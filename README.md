@@ -26,6 +26,17 @@ Der konfigurierte Administrator (`AGENT_ADMIN_EMAIL`) oder ein Benutzer mit der 
 
 Es gibt bewusst keinen Limit-Umgehungsagenten, keine Schlüsselrotation, keine Identitätsvortäuschung und keine kostenpflichtige oder nicht autorisierte Ausweichroute. Diese Grenzen schützen Konten, Anbieter und das Repository.
 
+## Villen & Verlauf (persistiert)
+
+Jede Villa ist ein pro Nutzer gespeicherter Agent-Arbeitsbereich:
+
+- Tabellen: `villas` (Name, Spezialisierung, Icon, pro `createdBy`) und `villa_messages` (Rollen `user`/`assistant`, Provider/Modell, `-1/1`-Bewertung) — Migration `drizzle/0001_sparkling_human_robot.sql`, angelegt über `pnpm db:push`.
+- tRPC-Router `villa`: `list`, `create`, `update`, `remove`, `messages`, `appendMessages`, `rateMessage` — alles Eigentümer-geprüft (`protectedProcedure`) und mit Eingabegrenzen.
+- Chat-Verläufe werden pro Villa geladen und nach jedem Turn optimistisch gespeichert; ist die Datenbank kurzfristig nicht erreichbar, bleibt die Antwort sichtbar und der Nutzer bekommt eine Meldung.
+- Antworten lassen sich im Chat mit Daumen hoch/runter bewerten; die Bewertung wird an der Nachricht gespeichert.
+- Spracheingabe nutzt die Web Speech API des Browsers (Deutsch, `de-DE`); nicht unterstützte Browser erhalten einen Hinweis.
+- Der Composer zeigt live an, wie viele Chats in der laufenden Stunde übrig bleiben (`agent.usage`).
+
 ## Status-API
 
 `agent.status` liefert unter anderem:
@@ -52,4 +63,4 @@ Datenbankmigrationen laufen über `pnpm db:push` (Drizzle Kit). Build-Skripte f�
 
 ## Tests
 
-Die Testsuite deckt Provider-Routing (inklusive Fail-Closed bei 429/402), die GitHub-Tool-Schleife mit Branch-/Draft-PR-Regeln, Eingabevalidierung, sichere Fehlermeldungen, Stundenlimits samt Fenster-Reset und die Villa-Orchestrierung ab. Live-Tests für Provider-Credentials sind markiert und laufen nur mit echten Schlüsseln.
+Die Testsuite deckt Provider-Routing (inklusive Fail-Closed bei 429/402), die GitHub-Tool-Schleife mit Branch-/Draft-PR-Regeln, Eingabevalidierung, sichere Fehlermeldungen, Stundenlimits samt Fenster-Reset und Fenster-Restbeträgen, die Villa-Orchestrierung sowie den Villa-Router (CRUD-Validierung, Ownership, Persistenz-Fehler-Mapping) ab. Live-Tests für Provider-Credentials sind markiert und laufen nur mit echten Schlüsseln.
