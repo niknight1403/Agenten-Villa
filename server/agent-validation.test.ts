@@ -10,6 +10,11 @@ import {
   type AgentInput,
 } from "./agent-engine";
 import { DEFAULT_VILLA_ID, getVillaSystemContext } from "./agent-villa";
+import {
+  AGENT_ERROR_CODES,
+  categoryForError,
+  publicMessageForError,
+} from "./error-codes";
 
 const baseInput: AgentInput = {
   prompt: "Analysiere das Projekt",
@@ -38,19 +43,30 @@ describe("agent input validation", () => {
   it("rejects empty and over-limit prompts", () => {
     expect(validAgentInput({ ...baseInput, prompt: "   " })).toBe(false);
     expect(
-      validAgentInput({ ...baseInput, prompt: "x".repeat(LIMITS.promptChars + 1) })
+      validAgentInput({
+        ...baseInput,
+        prompt: "x".repeat(LIMITS.promptChars + 1),
+      })
     ).toBe(false);
   });
 
   it("rejects unknown modes, broken history shapes, and too much history", () => {
-    expect(validAgentInput({ ...baseInput, mode: "admin" as AgentInput["mode"] })).toBe(false);
     expect(
-      validAgentInput({ ...baseInput, history: [{ role: "system" as never, content: "x" }] })
+      validAgentInput({ ...baseInput, mode: "admin" as AgentInput["mode"] })
     ).toBe(false);
     expect(
       validAgentInput({
         ...baseInput,
-        history: Array.from({ length: 21 }, () => ({ role: "user" as const, content: "x" })),
+        history: [{ role: "system" as never, content: "x" }],
+      })
+    ).toBe(false);
+    expect(
+      validAgentInput({
+        ...baseInput,
+        history: Array.from({ length: 21 }, () => ({
+          role: "user" as const,
+          content: "x",
+        })),
       })
     ).toBe(false);
   });
@@ -92,6 +108,15 @@ describe("rating and status helpers", () => {
     expect(isFallbackEligible(402, true)).toBe(false);
     expect(isFallbackEligible(503, false)).toBe(false);
     expect(isFallbackEligible(503, true)).toBe(true);
+  });
+});
+
+describe("stable error classification", () => {
+  it("classifies every agent error code without exposing internal details", () => {
+    expect(AGENT_ERROR_CODES).toHaveLength(7);
+    expect(categoryForError("LIMIT")).toBe("quota");
+    expect(categoryForError("UNAVAILABLE")).toBe("provider");
+    expect(publicMessageForError("INVALID_RESPONSE")).not.toContain("stack");
   });
 });
 

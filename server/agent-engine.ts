@@ -1,5 +1,6 @@
 import { githubTools } from "./github-tools";
 import { DEFAULT_VILLA_ID, getVillaSystemContext } from "./agent-villa";
+import type { AgentErrorCode } from "./error-codes";
 
 export type Provider = "openrouter" | "huggingface";
 export type Message = { role: "user" | "assistant"; content: string };
@@ -37,14 +38,7 @@ type ApiMessage = {
 
 export class AgentError extends Error {
   constructor(
-    public readonly code:
-      | "MISSING_KEY"
-      | "LIMIT"
-      | "AUTH"
-      | "UNAVAILABLE"
-      | "REJECTED"
-      | "STOPPED"
-      | "INVALID_RESPONSE",
+    public readonly code: AgentErrorCode,
     message: string,
     public readonly status?: number
   ) {
@@ -102,12 +96,10 @@ function makeMessages(input: AgentInput, withGitHub = false): ApiMessage[] {
       role: "system",
       content: `${resolveSystemPrompt(input)}\n\n${getVillaSystemContext(DEFAULT_VILLA_ID)}\n\n${context}${withGitHub ? `\n\n${GITHUB_SYSTEM}` : ""}`,
     },
-    ...input.history
-      .slice(-LIMITS.historyMessages)
-      .map(m => ({
-        role: m.role,
-        content: m.content.slice(0, LIMITS.historyChars),
-      })),
+    ...input.history.slice(-LIMITS.historyMessages).map(m => ({
+      role: m.role,
+      content: m.content.slice(0, LIMITS.historyChars),
+    })),
     { role: "user", content: input.prompt.trim().slice(0, LIMITS.promptChars) },
   ];
 }
