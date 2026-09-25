@@ -85,7 +85,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.4",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.0",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.1.14",
@@ -127,7 +127,8 @@
       "uuid@<11.1.1": ">=11.1.1",
       "vite@<=7.3.4": ">=7.3.5",
       "vitest@>=2.1.0 <4.1.11": ">=4.1.11",
-      "@vitest/mocker@>=2.1.0 <4.1.11": ">=4.1.11"
+      "@vitest/mocker@>=2.1.0 <4.1.11": ">=4.1.11",
+      "esbuild@<=0.26.2": ">=0.27.0"
     },
     "onlyBuiltDependencies": [
       "esbuild",
