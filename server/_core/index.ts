@@ -6,6 +6,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerHealthRoute } from "./health";
+import { rateLimit } from "./rate-limit";
 import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -38,6 +39,11 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(compression());
+  // Brute-Force-Schutz fuer Login-/OAuth-Endpunkte (20 Anfragen/Minute/IP)
+  app.use(
+    "/api/auth",
+    rateLimit({ windowMs: 60_000, max: 20, keyPrefix: "auth" })
+  );
   registerHealthRoute(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
