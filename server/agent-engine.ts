@@ -89,5 +89,21 @@ export function isRetryableStatus(status: number) { return retryable(status); }
 export function isFallbackEligible(status: number, optedIn: boolean) { return optedIn && retryable(status) && status !== 429; }
 export function configuredProviders() { return { openrouter: Boolean(process.env.OPENROUTER_API_KEY?.trim()), huggingface: Boolean(process.env.HF_TOKEN?.trim()) }; }
 
+export type OpenRouterKeyStatus = "valid" | "invalid" | "unavailable";
+export async function verifyOpenRouterKey(key: string, fetcher: typeof fetch = fetch): Promise<OpenRouterKeyStatus> {
+  try {
+    const response = await fetcher("https://openrouter.ai/api/v1/key", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${key.trim()}` },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (response.status === 200) return "valid";
+    if (response.status === 401 || response.status === 403) return "invalid";
+    return "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
 export const PROVIDER_NOTICE = "Gratisverfügbarkeit und Kontingente werden von den Anbietern festgelegt und können sich ändern. Bei erreichtem Limit wird gestoppt; es erfolgt keine bezahlte oder rotierende Ausweichroute. Hugging Face wird nur bei ausdrücklicher Einwilligung und vorübergehendem Ausfall versucht.";
 export const PROVIDER_DOCS = { openrouter: "https://openrouter.ai/docs/guides/routing/routers/free-router", huggingface: "https://huggingface.co/docs/inference-providers/en/pricing" } as const;

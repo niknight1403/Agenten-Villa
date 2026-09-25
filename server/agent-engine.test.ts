@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentError, runAgentTurn } from "./agent-engine";
+import { AgentError, runAgentTurn, verifyOpenRouterKey } from "./agent-engine";
 
 const input = { prompt: "Erstelle einen kurzen Plan", history: [], mode: "home" as const, specialty: "Generalist" };
 const reply = (status: number, model = "free-test") => new Response(JSON.stringify({ model, choices: [{ message: { content: "1. Ziel festlegen. 2. Ergebnis prüfen." } }] }), { status, headers: { "Content-Type": "application/json" } });
@@ -37,5 +37,28 @@ describe("bounded provider router", () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(runAgentTurn(input, false, { fetcher })).rejects.toBeInstanceOf(AgentError);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("OpenRouter API key verification", () => {
+  it("checks the official read-only status endpoint and returns no key material", async () => {
+    const key = "sk-or-test-secret-value";
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", { status: 200 }));
+    const result = await verifyOpenRouterKey(key, fetcher);
+    expect(result).toBe("valid");
+    expect(fetcher).toHaveBeenCalledWith("https://openrouter.ai/api/v1/key", expect.objectContaining({ method: "GET", headers: { Authorization: `Bearer ${key}` } }));
+    expect(JSON.stringify(result)).not.toContain(key);
+  });
+
+  it("marks rejected credentials invalid without exposing provider response text", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("secret must never be returned", { status: 401 }));
+    await expect(verifyOpenRouterKey("sk-or-invalid-test", fetcher)).resolves.toBe("invalid");
+  });
+
+  it("fails closed as unavailable on rate limits and network failures", async () => {
+    const limited = vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 429 }));
+    await expect(verifyOpenRouterKey("sk-or-test-key", limited)).resolves.toBe("unavailable");
+    const networkFailure = vi.fn<typeof fetch>().mockRejectedValue(new Error("transport error"));
+    await expect(verifyOpenRouterKey("sk-or-test-key", networkFailure)).resolves.toBe("unavailable");
   });
 });

@@ -1,12 +1,15 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { configuredProviders, PROVIDER_NOTICE, runAgentTurn, safeAgentError } from "./agent-engine";
+import { configuredProviders, PROVIDER_NOTICE, runAgentTurn, safeAgentError, verifyOpenRouterKey } from "./agent-engine";
 
 let controlState: "RUNNING" | "STOPPED" = "STOPPED";
 const usage = new Map<number, { start: number; count: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_TURNS_PER_WINDOW = 12;
+const CREDENTIAL_CHECK_WINDOW_MS = 15 * 60 * 1000;
+const MAX_CREDENTIAL_CHECKS = 5;
+const credentialChecks = new Map<number, { start: number; count: number }>();
 
 function isAdmin(user: { role: string; email?: string | null }) {
   const allowlisted = process.env.AGENT_ADMIN_EMAIL?.trim().toLowerCase();
@@ -25,6 +28,17 @@ function consumeTurn(userId: number) {
     return;
   }
   if (current.count >= MAX_TURNS_PER_WINDOW) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Das lokale Stundenlimit ist erreicht. Bitte später erneut versuchen." });
+  current.count += 1;
+}
+
+function consumeCredentialCheck(userId: number) {
+  const now = Date.now();
+  const current = credentialChecks.get(userId);
+  if (!current || now - current.start >= CREDENTIAL_CHECK_WINDOW_MS) {
+    credentialChecks.set(userId, { start: now, count: 1 });
+    return;
+  }
+  if (current.count >= MAX_CREDENTIAL_CHECKS) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Zu viele Schlüsselprüfungen. Bitte später erneut versuchen." });
   current.count += 1;
 }
 
@@ -49,6 +63,19 @@ export const agentRouter = router({
     controlState = input.state;
     return { state: controlState };
   }),
+  testOpenRouterKey: protectedProcedure.input(z.object({ apiKey: z.string().trim().min(8).max(512) })).mutation(async ({ ctx, input }) => {
+    requireAdmin(ctx.user);
+    consumeCredentialCheck(ctx.user.id);
+    const status = await verifyOpenRouterKey(input.apiKey);
+    return {
+      status,
+      message: status === "valid"
+        ? "Authentifizierung erfolgreich. Der Schlüssel wurde nur für diese Prüfung verwendet und nicht gespeichert."
+        : status === "invalid"
+          ? "OpenRouter hat den Schlüssel abgewiesen. Bitte prüfe ihn und versuche es erneut. Der Schlüssel wurde nicht gespeichert."
+          : "OpenRouter ist gerade nicht erreichbar oder begrenzt Prüfungen. Es wurde nichts gespeichert.",
+    } as const;
+  }),
   chat: protectedProcedure.input(inputSchema).mutation(async ({ ctx, input }) => {
     if (controlState !== "RUNNING") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Der Agent steht auf STOPPED. Der Administrator muss ihn ausdrücklich starten." });
     consumeTurn(ctx.user.id);
@@ -64,8 +91,10 @@ export const agentRouter = router({
 });
 
 export const agentControlLimits = { windowMs: WINDOW_MS, maxTurnsPerWindow: MAX_TURNS_PER_WINDOW } as const;
-export function resetAgentRouterForTests() { controlState = "STOPPED"; usage.clear(); }
+export const credentialCheckLimits = { windowMs: CREDENTIAL_CHECK_WINDOW_MS, maxChecks: MAX_CREDENTIAL_CHECKS } as const;
+export function resetAgentRouterForTests() { controlState = "STOPPED"; usage.clear(); credentialChecks.clear(); }
 export function getAgentRouterStateForTests() { return controlState; }
 export function isAgentAdminForTests(user: { role: string; email?: string | null }) { return isAdmin(user); }
 export function consumeTurnForTests(userId: number) { consumeTurn(userId); }
+export function consumeCredentialCheckForTests(userId: number) { consumeCredentialCheck(userId); }
 export function setAgentStateForTests(state: "RUNNING" | "STOPPED") { controlState = state; }

@@ -13,13 +13,16 @@ import {
   ExternalLink,
   FolderGit2,
   Github,
+  KeyRound,
   LayoutGrid,
+  Loader2,
   Menu,
   MessageSquare,
   Mic,
   Plus,
   Search,
   Send,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Sun,
@@ -48,10 +51,14 @@ export default function Home() {
   const statusQuery = trpc.agent.status.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const chatMutation = trpc.agent.chat.useMutation();
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
+  const keyTestMutation = trpc.agent.testOpenRouterKey.useMutation({ gcTime: 0 });
 
   const [screen, setScreen] = useState<Screen>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [newVillaOpen, setNewVillaOpen] = useState(false);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [keyTestResult, setKeyTestResult] = useState<{ status: "valid" | "invalid" | "unavailable"; message: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
@@ -90,6 +97,28 @@ export default function Home() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMessage();
+  }
+
+  async function testOpenRouterKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const apiKey = openRouterKey.trim();
+    if (!apiKey || keyTestMutation.isPending) return;
+    setKeyTestResult(null);
+    try {
+      setKeyTestResult(await keyTestMutation.mutateAsync({ apiKey }));
+    } catch (error) {
+      setKeyTestResult({ status: "unavailable", message: error instanceof Error ? error.message : "Die Prüfung konnte nicht abgeschlossen werden." });
+    } finally {
+      setOpenRouterKey("");
+      keyTestMutation.reset();
+    }
+  }
+
+  function closeKeyDialog() {
+    setKeyDialogOpen(false);
+    setOpenRouterKey("");
+    setKeyTestResult(null);
+    keyTestMutation.reset();
   }
 
   function createVilla(event: FormEvent<HTMLFormElement>) {
@@ -131,7 +160,7 @@ export default function Home() {
           <nav className="header-tools" aria-label="Werkzeuge">
             <button className="icon-button" aria-label="Projekt-Werkstatt" onClick={() => { setScreen("workshop"); setMessages([]); }}><Bot /></button>
             <button className={`icon-button${searchOpen ? " active" : ""}`} aria-label="Villen suchen" onClick={() => { setScreen("villas"); setSearchOpen(true); setDrawerOpen(false); }}><Search /></button>
-            <button className="icon-button tool-optional" aria-label="Einstellungen" onClick={() => setNewVillaOpen(true)}><SlidersHorizontal /></button>
+            <button className="icon-button tool-optional" aria-label="OpenRouter-Key prüfen" title={statusQuery.data?.isAdmin ? "OpenRouter-Key sicher prüfen" : "Administratorzugriff erforderlich"} disabled={!statusQuery.data?.isAdmin} onClick={() => { setOpenRouterKey(""); setKeyTestResult(null); setKeyDialogOpen(true); }}><SlidersHorizontal /></button>
             <button className="icon-button tool-optional" aria-label="Darstellung" onClick={(event) => event.currentTarget.classList.toggle("active")}><Sun /></button>
           </nav>
         )}
@@ -214,6 +243,7 @@ export default function Home() {
             <button className="new-villa-button" onClick={() => { setDrawerOpen(false); setNewVillaOpen(true); }}><Plus size={18} /> Neue Villa</button>
             <div className="drawer-spacer" />
             <button className="drawer-link" onClick={() => { setScreen("workshop"); setMessages([]); setDrawerOpen(false); }}><FolderGit2 size={18} /> Projekt-Werkstatt</button>
+            {statusQuery.data?.isAdmin && <button className="drawer-link" onClick={() => { setDrawerOpen(false); setOpenRouterKey(""); setKeyTestResult(null); setKeyDialogOpen(true); }}><KeyRound size={18} /> OpenRouter-Key prüfen</button>}
             <a className="drawer-link" href="/login"><ArrowLeft size={18} /> Abmelden</a>
           </aside>
         </div>
@@ -227,6 +257,23 @@ export default function Home() {
             <label className="modal-label" htmlFor="villa-name">Name</label><input id="villa-name" className="modal-input" value={villaName} onChange={(event) => setVillaName(event.target.value)} placeholder="z. B. Marketing-Villa" autoFocus required />
             <button className="modal-submit" type="submit"><Plus size={17} /> Villa erstellen</button>
           </form>
+        </div>
+      )}
+
+      {keyDialogOpen && statusQuery.data?.isAdmin && (
+        <div className="modal-backdrop" role="presentation" onClick={closeKeyDialog}>
+          <section className="new-villa-modal credential-modal" role="dialog" aria-modal="true" aria-labelledby="key-dialog-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-heading"><span className="modal-mark"><KeyRound size={20} /></span><button type="button" className="drawer-close" aria-label="Dialog schließen" onClick={closeKeyDialog}><X size={18} /></button></div>
+            <h2 id="key-dialog-title">OpenRouter-Key testen</h2>
+            <p>Nur Administratoren. Der maskiert eingegebene Schlüssel wird einmalig per HTTPS an OpenRouter gesendet, danach aus dem Formular gelöscht und nicht gespeichert. Es wird keine Modellanfrage ausgelöst.</p>
+            <form onSubmit={testOpenRouterKey}>
+              <label className="modal-label" htmlFor="openrouter-api-key">API-Key</label>
+              <input id="openrouter-api-key" className="modal-input" type="password" value={openRouterKey} onChange={(event) => { setOpenRouterKey(event.target.value); setKeyTestResult(null); }} placeholder="sk-or-…" autoComplete="new-password" autoCapitalize="none" spellCheck={false} required minLength={8} maxLength={512} disabled={keyTestMutation.isPending} />
+              <button className="modal-submit" type="submit" disabled={!openRouterKey.trim() || keyTestMutation.isPending}>{keyTestMutation.isPending ? <><Loader2 size={17} className="spin" /> Prüfe Authentifizierung …</> : <><ShieldCheck size={17} /> Schlüssel sicher testen</>}</button>
+            </form>
+            {keyTestResult && <p className={`key-test-result ${keyTestResult.status}`} role="status" aria-live="polite">{keyTestResult.message}</p>}
+            <p className="key-dialog-note">Für den Live-Agenten muss ein gültiger Schlüssel anschließend separat über den geschützten Projekt-Secret-Manager eingerichtet werden. Die Oberfläche speichert oder übernimmt ihn absichtlich nicht.</p>
+          </section>
         </div>
       )}
 

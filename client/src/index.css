@@ -821,3 +821,27 @@ body:has(.villa-app) {
   line-height: 1.45;
 }
 .fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
+
+
+.credential-modal {
+  width: min(520px, 100%);
+  max-height: min(88svh, 720px);
+  overflow-y: auto;
+}
+.credential-modal form { margin-top: 18px; }
+.credential-modal .modal-submit:disabled { opacity: .58; cursor: not-allowed; }
+.key-test-result {
+  margin: 15px 0 0 !important;
+  padding: 12px 13px;
+  border: 1px solid #344064;
+  border-radius: 12px;
+  font-size: 13px !important;
+}
+.key-test-result.valid { color: #8af0da; border-color: #16877b; background: #102c30; }
+.key-test-result.invalid { color: #ffc1c1; border-color: #9e4d5b; background: #321d2b; }
+.key-test-result.unavailable { color: #f4d69a; border-color: #8e7440; background: #302a1e; }
+.key-dialog-note { margin: 13px 0 0 !important; color: #8d99b8 !important; font-size: 11px !important; }
+.credential-modal :focus-visible { outline: 2px solid #37dcc6; outline-offset: 2px; }
+@keyframes key-spin { to { transform: rotate(360deg); } }
+.spin { animation: key-spin 800ms linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.5s; } }
