@@ -170,9 +170,10 @@ async function callProvider(
   }
   const message = data.choices?.[0]?.message;
   const answer = message?.content?.trim() ?? "";
-  const toolCalls = Array.isArray(message?.tool_calls)
-    ? message!.tool_calls!.slice(0, LIMITS.githubActionsPerTurn)
+  const rawToolCalls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls
     : [];
+  const toolCalls = rawToolCalls.slice(0, LIMITS.githubActionsPerTurn);
   if (!answer && toolCalls.length === 0)
     throw new AgentError(
       "INVALID_RESPONSE",
