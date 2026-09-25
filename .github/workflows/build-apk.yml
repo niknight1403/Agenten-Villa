@@ -43,9 +43,49 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Prepare release signing (optional)
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > /tmp/agenten-villa.keystore
+            echo "ANDROID_KEYSTORE_FILE=/tmp/agenten-villa.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PW" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: agenten-villa-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agenten-villa-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+
+      - name: Verify release APK is signed
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/app-release.apk)
+          if ${ANDROID_HOME}/build-tools/*/apksigner verify --print-certs "$APK" > /dev/null 2>&1 ||              ${ANDROID_HOME}/build-tools/34.0.0/apksigner verify "$APK" 2>&1 | grep -q "^Verifies"; then
+            echo "Release-APK ist signiert: $APK"
+          else
+            echo "Fehler: Release-APK ist nicht signiert" >&2
+            exit 1
+          fi
           retention-days: 30
