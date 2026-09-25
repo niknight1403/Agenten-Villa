@@ -1,5 +1,7 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import {
@@ -25,15 +27,21 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  Sun,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
   X,
 } from "lucide-react";
 
 type Screen = "home" | "workshop" | "villas";
-type ChatMessage = { role: "assistant" | "user"; text: string };
-type Villa = { name: string; specialty: string; icon: "villa" | "bot" };
-
-const initialVillas: Villa[] = [{ name: "Agent-Villa", specialty: "Generalist", icon: "villa" }];
+type ChatMessage = {
+  role: "assistant" | "user";
+  text: string;
+  meta?: string;
+  messageId?: number;
+  rating?: -1 | 1 | null;
+};
+type Villa = { id: number; name: string; specialty: string; icon: "villa" | "bot" };
 const homeIdeas = ["Erstelle einen Aktionsplan", "Analysiere Chancen & Risiken"];
 const workshopIdeas = [
   "Zeige Repo-Überblick und letzte Commits",
@@ -47,8 +55,13 @@ export default function Home() {
   // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
   // startLogin() during render (no href={startLogin()}) — it mints a one-time
   // nonce cookie and must run only at the moment of navigation.
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, logout } = useAuth();
   const statusQuery = trpc.agent.status.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const villaListQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const createVillaMutation = trpc.villa.create.useMutation({ onSuccess: () => villaListQuery.refetch() });
+  const deleteVillaMutation = trpc.villa.remove.useMutation({ onSuccess: () => villaListQuery.refetch() });
+  const appendMessagesMutation = trpc.villa.appendMessages.useMutation();
+  const rateMessageMutation = trpc.villa.rateMessage.useMutation();
   const villaSnapshotQuery = trpc.agent.villaSnapshot.useQuery({}, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const chatMutation = trpc.agent.chat.useMutation();
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
@@ -64,20 +77,63 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [villaName, setVillaName] = useState("");
-  const [villas, setVillas] = useState(initialVillas);
-  const [activeVilla, setActiveVilla] = useState(initialVillas[0]);
+  const [activeVillaId, setActiveVillaId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] = useState(false);
   const [githubToolsEnabled, setGithubToolsEnabled] = useState(false);
 
+  const villas = useMemo<Villa[]>(
+    () => (villaListQuery.data ?? []).map(({ id, name, specialty, icon }) => ({ id, name, specialty, icon: icon as Villa["icon"] })),
+    [villaListQuery.data],
+  );
+  const activeVilla = useMemo(
+    () => villas.find((villa) => villa.id === activeVillaId) ?? villas[0],
+    [villas, activeVillaId],
+  );
+  const messagesQuery = trpc.villa.messages.useQuery(
+    { villaId: activeVilla?.id ?? 0 },
+    { enabled: isAuthenticated && Boolean(activeVilla?.id), refetchOnWindowFocus: false },
+  );
   const filteredVillas = useMemo(
     () => villas.filter((villa) => `${villa.name} ${villa.specialty}`.toLowerCase().includes(query.toLowerCase())),
     [villas, query],
   );
 
+  // Verlauf aus der Datenbank übernehmen, sobald er geladen ist.
+  useEffect(() => {
+    if (!activeVilla) {
+      setMessages([]);
+      return;
+    }
+    const rows = messagesQuery.data;
+    if (!rows) return;
+    setMessages(
+      rows.map((row) =>
+        row.role === "assistant"
+          ? {
+              role: "assistant",
+              text: row.content,
+              meta: [row.provider, row.model].filter(Boolean).join(" · ") || undefined,
+              messageId: row.id,
+              rating: row.rating === -1 || row.rating === 1 ? row.rating : null,
+            }
+          : { role: "user", text: row.content },
+      ),
+    );
+  }, [activeVilla?.id, messagesQuery.data]);
+
+  const speech = useSpeechRecognition((text) => {
+    setDraft((previous) => (previous.trim() ? `${previous.trim()} ${text}` : text));
+  });
+
   async function sendMessage(text = draft) {
     const prompt = text.trim();
     if (!prompt || chatMutation.isPending) return;
+    if (screen !== "workshop" && !activeVilla) {
+      toast.error("Erstelle zuerst eine Villa, bevor du chattest.");
+      setNewVillaOpen(true);
+      return;
+    }
     const prior = messages.slice(-8).map(({ role, text: content }) => ({ role, content }));
     setMessages((previous) => [...previous, { role: "user", text: prompt }]);
     setDraft("");
@@ -86,15 +142,42 @@ export default function Home() {
         prompt,
         history: prior,
         mode: screen === "workshop" ? "workshop" : "home",
-        specialty: activeVilla.specialty,
+        specialty: activeVilla?.specialty ?? "Generalist",
         allowHuggingFaceFallback,
         useGitHub: screen === "workshop" && githubToolsEnabled,
       });
       const actionInfo = result.githubActions ? ` · ${result.githubActions} GitHub-Aktionen` : "";
-      setMessages((previous) => [...previous, { role: "assistant", text: `${result.answer}\n\n${result.provider} · ${result.model}${actionInfo}` }]);
+      const meta = `${result.provider} · ${result.model}${actionInfo}`;
+      const optimistic: ChatMessage = { role: "assistant", text: result.answer, meta };
+      setMessages((previous) => [...previous, optimistic]);
+      if (screen !== "workshop" && activeVilla) {
+        try {
+          await appendMessagesMutation.mutateAsync({
+            villaId: activeVilla.id,
+            messages: [
+              { role: "user", content: prompt },
+              { role: "assistant", content: result.answer, provider: result.provider, model: result.model },
+            ],
+          });
+          await messagesQuery.refetch();
+        } catch {
+          toast.error("Der Verlauf konnte nicht gespeichert werden. Die Datenbank ist gerade nicht erreichbar.");
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Die Anfrage konnte nicht verarbeitet werden.";
       setMessages((previous) => [...previous, { role: "assistant", text: message }]);
+    }
+  }
+
+  async function rateMessage(messageId: number, rating: -1 | 1) {
+    try {
+      await rateMessageMutation.mutateAsync({ messageId, rating });
+      setMessages((previous) =>
+        previous.map((message) => (message.messageId === messageId ? { ...message, rating } : message)),
+      );
+    } catch {
+      toast.error("Die Bewertung konnte nicht gespeichert werden.");
     }
   }
 
@@ -125,21 +208,46 @@ export default function Home() {
     keyTestMutation.reset();
   }
 
-  function createVilla(event: FormEvent<HTMLFormElement>) {
+  async function createVilla(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = villaName.trim();
-    if (!cleanName) return;
-    const villa = { name: cleanName, specialty: "Neuer Agent", icon: "bot" as const };
-    setVillas((previous) => [...previous, villa]);
-    setActiveVilla(villa);
-    setVillaName("");
-    setNewVillaOpen(false);
-    setScreen("home");
-    setMessages([]);
+    if (!cleanName || createVillaMutation.isPending) return;
+    try {
+      const villa = await createVillaMutation.mutateAsync({ name: cleanName });
+      setVillaName("");
+      setNewVillaOpen(false);
+      setScreen("home");
+      setActiveVillaId(villa.id);
+      setMessages([]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Die Villa konnte nicht erstellt werden.");
+    }
+  }
+
+  async function removeVilla(villa: Villa) {
+    if (deleteVillaMutation.isPending) return;
+    if (!window.confirm(`Villa „${villa.name}" inklusive Verlauf endgültig löschen?`)) return;
+    try {
+      await deleteVillaMutation.mutateAsync({ id: villa.id });
+      if (activeVilla?.id === villa.id) {
+        setActiveVillaId(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Die Villa konnte nicht gelöscht werden.");
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } finally {
+      window.location.assign("/login");
+    }
   }
 
   function chooseVilla(villa: Villa) {
-    setActiveVilla(villa);
+    setActiveVillaId(villa.id);
     setMessages([]);
     setScreen("home");
     setDrawerOpen(false);
@@ -155,8 +263,8 @@ export default function Home() {
         <button className="brand-block" onClick={() => { setScreen("home"); setMessages([]); }} aria-label="Zur Agenten-Villa">
           <span className="brand-tile">{isWorkshop ? <Github /> : <Building2 />}</span>
           <span className="brand-copy">
-            <strong>{isWorkshop ? "Superagent · Projekt-Werkstatt" : activeVilla.name}</strong>
-            <span><i className={`status-dot${agentRunning ? " running" : " stopped"}`} />{isWorkshop ? `GitHub · ${statusQuery.data?.github?.configured ? "Repository verbunden" : "Token fehlt"}` : `${activeVilla.specialty} · ${agentRunning ? "Agent läuft" : statusQuery.data?.providers.openrouter ? "Agent gestoppt" : "OpenRouter-Schlüssel fehlt"}`}</span>
+            <strong>{isWorkshop ? "Superagent · Projekt-Werkstatt" : activeVilla?.name ?? "Agenten-Villa"}</strong>
+            <span><i className={`status-dot${agentRunning ? " running" : " stopped"}`} />{isWorkshop ? `GitHub · ${statusQuery.data?.github?.configured ? "Repository verbunden" : "Token fehlt"}` : `${activeVilla?.specialty ?? "Neue Villa"} · ${agentRunning ? "Agent läuft" : statusQuery.data?.providers.openrouter ? "Agent gestoppt" : "OpenRouter-Schlüssel fehlt"}`}</span>
           </span>
           <ChevronDown className="brand-chevron" size={16} />
         </button>
@@ -165,7 +273,7 @@ export default function Home() {
             <button className="icon-button" aria-label="Projekt-Werkstatt" onClick={() => { setScreen("workshop"); setMessages([]); }}><Bot /></button>
             <button className={`icon-button${searchOpen ? " active" : ""}`} aria-label="Villen suchen" onClick={() => { setScreen("villas"); setSearchOpen(true); setDrawerOpen(false); }}><Search /></button>
             <button className="icon-button tool-optional" aria-label="OpenRouter-Key prüfen" title={statusQuery.data?.isAdmin ? "OpenRouter-Key sicher prüfen" : "Administratorzugriff erforderlich"} disabled={!statusQuery.data?.isAdmin} onClick={() => { setOpenRouterKey(""); setKeyTestResult(null); setKeyDialogOpen(true); }}><SlidersHorizontal /></button>
-            <button className="icon-button tool-optional" aria-label="Darstellung" onClick={(event) => event.currentTarget.classList.toggle("active")}><Sun /></button>
+
           </nav>
         )}
         {isWorkshop && <button className="new-project-button" onClick={() => setDrawerOpen(true)}><Plus size={18} /><span>Neu</span></button>}
@@ -184,17 +292,30 @@ export default function Home() {
             </p>
           )}
           <div className="villa-list">
+            {villaListQuery.isLoading && <p className="empty-search">Villen werden geladen …</p>}
+            {villaListQuery.isError && (
+              <p className="empty-search">
+                Villen konnten nicht geladen werden: {villaListQuery.error instanceof Error ? villaListQuery.error.message : "Datenbank nicht erreichbar."}
+                <button className="retry-link" onClick={() => villaListQuery.refetch()}>Erneut versuchen</button>
+              </p>
+            )}
+            {villaListQuery.isSuccess && villas.length === 0 && (
+              <p className="empty-search">Noch keine Villa. Erstelle deine erste Agenten-Villa oben rechts.</p>
+            )}
             {filteredVillas.map((villa) => (
-              <button key={villa.name} className={`villa-row${activeVilla.name === villa.name ? " selected" : ""}`} onClick={() => chooseVilla(villa)}>
-                <span className="villa-row-icon">{villa.icon === "villa" ? <Building2 /> : <Bot />}</span>
-                <span className="villa-row-copy"><strong>{villa.name}</strong><span>{villa.specialty}</span></span>
-                {activeVilla.name === villa.name && <Check className="selected-check" size={18} />}
-              </button>
+              <div key={villa.id} className={`villa-row${activeVilla?.id === villa.id ? " selected" : ""}`}>
+                <button className="villa-row-main" onClick={() => chooseVilla(villa)}>
+                  <span className="villa-row-icon">{villa.icon === "villa" ? <Building2 /> : <Bot />}</span>
+                  <span className="villa-row-copy"><strong>{villa.name}</strong><span>{villa.specialty}</span></span>
+                  {activeVilla?.id === villa.id && <Check className="selected-check" size={18} />}
+                </button>
+                <button className="villa-row-delete" aria-label={`Villa ${villa.name} löschen`} disabled={deleteVillaMutation.isPending} onClick={() => removeVilla(villa)}><Trash2 size={16} /></button>
+              </div>
             ))}
-            {filteredVillas.length === 0 && <p className="empty-search">Keine Villa gefunden.</p>}
+            {villaListQuery.isSuccess && villas.length > 0 && filteredVillas.length === 0 && <p className="empty-search">Keine Villa gefunden.</p>}
           </div>
           <button className="new-villa-button" onClick={() => setNewVillaOpen(true)}><Plus size={18} /> Neue Villa</button>
-          <a className="sign-out-link" href="/login"><ArrowLeft size={16} /> Abmelden</a>
+          <button className="sign-out-link" type="button" onClick={handleLogout}><ArrowLeft size={16} /> Abmelden</button>
         </section>
       ) : (
         <section className={`conversation ${isWorkshop ? "workshop" : "agent-home"}`}>
@@ -207,22 +328,36 @@ export default function Home() {
                   ? statusQuery.data?.github?.configured
                     ? `Repository ${statusQuery.data.github.repository} ist verbunden. Aktiviere GitHub-Werkzeuge im Eingabebereich, damit der Agent Repo-Daten lesen und begrenzte Aufgaben auf einem Branch ausführen kann.`
                     : `GitHub ist für ${statusQuery.data?.github?.repository ?? "das konfigurierte Repository"} noch nicht verbunden. Hinterlege zuerst GITHUB_TOKEN als geschütztes Server-Secret; der Agent führt bis dahin keine Repo-Aktionen aus.`
-                  : <>Dein Superagent für <strong>{activeVilla.specialty}</strong> ist bereit. Die Abteilungen Strategie, Recherche, Analyse und weitere warten auf deine Anweisung.</>}
+                  : activeVilla
+                    ? <>Dein Superagent für <strong>{activeVilla.specialty}</strong> ist bereit. Die Abteilungen Strategie, Recherche, Analyse und weitere warten auf deine Anweisung.</>
+                    : <>Erstelle deine erste Villa, dann startet dein Superagent hier. Villen und Verläufe werden dauerhaft gespeichert.</>}
                 </p>
-                <div className={`suggestion-list ${isWorkshop ? "workshop-ideas" : "home-ideas"}`}>
-                  {(isWorkshop ? workshopIdeas : homeIdeas).map((idea) => (
-                    <button key={idea} className="suggestion-chip" onClick={() => sendMessage(idea)}>{idea}</button>
-                  ))}
-                </div>
+                {activeVilla && (
+                  <div className={`suggestion-list ${isWorkshop ? "workshop-ideas" : "home-ideas"}`}>
+                    {(isWorkshop ? workshopIdeas : homeIdeas).map((idea) => (
+                      <button key={idea} className="suggestion-chip" onClick={() => sendMessage(idea)}>{idea}</button>
+                    ))}
+                  </div>
+                )}
+                {!isWorkshop && !activeVilla && (
+                  <button className="modal-submit" type="button" onClick={() => setNewVillaOpen(true)}><Plus size={17} /> Erste Villa erstellen</button>
+                )}
               </div>
             ) : (
               <div className="message-list" aria-live="polite">
                 {messages.map((message, index) => (
-                  <article key={`${index}-${message.role}`} className={`chat-message ${message.role}`}>
+                  <article key={message.messageId ?? `${index}-${message.role}`} className={`chat-message ${message.role}`}>
                     {message.role === "assistant" && <span className="assistant-avatar">{isWorkshop ? <Bot size={16} /> : <span>CS</span>}</span>}
                     <div className="message-bubble">
                       {message.role === "assistant" && <div className="message-author">{isWorkshop ? "Superagent · Projekt-Werkstatt" : "Sarah · KI-Operations"}</div>}
                       <p>{message.text}</p>
+                      {message.role === "assistant" && message.meta && <div className="message-meta">{message.meta}</div>}
+                      {message.role === "assistant" && message.messageId && (
+                        <div className="message-rating" data-rated={message.rating ? "yes" : "no"}>
+                          <button type="button" aria-label="Antwort positiv bewerten" className={message.rating === 1 ? "rated" : ""} disabled={rateMessageMutation.isPending} onClick={() => rateMessage(message.messageId as number, 1)}><ThumbsUp size={14} /></button>
+                          <button type="button" aria-label="Antwort negativ bewerten" className={message.rating === -1 ? "rated" : ""} disabled={rateMessageMutation.isPending} onClick={() => rateMessage(message.messageId as number, -1)}><ThumbsDown size={14} /></button>
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -235,7 +370,7 @@ export default function Home() {
             {isWorkshop && statusQuery.data?.isAdmin && <label className="github-tool-toggle"><input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} /><span><strong>GitHub-Werkzeuge aktivieren</strong><small>{statusQuery.data.github?.configured ? `${statusQuery.data.github.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small></span></label>}
             <form className="message-composer" onSubmit={onSubmit}>
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isWorkshop ? "Auftrag an den Superagenten…" : "Anweisung an den Superagenten…"} rows={1} aria-label="Nachricht an den Superagenten" disabled={!isAuthenticated || !agentRunning || chatMutation.isPending} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />
-              {!isWorkshop && <button className="mic-button" type="button" aria-label="Spracheingabe (Vorschau)"><Mic size={20} /></button>}
+              {!isWorkshop && <button className={`mic-button${speech.listening ? " listening" : ""}`} type="button" aria-label={speech.listening ? "Spracheingabe stoppen" : "Spracheingabe starten"} title={speech.supported ? "Spracheingabe (Deutsch)" : "Spracheingabe wird von diesem Browser nicht unterstützt"} onClick={() => { if (!speech.supported) { toast.info("Spracheingabe wird von diesem Browser nicht unterstützt."); return; } speech.toggle(); }}><Mic size={20} /></button>}
               {!isAuthenticated && !loading ? <button className="send-button" type="button" aria-label="Anmelden" onClick={() => startLogin()}><ArrowLeft size={19} /></button> : <button className="send-button" type="submit" aria-label="Senden" disabled={!draft.trim() || !agentRunning || chatMutation.isPending}><Send size={19} /></button>}
             </form>
             {isAuthenticated && <label className="fallback-consent"><input type="checkbox" checked={allowHuggingFaceFallback} onChange={(event) => setAllowHuggingFaceFallback(event.target.checked)} /> Hugging Face einmalig nur bei vorübergehendem OpenRouter-Ausfall versuchen</label>}
@@ -250,13 +385,13 @@ export default function Home() {
             <div className="drawer-top"><span className="drawer-title">Deine Villen</span><button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Menü schließen"><X size={20} /></button></div>
             <label className="drawer-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Villa suchen…" /></label>
             <div className="drawer-villas">
-              {filteredVillas.map((villa) => <button key={villa.name} className={`villa-row${activeVilla.name === villa.name ? " selected" : ""}`} onClick={() => chooseVilla(villa)}><span className="villa-row-icon">{villa.icon === "villa" ? <Building2 /> : <Bot />}</span><span className="villa-row-copy"><strong>{villa.name}</strong><span>{villa.specialty}</span></span></button>)}
+              {filteredVillas.map((villa) => <button key={villa.id} className={`villa-row${activeVilla?.id === villa.id ? " selected" : ""}`} onClick={() => chooseVilla(villa)}><span className="villa-row-icon">{villa.icon === "villa" ? <Building2 /> : <Bot />}</span><span className="villa-row-copy"><strong>{villa.name}</strong><span>{villa.specialty}</span></span></button>)}
             </div>
             <button className="new-villa-button" onClick={() => { setDrawerOpen(false); setNewVillaOpen(true); }}><Plus size={18} /> Neue Villa</button>
             <div className="drawer-spacer" />
             <button className="drawer-link" onClick={() => { setScreen("workshop"); setMessages([]); setDrawerOpen(false); }}><FolderGit2 size={18} /> Projekt-Werkstatt</button>
             {statusQuery.data?.isAdmin && <button className="drawer-link" onClick={() => { setDrawerOpen(false); setOpenRouterKey(""); setKeyTestResult(null); setKeyDialogOpen(true); }}><KeyRound size={18} /> OpenRouter-Key prüfen</button>}
-            <a className="drawer-link" href="/login"><ArrowLeft size={18} /> Abmelden</a>
+            <button className="drawer-link" type="button" onClick={handleLogout}><ArrowLeft size={18} /> Abmelden</button>
           </aside>
         </div>
       )}
