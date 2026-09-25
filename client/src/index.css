@@ -862,6 +862,10 @@ body:has(.villa-app) {
   line-height: 1.4;
 }
 .github-tool-toggle input { flex: 0 0 auto; margin-top: 2px; accent-color: #19c7b5; }
+.admin-prompt-panel { display: block; }
+.admin-prompt-panel span { width: 100%; }
+.admin-prompt-panel textarea { width: 100%; margin-top: 4px; border-radius: 10px; border: 1px solid rgba(148, 163, 196, .25); background: rgba(12, 20, 38, .6); color: #e2e9fb; font: inherit; font-size: 12px; padding: 8px 10px; resize: vertical; }
+.admin-prompt-panel .prompt-actions { margin-top: 6px; display: flex; gap: 8px; flex-direction: row; align-items: center; }
 .github-tool-toggle span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .github-tool-toggle strong { color: #e2e9fb; font-size: 12px; font-weight: 600; }
 .github-tool-toggle small { color: #929fbd; font-size: 10px; overflow-wrap: anywhere; }
