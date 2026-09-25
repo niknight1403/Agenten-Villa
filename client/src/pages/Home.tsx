@@ -55,6 +55,7 @@ export default function Home() {
   // nonce cookie and must run only at the moment of navigation.
   const { isAuthenticated, loading, logout } = useAuth();
   const statusQuery = trpc.agent.status.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const usageQuery = trpc.agent.usage.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const villaListQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const createVillaMutation = trpc.villa.create.useMutation({ onSuccess: () => villaListQuery.refetch() });
   const deleteVillaMutation = trpc.villa.remove.useMutation({ onSuccess: () => villaListQuery.refetch() });
@@ -372,7 +373,7 @@ export default function Home() {
               {!isAuthenticated && !loading ? <button className="send-button" type="button" aria-label="Anmelden" onClick={() => startLogin()}><ArrowLeft size={19} /></button> : <button className="send-button" type="submit" aria-label="Senden" disabled={!draft.trim() || !agentRunning || chatMutation.isPending}><Send size={19} /></button>}
             </form>
             {isAuthenticated && <label className="fallback-consent"><input type="checkbox" checked={allowHuggingFaceFallback} onChange={(event) => setAllowHuggingFaceFallback(event.target.checked)} /> Hugging Face einmalig nur bei vorübergehendem OpenRouter-Ausfall versuchen</label>}
-            <div className="composer-footnote"><Sparkles size={12} /> {statusQuery.data?.notice ?? "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}</div>
+            <div className="composer-footnote"><Sparkles size={12} /> {statusQuery.data?.notice ?? "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}{usageQuery.data && !isWorkshop && ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`}</div>
           </div>
         </section>
       )}

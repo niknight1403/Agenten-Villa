@@ -65,6 +65,26 @@ function consumeInWindow(
     throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: errorMessage });
   current.count += 1;
 }
+/** Pure peek at how many calls remain in the current window without consuming one. */
+export function remainingInWindow(
+  store: Map<number, { start: number; count: number }>,
+  userId: number,
+  limit: number,
+  windowMs: number
+) {
+  const current = store.get(userId);
+  const now = Date.now();
+  if (!current || now - current.start >= windowMs) return limit;
+  return Math.max(0, limit - current.count);
+}
+
+function windowResetAt(store: Map<number, { start: number; count: number }>, userId: number, windowMs: number) {
+  const current = store.get(userId);
+  const now = Date.now();
+  if (!current || now - current.start >= windowMs) return null;
+  return new Date(current.start + windowMs);
+}
+
 function consumeTurn(userId: number) {
   consumeInWindow(
     usage,
@@ -119,6 +139,10 @@ const inputSchema = z
   });
 
 export const agentRouter = router({
+  usage: protectedProcedure.query(({ ctx }) => ({
+    remainingTurns: remainingInWindow(usage, ctx.user.id, MAX_TURNS_PER_WINDOW, WINDOW_MS),
+    resetsAt: windowResetAt(usage, ctx.user.id, WINDOW_MS),
+  })),
   status: protectedProcedure.query(({ ctx }) => ({
     state: controlState,
     isAdmin: isAdmin(ctx.user),
