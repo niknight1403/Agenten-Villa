@@ -74,6 +74,9 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 | `JWT_SECRET` | Signatur der Sitzungen | ja (auto-generiert) |
 | `AGENT_ADMIN_EMAIL` | Allowlist-Administrator | empfohlen |
 | `OPENROUTER_API_KEY` | Kostenlose Modellroute | ja für Agenten |
+| `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) | nein |
+| `FREE_TIER_CACHE` | Antwort-Cache: Produktion default an | nein |
+| `FREE_TIER_CACHE_TTL_SECONDS` | Cache-TTL (Default 600) | nein |
 | `PORT` | von Render gesetzt | nein |
 
 ## Client (Web)
