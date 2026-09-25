@@ -6,6 +6,22 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
+/**
+ * vite.config.ts exports a ConfigFn (defineConfig((env) => config)).
+ * Spreading the function itself silently drops root, aliases and plugins,
+ * so it must be resolved to the UserConfig object first.
+ */
+export async function resolveViteDevConfig(): Promise<Record<string, unknown>> {
+  const config =
+    typeof viteConfig === "function"
+      ? await (viteConfig as (env: { command: string; mode: string }) => unknown)({ command: "serve", mode: "development" })
+      : viteConfig;
+  if (!config || typeof config !== "object") {
+    throw new Error("vite.config did not resolve to a config object");
+  }
+  return config as Record<string, unknown>;
+}
+
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
@@ -14,7 +30,7 @@ export async function setupVite(app: Express, server: Server) {
   };
 
   const vite = await createViteServer({
-    ...viteConfig,
+    ...(await resolveViteDevConfig()),
     configFile: false,
     server: serverOptions,
     appType: "custom",
