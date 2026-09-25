@@ -49,6 +49,7 @@ export default function Home() {
   // nonce cookie and must run only at the moment of navigation.
   const { isAuthenticated, loading } = useAuth();
   const statusQuery = trpc.agent.status.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const villaSnapshotQuery = trpc.agent.villaSnapshot.useQuery({}, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const chatMutation = trpc.agent.chat.useMutation();
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
   const keyTestMutation = trpc.agent.testOpenRouterKey.useMutation({ gcTime: 0 });
@@ -177,6 +178,11 @@ export default function Home() {
       {screen === "villas" ? (
         <section className="villa-library">
           <div className="library-heading"><div><span className="eyebrow">DEIN AGENTEN-TEAM</span><h1>Deine Villen</h1></div><button className="round-add" aria-label="Neue Villa" onClick={() => setNewVillaOpen(true)}><Plus size={20} /></button></div>
+          {villaSnapshotQuery.data && (
+            <p className="library-capacity">
+              Villa {villaSnapshotQuery.data.id}: {villaSnapshotQuery.data.availableLogicalAgents.toLocaleString("de-DE")} von {villaSnapshotQuery.data.logicalAgentCapacity.toLocaleString("de-DE")} logischen Plätzen verfügbar · {villaSnapshotQuery.data.provisioning === "lazy" ? "bedarfsgesteuert provisioniert" : villaSnapshotQuery.data.provisioning} · {villaSnapshotQuery.data.packs.length} Capability-Packs aktiv
+            </p>
+          )}
           <div className="villa-list">
             {filteredVillas.map((villa) => (
               <button key={villa.name} className={`villa-row${activeVilla.name === villa.name ? " selected" : ""}`} onClick={() => chooseVilla(villa)}>

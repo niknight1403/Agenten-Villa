@@ -867,3 +867,10 @@ body:has(.villa-app) {
 .github-tool-toggle small { color: #929fbd; font-size: 10px; overflow-wrap: anywhere; }
 .github-tool-toggle:has(input:disabled) { opacity: .65; }
 @media (max-width: 680px) { .github-tool-toggle { padding: 9px 11px; font-size: 11px; } }
+
+.library-capacity {
+  margin: -10px 0 21px;
+  color: #7786aa;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
