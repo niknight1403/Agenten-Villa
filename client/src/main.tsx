@@ -40,7 +40,8 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      // Mobile build (APK): absolute server URL via VITE_API_URL, e.g. https://agenten-villa.onrender.com/api/trpc
+      url: `${import.meta.env.VITE_API_URL ?? ""}/api/trpc`,
       transformer: superjson,
       headers() {
         // Preview auto-login fallback: when the browser blocks iframe cookies
