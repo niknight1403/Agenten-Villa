@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -39,7 +39,7 @@ export const villas = mysqlTable("villas", {
   icon: mysqlEnum("icon", ["villa", "bot"]).default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [index("villas_createdBy_idx").on(table.createdBy)]);
 
 export type Villa = typeof villas.$inferSelect;
 export type InsertVilla = typeof villas.$inferInsert;
@@ -57,7 +57,7 @@ export const villaMessages = mysqlTable("villa_messages", {
   model: varchar("model", { length: 128 }),
   rating: int("rating"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [index("villa_messages_villaId_idx").on(table.villaId)]);
 
 export type VillaMessage = typeof villaMessages.$inferSelect;
 export type InsertVillaMessage = typeof villaMessages.$inferInsert;
