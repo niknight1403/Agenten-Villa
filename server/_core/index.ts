@@ -8,6 +8,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerHealthRoute } from "./health";
 import { rateLimit } from "./rate-limit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
+import { logStartupDiagnostics } from "./diagnostics";
 import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -77,6 +78,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    logStartupDiagnostics();
   });
 }
 
