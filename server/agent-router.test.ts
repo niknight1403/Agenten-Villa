@@ -127,3 +127,22 @@ describe("remainingInWindow", () => {
     expect(remainingInWindow(store, 1, limit, windowMs)).toBe(0);
   });
 });
+
+describe("admin system prompt configuration", () => {
+  it("lets only admins set, read and clear the prompt", async () => {
+    vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
+    const admin = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    const user = appRouter.createCaller(createContext("user", "other@example.com"));
+
+    await expect(user.agent.setSystemPrompt({ prompt: "nope" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await expect(admin.agent.setSystemPrompt({ prompt: "  Eigenes Admin-Verhalten.  " })).resolves.toMatchObject({ systemPrompt: "Eigenes Admin-Verhalten." });
+    await expect(admin.agent.status()).resolves.toMatchObject({ systemPrompt: "Eigenes Admin-Verhalten." });
+
+    await admin.agent.setSystemPrompt({ prompt: null });
+    await expect(admin.agent.status()).resolves.toMatchObject({ systemPrompt: null });
+
+    await admin.agent.setSystemPrompt({ prompt: "   " });
+    await expect(admin.agent.status()).resolves.toMatchObject({ systemPrompt: null });
+  });
+});

@@ -8,6 +8,8 @@ export type AgentInput = {
   history: Message[];
   mode: "home" | "workshop";
   specialty: string;
+  /** Administrator-defined replacement for the default persona prompt. */
+  systemOverride?: string | null;
 };
 export type AgentResult = {
   answer: string;
@@ -83,6 +85,13 @@ function retryable(status: number) {
   return [408, 429, 500, 502, 503, 504].includes(status);
 }
 
+function resolveSystemPrompt(input: AgentInput): string {
+  const override = input.systemOverride?.trim();
+  // An admin override replaces the default persona; the GitHub tool-safety
+  // block is appended separately by makeMessages and is never overridable.
+  return override ? override : SYSTEM;
+}
+
 function makeMessages(input: AgentInput, withGitHub = false): ApiMessage[] {
   const context =
     input.mode === "workshop"
@@ -91,7 +100,7 @@ function makeMessages(input: AgentInput, withGitHub = false): ApiMessage[] {
   return [
     {
       role: "system",
-      content: `${SYSTEM}\n\n${getVillaSystemContext(DEFAULT_VILLA_ID)}\n\n${context}${withGitHub ? `\n\n${GITHUB_SYSTEM}` : ""}`,
+      content: `${resolveSystemPrompt(input)}\n\n${getVillaSystemContext(DEFAULT_VILLA_ID)}\n\n${context}${withGitHub ? `\n\n${GITHUB_SYSTEM}` : ""}`,
     },
     ...input.history
       .slice(-LIMITS.historyMessages)

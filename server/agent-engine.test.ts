@@ -120,3 +120,29 @@ describe("OpenRouter API key verification", () => {
     await expect(verifyOpenRouterKey("sk-or-test-key", networkFailure)).resolves.toBe("unavailable");
   });
 });
+
+describe("admin system prompt override", () => {
+  it("replaces the default persona when set and keeps it when empty", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await runAgentTurn({ ...input, systemOverride: "  Du bist der Test-Override.  " }, false, { fetcher });
+    const body = JSON.parse((fetcher.mock.calls[0]?.[1] as RequestInit).body as string) as { messages: Array<{ role: string; content: string }> };
+    expect(body.messages[0]?.role).toBe("system");
+    expect(body.messages[0]?.content).toContain("Du bist der Test-Override.");
+    expect(body.messages[0]?.content).not.toContain("Agenten-Villa-Assistent");
+
+    const fetcher2 = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await runAgentTurn({ ...input, systemOverride: "   " }, false, { fetcher: fetcher2 });
+    const body2 = JSON.parse((fetcher2.mock.calls[0]?.[1] as RequestInit).body as string) as { messages: Array<{ content: string }> };
+    expect(body2.messages[0]?.content).toContain("Agenten-Villa-Assistent");
+  });
+
+  it("keeps the GitHub tool-safety block even with an override active", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await runAgentTurnWithGitHub({ ...workshopInput, systemOverride: "Override-Modus" }, async () => ({ ok: true, summary: "noop", created: [] }), { fetcher });
+    const body = JSON.parse((fetcher.mock.calls[0]?.[1] as RequestInit).body as string) as { messages: Array<{ content: string }> };
+    expect(body.messages[0]?.content).toContain("Override-Modus");
+    expect(body.messages[0]?.content).toContain("GitHub-Werkzeuge sind für diese Anfrage aktiviert");
+  });
+});

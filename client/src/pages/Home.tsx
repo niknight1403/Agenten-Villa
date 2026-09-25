@@ -64,6 +64,9 @@ export default function Home() {
   const villaSnapshotQuery = trpc.agent.villaSnapshot.useQuery({}, { enabled: isAuthenticated, refetchOnWindowFocus: false });
   const chatMutation = trpc.agent.chat.useMutation();
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
+  const systemPromptMutation = trpc.agent.setSystemPrompt.useMutation({ onSuccess: () => statusQuery.refetch() });
+  const [promptDraft, setPromptDraft] = useState<string | null>(null);
+  const effectivePrompt = promptDraft ?? statusQuery.data?.systemPrompt ?? "";
   const keyTestMutation = trpc.agent.testOpenRouterKey.useMutation({ gcTime: 0 });
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -366,6 +369,19 @@ export default function Home() {
           <div className="composer-area">
             {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
             {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING" })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
+            {statusQuery.data?.isAdmin && (
+              <div className="github-tool-toggle admin-prompt-panel">
+                <span>
+                  <strong>Eigene Systemanweisung (Administrator)</strong>
+                  <small>Ersetzt die Standard-Persona des Assistenten. Leer lassen und speichern = Standard wiederherstellen. GitHub-Sicherheitsregeln und Anbieterrichtlinien gelten weiterhin.</small>
+                  <textarea value={effectivePrompt} onChange={(event) => setPromptDraft(event.target.value)} rows={2} maxLength={4000} aria-label="Eigene Systemanweisung" placeholder="z. B. eigener Stil, eigene Rollenbeschreibung …" />
+                  <span className="prompt-actions">
+                    <button className="agent-control" type="button" disabled={systemPromptMutation.isPending} onClick={() => systemPromptMutation.mutate({ prompt: effectivePrompt.trim() || null })}>{systemPromptMutation.isPending ? "Speichern …" : "Anweisung speichern"}</button>
+                    <button className="agent-control" type="button" disabled={systemPromptMutation.isPending || !statusQuery.data.systemPrompt} onClick={() => { setPromptDraft(null); systemPromptMutation.mutate({ prompt: null }); }}>Zurücksetzen</button>
+                  </span>
+                </span>
+              </div>
+            )}
             {isWorkshop && statusQuery.data?.isAdmin && <label className="github-tool-toggle"><input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} /><span><strong>GitHub-Werkzeuge aktivieren</strong><small>{statusQuery.data.github?.configured ? `${statusQuery.data.github.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small></span></label>}
             <form className="message-composer" onSubmit={onSubmit}>
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isWorkshop ? "Auftrag an den Superagenten…" : "Anweisung an den Superagenten…"} rows={1} aria-label="Nachricht an den Superagenten" disabled={!isAuthenticated || !agentRunning || chatMutation.isPending} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />

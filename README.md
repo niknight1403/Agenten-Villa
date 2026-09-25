@@ -22,6 +22,8 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 
 ## Administratorzugriff
 
+Administratoren (Rolle `admin` oder `AGENT_ADMIN_EMAIL`) sind vom Stundenlimit ausgenommen und können über `agent.setSystemPrompt` eine eigene Systemanweisung setzen, die die Standard-Persona ersetzt (UI-Feld im Composer, max. 4000 Zeichen). Der GitHub-Werkzeug-Sicherheitsblock bleibt davon unberührt; Anbieter-Moderation und Nutzungsbedingungen der Provider gelten weiterhin und werden nicht umgangen.
+
 Der konfigurierte Administrator (`AGENT_ADMIN_EMAIL`) oder ein Benutzer mit der Rolle `admin` besitzt vollständigen **Anwendungszugriff** auf Agentensteuerung, Werkstatt und geschützte GitHub-Funktionen. Anwendungslimits für normale Benutzer blockieren den Administrator nicht. Pro-Anfrage-Sicherheitsgrenzen, Provider-Kontingente, Zugangsschutz, Audit-Regeln und die GitHub-Branch-/Draft-PR-Regeln bleiben für alle Benutzer aktiv.
 
 Es gibt bewusst keinen Limit-Umgehungsagenten, keine Schlüsselrotation, keine Identitätsvortäuschung und keine kostenpflichtige oder nicht autorisierte Ausweichroute. Diese Grenzen schützen Konten, Anbieter und das Repository.

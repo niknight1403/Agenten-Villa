@@ -23,6 +23,7 @@ import {
 } from "./agent-villa";
 
 let controlState: "RUNNING" | "STOPPED" = "STOPPED";
+let adminSystemPrompt: string | null = null;
 const usage = new Map<number, { start: number; count: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_TURNS_PER_WINDOW = 12;
@@ -146,6 +147,7 @@ export const agentRouter = router({
   status: protectedProcedure.query(({ ctx }) => ({
     state: controlState,
     isAdmin: isAdmin(ctx.user),
+    systemPrompt: adminSystemPrompt,
     providers: configuredProviders(),
     github: {
       configured: Boolean(process.env.GITHUB_TOKEN?.trim()),
@@ -182,6 +184,14 @@ export const agentRouter = router({
       requireAdmin(ctx.user);
       controlState = input.state;
       return { state: controlState };
+    }),
+  setSystemPrompt: protectedProcedure
+    .input(z.object({ prompt: z.string().max(4000).nullable() }))
+    .mutation(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      const trimmed = input.prompt?.trim() ?? "";
+      adminSystemPrompt = trimmed ? trimmed : null;
+      return { systemPrompt: adminSystemPrompt };
     }),
   testOpenRouterKey: protectedProcedure
     .input(z.object({ apiKey: z.string().trim().min(8).max(512) }))
@@ -222,8 +232,9 @@ export const agentRouter = router({
                 "Der GitHub-Token ist noch nicht im geschützten Server-Secret eingerichtet.",
             });
           if (!isAdmin(ctx.user)) consumeGitHubTurn(ctx.user.id);
-          const result = await runAgentTurnWithGitHub(input, (name, args) =>
-            executeGitHubTool(name, args)
+          const result = await runAgentTurnWithGitHub(
+            adminSystemPrompt ? { ...input, systemOverride: adminSystemPrompt } : input,
+            (name, args) => executeGitHubTool(name, args)
           );
           return {
             ...result,
@@ -238,7 +249,7 @@ export const agentRouter = router({
           };
         }
         const result = await runAgentTurn(
-          input,
+          adminSystemPrompt ? { ...input, systemOverride: adminSystemPrompt } : input,
           input.allowHuggingFaceFallback,
           { beforeFallback: async () => controlState === "RUNNING" }
         );
@@ -279,9 +290,14 @@ export const githubControlLimits = {
 } as const;
 export function resetAgentRouterForTests() {
   controlState = "STOPPED";
+  adminSystemPrompt = null;
   usage.clear();
   credentialChecks.clear();
   githubUsage.clear();
+}
+
+export function getAdminSystemPromptForTests() {
+  return adminSystemPrompt;
 }
 export function getAgentRouterStateForTests() {
   return controlState;
