@@ -10,9 +10,7 @@ import {
   Building2,
   Check,
   ChevronDown,
-  CircleDot,
   Code2,
-  ExternalLink,
   FolderGit2,
   Github,
   KeyRound,
@@ -433,5 +431,3 @@ export default function Home() {
     </main>
   );
 }
-
-export { ExternalLink, CircleDot };
