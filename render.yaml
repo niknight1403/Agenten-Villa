@@ -1,0 +1,22 @@
+# Render Blueprint: Agenten Villa als kostenloser Web-Service (Client + API in einem Docker-Container)
+# Schritt-für-Schritt-Anleitung: docs/DEPLOY.md
+services:
+  - type: web
+    name: agenten-villa
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      # MySQL-Verbindung (Aiven Free / TiDB Serverless) – in docs/DEPLOY.md
+      - key: DATABASE_URL
+        sync: false
+      # Admin-Allowlist (deine E-Mail)
+      - key: AGENT_ADMIN_EMAIL
+        sync: false
+      # Kostenloser Modellanbieter: https://openrouter.ai/keys
+      - key: OPENROUTER_API_KEY
+        sync: false

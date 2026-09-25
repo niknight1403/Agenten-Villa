@@ -1,0 +1,68 @@
+# Deployment – kostenloser Server (Schritt für Schritt)
+
+Diese Anleitung bringt Agenten Villa **kostenlos** ans Netz: ein Docker-Web-Service (Client + Express-API gemeinsam) plus kostenlose MySQL-Datenbank. Der gesamte Client-Build wird vom Service mit ausgeliefert, es gibt nur **einen** Service.
+
+## Überblick
+
+| Baustein | Kostenloser Anbieter | Konto nötig |
+| --- | --- | --- |
+| Web-Service (Docker) | [Render](https://render.com) Free Plan | ja (GitHub-Login) |
+| MySQL-Datenbank | [Aiven Free](https://aiven.io) oder [TiDB Serverless](https://tidbcloud.com) | ja |
+| LLM-Modellroute | [OpenRouter](https://openrouter.ai/keys) (Free-Modelle) | ja |
+
+> Hinweis: Render Free-Services gehen nach ~15 Min. Inaktivität schlafen und brauchen beim ersten Aufruf ~30–60 Sek. Aufwachzeit.
+
+## 1. MySQL-Datenbank anlegen
+
+**Aiven Free:** Projekt anlegen → Service `MySQL` (Free Plan) → nach dem Start die `Service URI` kopieren (Format: `mysql://user:pass@host:port/defaultdb?ssl-mode=REQUIRED`).
+
+**Alternativ TiDB Serverless (Free):** Cluster anlegen → Connection String (Format: `mysql://user:pass@host:4000/test?ssl-mode=VERIFY_IDENTITY`).
+
+Die URI später als `DATABASE_URL` eintragen.
+
+## 2. Schema in die Datenbank pushen (einmalig, lokal)
+
+```bash
+pnpm install
+DATABASE_URL="mysql://...deine-uri..." pnpm db:push
+```
+
+## 3. Web-Service auf Render deployen
+
+1. Auf [render.com](https://render.com) mit GitHub anmelden.
+2. **New → Blueprint** wählen → Repository `niknight1403/Agenten-Villa` verbinden → Render erkennt die `render.yaml` → **Apply**.
+3. Beim ersten Deploy nach den drei Werten fragen (Sync-Dialog):
+   - `DATABASE_URL` = MySQL-URI aus Schritt 1
+   - `AGENT_ADMIN_EMAIL` = deine Administrator-E-Mail (Allowlist-Admin, vom Stundenlimit befreit)
+   - `OPENROUTER_API_KEY` = Key von <https://openrouter.ai/keys> (kostenlose Modelle)
+   - `JWT_SECRET` wird automatisch generiert.
+4. Nach dem Deploy ist die App unter `https://agenten-villa.onrender.com` erreichbar.
+
+## 4. Administratorkonto
+
+Nach dem ersten Login im Web-UI: die E-Mail aus `AGENT_ADMIN_EMAIL` erhält automatisch die Admin-Rolle (`admin`) – Stundenlimit entfällt, voller Zugriff auf Werkstatt und geschützte GitHub-Funktionen. Zugangsdaten gehören **niemals** in Code, Chats oder die APK.
+
+## 5. APK bauen (GitHub Actions)
+
+Im Repo: **Actions → Build Android APK → Run workflow**. Optional das Feld `server_url` mit der Render-URL aus Schritt 3 füllen (z. B. `https://agenten-villa.onrender.com`), damit die App direkt das Backend anspricht.
+
+Nach ~15 Min. liegt unter dem Run das **Artifact `agenten-villa-debug-apk`** – die APK aufs Handy herunterladen und installieren („Unbekannte Quellen" erlauben). Ohne `server_url` gestartet die App, findet aber noch kein Backend.
+
+Die Debug-APK ist für Tests gedacht. Für Play Store / Verteilung: Release-APK mit eigenem Keystore signieren (folgt auf Anfrage).
+
+## Umgebungsvariablen (Server)
+
+| Variable | Zweck | Pflicht |
+| --- | --- | --- |
+| `DATABASE_URL` | MySQL-Verbindung | ja |
+| `JWT_SECRET` | Signatur der Sitzungen | ja (auto-generiert) |
+| `AGENT_ADMIN_EMAIL` | Allowlist-Administrator | empfohlen |
+| `OPENROUTER_API_KEY` | Kostenlose Modellroute | ja für Agenten |
+| `PORT` | von Render gesetzt | nein |
+
+## Client (Web)
+
+| Variable | Zweck |
+| --- | --- |
+| `VITE_API_URL` | Nur für Mobile-Builds (APK): absolute Server-URL, z. B. `https://agenten-villa.onrender.com`. Web-Standard: leer = relative `/api/trpc` |
+| `VITE_ANALYTICS_ENDPOINT` / `VITE_ANALYTICS_WEBSITE_ID` | optionales Umami-Tracking |
