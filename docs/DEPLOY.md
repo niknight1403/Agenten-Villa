@@ -38,11 +38,20 @@ DATABASE_URL="mysql://...deine-uri..." pnpm db:push
    - `JWT_SECRET` wird automatisch generiert.
 4. Nach dem Deploy ist die App unter `https://agenten-villa.onrender.com` erreichbar.
 
-## 4. Administratorkonto
+## 4. Google-Anmeldung einrichten (Account-System)
+
+Das Account-System basiert auf Google OAuth 2.0 (kein separates Passwort-System, "Mit Google anmelden" ist die einzige Anmeldeart):
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/apis/credentials) ein OAuth-Client (Typ **Web-Anwendung**) anlegen.
+2. **Autorisierte Redirect-URI**: `https://<deine-render-url>/api/auth/google/callback`
+3. `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` bei Render als Umgebungsvariablen hinterlegen.
+4. Fertig — der Button „Mit Google anmelden" auf `/login` funktioniert direkt.
+
+## 5. Administratorkonto
 
 Nach dem ersten Login im Web-UI: die E-Mail aus `AGENT_ADMIN_EMAIL` erhält automatisch die Admin-Rolle (`admin`) – Stundenlimit entfällt, voller Zugriff auf Werkstatt und geschützte GitHub-Funktionen. Zugangsdaten gehören **niemals** in Code, Chats oder die APK.
 
-## 5. APK bauen (GitHub Actions)
+## 6. APK bauen (GitHub Actions)
 
 Im Repo: **Actions → Build Android APK → Run workflow**. Optional das Feld `server_url` mit der Render-URL aus Schritt 3 füllen (z. B. `https://agenten-villa.onrender.com`), damit die App direkt das Backend anspricht.
 

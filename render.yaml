@@ -20,3 +20,8 @@ services:
       # Kostenloser Modellanbieter: https://openrouter.ai/keys
       - key: OPENROUTER_API_KEY
         sync: false
+      # Google OAuth (Account-System) – siehe docs/DEPLOY.md
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

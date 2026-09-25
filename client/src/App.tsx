@@ -14,6 +14,8 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/core/controller"} component={Controller} />
+      {/* Account system is Google OAuth only (no password) — one sign-in
+          screen for all legacy auth paths. */}
       <Route path={"/login"} component={Auth} />
       <Route path={"/register"} component={Auth} />
       <Route path={"/forgot-password"} component={Auth} />
