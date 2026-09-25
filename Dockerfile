@@ -10,6 +10,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+
+# API-URL fest auf die Produktionsumgebung gepinnt (Web-App extern erreichbar).
+# Ueberschreibbar zur Build-Zeit: docker build --build-arg VITE_API_URL=<url>
+ARG VITE_API_URL=https://agenten-villa.onrender.com
+ENV VITE_API_URL=$VITE_API_URL
 RUN pnpm build
 
 FROM node:22-bookworm-slim AS runtime

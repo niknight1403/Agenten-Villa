@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       server_url:
-        description: "Backend-URL (ohne /api/trpc), z.B. https://agenten-villa.onrender.com"
+        description: "Backend-URL (ohne /api/trpc). Default: Produktions-URL"
         required: false
-        default: ""
+        default: "https://agenten-villa.onrender.com"
   push:
     branches: [main]
 

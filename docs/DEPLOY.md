@@ -62,6 +62,10 @@ Nach ~15 Min. liegt unter dem Run das **Artifact `agenten-villa-debug-apk`** –
 
 Die Debug-APK ist für Tests gedacht. Für Play Store / Verteilung: Release-APK mit eigenem Keystore signieren (folgt auf Anfrage).
 
+## API-URL (Web-App)
+
+Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-villa.onrender.com` auf – gepinnt im `Dockerfile` zur Build-Zeit (`ARG VITE_API_URL`, Überschreibbar mit `--build-arg`). Die APK-Builds im GitHub-Workflow defaulten ebenfalls auf diese URL. Lokale Entwicklung bleibt unberührt (relative URL via `pnpm dev`).
+
 ## Umgebungsvariablen (Server)
 
 | Variable | Zweck | Pflicht |
