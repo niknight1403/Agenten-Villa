@@ -791,3 +791,33 @@ body:has(.villa-app) {
 @media (prefers-reduced-motion: reduce) {
   .drawer-backdrop, .app-drawer, .new-villa-modal { animation: none !important; }
 }
+
+
+/* Safe, explicit agent controls */
+.status-dot.stopped { background: #71809c; box-shadow: none; }
+.status-dot.running { background: #22d7c2; box-shadow: 0 0 10px rgb(34 215 194 / 38%); }
+.agent-control {
+  display: block;
+  min-height: 34px;
+  margin: 0 auto 10px;
+  padding: 0 14px;
+  border: 1px solid #52608a;
+  border-radius: 999px;
+  color: #dce5ff;
+  background: #171e3b;
+  font: inherit;
+  font-size: 12px;
+}
+.agent-control:hover { border-color: #20bdae; background: #132b35; }
+.agent-control:disabled { opacity: .65; }
+.fallback-consent {
+  width: min(720px, 100%);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 9px auto 0;
+  color: #8e9ab7;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }

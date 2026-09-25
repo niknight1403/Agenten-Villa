@@ -1,4 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft,
   Bot,
@@ -35,18 +38,17 @@ const workshopIdeas = [
   "Erstelle ein Issue für eine Sprachgabe-Funktion",
 ];
 
-function cannedReply(prompt: string, screen: Screen) {
-  if (screen === "workshop") {
-    if (/repo|commit/i.test(prompt)) return "Ich würde mit einer Übersicht der Repository-Struktur und den letzten Commits beginnen. Verbinde zuerst ein GitHub-Repository, damit ich den tatsächlichen Projektstand analysieren kann.";
-    if (/issue/i.test(prompt)) return "Gern. Beschreibe kurz den gewünschten Umfang und die Akzeptanzkriterien. In dieser Vorschau kann ich noch kein Issue in GitHub anlegen.";
-    return "Ich habe den Auftrag aufgenommen. Für eine echte Codeanalyse muss ein Repository verbunden sein. Die angezeigte Werkstatt ist derzeit eine interaktive Vorschau.";
-  }
-  if (/risiko|chance/i.test(prompt)) return "Ich kann Chancen und Risiken strukturiert gegenüberstellen. Nenne mir dazu das Vorhaben, den Zeithorizont und deine wichtigsten Rahmenbedingungen.";
-  if (/aktionsplan|plan/i.test(prompt)) return "Ein guter Start: Ziel und messbares Ergebnis festlegen, die Arbeit in Etappen teilen, Verantwortlichkeiten zuweisen und pro Etappe einen Prüfpunkt setzen. Was ist dein konkretes Ziel?";
-  return "Ich unterstütze dich als Generalist beim Planen, Recherchieren und Analysieren. Sag mir kurz, welches Ergebnis du erreichen möchtest.";
-}
-
 export default function Home() {
+  // The useAuth hook provides authentication state.
+  // To implement login/logout, call logout(), or start login from an event
+  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
+  // startLogin() during render (no href={startLogin()}) — it mints a one-time
+  // nonce cookie and must run only at the moment of navigation.
+  const { isAuthenticated, loading } = useAuth();
+  const statusQuery = trpc.agent.status.useQuery(undefined, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const chatMutation = trpc.agent.chat.useMutation();
+  const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
+
   const [screen, setScreen] = useState<Screen>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [newVillaOpen, setNewVillaOpen] = useState(false);
@@ -57,21 +59,32 @@ export default function Home() {
   const [villas, setVillas] = useState(initialVillas);
   const [activeVilla, setActiveVilla] = useState(initialVillas[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] = useState(false);
 
   const filteredVillas = useMemo(
     () => villas.filter((villa) => `${villa.name} ${villa.specialty}`.toLowerCase().includes(query.toLowerCase())),
     [villas, query],
   );
 
-  function sendMessage(text = draft) {
+  async function sendMessage(text = draft) {
     const prompt = text.trim();
-    if (!prompt) return;
-    setMessages((previous) => [
-      ...previous,
-      { role: "user", text: prompt },
-      { role: "assistant", text: cannedReply(prompt, screen) },
-    ]);
+    if (!prompt || chatMutation.isPending) return;
+    const prior = messages.slice(-8).map(({ role, text: content }) => ({ role, content }));
+    setMessages((previous) => [...previous, { role: "user", text: prompt }]);
     setDraft("");
+    try {
+      const result = await chatMutation.mutateAsync({
+        prompt,
+        history: prior,
+        mode: screen === "workshop" ? "workshop" : "home",
+        specialty: activeVilla.specialty,
+        allowHuggingFaceFallback,
+      });
+      setMessages((previous) => [...previous, { role: "assistant", text: `${result.answer}\n\n${result.provider} · ${result.model}` }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Die Anfrage konnte nicht verarbeitet werden.";
+      setMessages((previous) => [...previous, { role: "assistant", text: message }]);
+    }
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -100,6 +113,7 @@ export default function Home() {
   }
 
   const isWorkshop = screen === "workshop";
+  const agentRunning = statusQuery.data?.state === "RUNNING";
 
   return (
     <main className="villa-app">
@@ -109,7 +123,7 @@ export default function Home() {
           <span className="brand-tile">{isWorkshop ? <Github /> : <Building2 />}</span>
           <span className="brand-copy">
             <strong>{isWorkshop ? "Superagent · Projekt-Werkstatt" : activeVilla.name}</strong>
-            <span><i className="status-dot" />{isWorkshop ? "niknight1403/Agenten-Villa · Vorschau" : `${activeVilla.specialty} · bereit`}</span>
+            <span><i className={`status-dot${agentRunning ? " running" : " stopped"}`} />{isWorkshop ? "Projekt-Werkstatt · ohne Repository-Zugriff" : `${activeVilla.specialty} · ${agentRunning ? "Agent läuft" : statusQuery.data?.providers.openrouter ? "Agent gestoppt" : "OpenRouter-Schlüssel fehlt"}`}</span>
           </span>
           <ChevronDown className="brand-chevron" size={16} />
         </button>
@@ -152,7 +166,7 @@ export default function Home() {
                 <div className={`hero-mark ${isWorkshop ? "robot" : "house"}`}>{isWorkshop ? <Bot /> : <Building2 />}</div>
                 <h1>{isWorkshop ? "Superagent bereit" : "Agenten‑Villa"}</h1>
                 <p>{isWorkshop
-                  ? "Beschreibe, was am Projekt weiterentwickelt werden soll. Der Superagent liest das Repo, schlägt Änderungen vor, legt Dateien an und erstellt Issues."
+                  ? "Beschreibe, was am Projekt weiterentwickelt werden soll. Der Agent kann Vorschläge anhand deiner Beschreibung erstellen. Ein Repository ist nicht verbunden; er liest oder ändert keine Dateien und erstellt keine Issues."
                   : <>Dein Superagent für <strong>{activeVilla.specialty}</strong> ist bereit. Die Abteilungen Strategie, Recherche, Analyse und weitere warten auf deine Anweisung.</>}
                 </p>
                 <div className={`suggestion-list ${isWorkshop ? "workshop-ideas" : "home-ideas"}`}>
@@ -176,13 +190,15 @@ export default function Home() {
             )}
           </div>
           <div className="composer-area">
-            {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />Chat bereit <span>·</span> {isWorkshop ? "main · On-Server" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
+            {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
+            {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING" })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             <form className="message-composer" onSubmit={onSubmit}>
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isWorkshop ? "Auftrag an den Superagenten…" : "Anweisung an den Superagenten…"} rows={1} aria-label="Nachricht an den Superagenten" onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />
+              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isWorkshop ? "Auftrag an den Superagenten…" : "Anweisung an den Superagenten…"} rows={1} aria-label="Nachricht an den Superagenten" disabled={!isAuthenticated || !agentRunning || chatMutation.isPending} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />
               {!isWorkshop && <button className="mic-button" type="button" aria-label="Spracheingabe (Vorschau)"><Mic size={20} /></button>}
-              <button className="send-button" type="submit" aria-label="Senden" disabled={!draft.trim()}><Send size={19} /></button>
+              {!isAuthenticated && !loading ? <button className="send-button" type="button" aria-label="Anmelden" onClick={() => startLogin()}><ArrowLeft size={19} /></button> : <button className="send-button" type="submit" aria-label="Senden" disabled={!draft.trim() || !agentRunning || chatMutation.isPending}><Send size={19} /></button>}
             </form>
-            <div className="composer-footnote"><Sparkles size={12} /> KI-Antworten in dieser Vorschau sind Beispiele</div>
+            {isAuthenticated && <label className="fallback-consent"><input type="checkbox" checked={allowHuggingFaceFallback} onChange={(event) => setAllowHuggingFaceFallback(event.target.checked)} /> Hugging Face einmalig nur bei vorübergehendem OpenRouter-Ausfall versuchen</label>}
+            <div className="composer-footnote"><Sparkles size={12} /> {statusQuery.data?.notice ?? "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}</div>
           </div>
         </section>
       )}
