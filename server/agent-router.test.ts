@@ -81,3 +81,26 @@ describe("agent access controls", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("rate limit window reset", () => {
+  it("reopens the window after the configured interval passes", () => {
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < agentControlLimits.maxTurnsPerWindow; i += 1) consumeTurnForTests(42);
+      expect(() => consumeTurnForTests(42)).toThrow(TRPCError);
+      vi.advanceTimersByTime(agentControlLimits.windowMs + 1);
+      expect(() => consumeTurnForTests(42)).not.toThrow();
+      // fresh window started, so the limit applies again
+      for (let i = 1; i < agentControlLimits.maxTurnsPerWindow; i += 1) consumeTurnForTests(42);
+      expect(() => consumeTurnForTests(42)).toThrow(TRPCError);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps users in independent windows without cross-talk", () => {
+    for (let i = 0; i < agentControlLimits.maxTurnsPerWindow; i += 1) consumeTurnForTests(100);
+    expect(() => consumeTurnForTests(100)).toThrow(TRPCError);
+    expect(() => consumeTurnForTests(101)).not.toThrow();
+  });
+});
