@@ -44,7 +44,10 @@ Das Account-System basiert auf Google OAuth 2.0 (kein separates Passwort-System,
 
 1. In der [Google Cloud Console](https://console.cloud.google.com/apis/credentials) ein OAuth-Client (Typ **Web-Anwendung**) anlegen.
 2. **Autorisierte Redirect-URI**: `https://<deine-render-url>/api/auth/google/callback`
-3. `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` bei Render als Umgebungsvariablen hinterlegen.
+   - Der Service heißt in `render.yaml` `agenten-villa`, d.h. Render vergibt standardmäßig **`https://agenten-villa.onrender.com`** → Redirect-URI dann exakt: `https://agenten-villa.onrender.com/api/auth/google/callback`
+   - Tipp: zusätzlich `http://localhost:3000/api/auth/google/callback` als zweite Redirect-URI hinterlegen (Google erlaubt mehrere), dann funktioniert die Anmeldung auch beim lokalen Test-Server (`pnpm dev`).
+   - (Name vergeben? Render hängt dann `-1`, `-2` … an die URL. Falls das passiert: einfach die angezeigte Render-URL in der Google-Konsole ergänzen.)
+3. `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` bei Render als Umgebungsvariablen hinterlegen (werden beim Blueprint-Deploy abgefragt, `sync: false`).
 4. Fertig — der Button „Mit Google anmelden" auf `/login` funktioniert direkt.
 
 ## 5. Administratorkonto
