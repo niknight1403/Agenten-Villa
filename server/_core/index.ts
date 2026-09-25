@@ -7,6 +7,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerHealthRoute } from "./health";
 import { rateLimit } from "./rate-limit";
+import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -39,6 +40,7 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(compression());
+  app.use(requestLogger());
   // Brute-Force-Schutz fuer Login-/OAuth-Endpunkte (20 Anfragen/Minute/IP)
   app.use(
     "/api/auth",
@@ -62,6 +64,9 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // LetzterFallback fuer unbehandelte Fehler
+  app.use(jsonErrorHandler());
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
