@@ -874,3 +874,91 @@ body:has(.villa-app) {
   font-size: 12px;
   letter-spacing: 0.01em;
 }
+
+/* Persistierte Villen-Verwaltung (CRUD-Zeilen mit Löschen) */
+.villa-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.villa-row-delete {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  color: #8a97bd;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.villa-row-delete:hover:not(:disabled) {
+  color: #ff8f8f;
+  border-color: #5a2c3a;
+  background: #2b1830;
+}
+.villa-row-delete:disabled { opacity: 0.5; cursor: default; }
+
+.retry-link {
+  display: block;
+  margin-top: 8px;
+  padding: 6px 12px;
+  width: fit-content;
+  color: #c9d2f5;
+  font-size: 12px;
+  border: 1px solid #273254;
+  border-radius: 10px;
+  background: #121831;
+  cursor: pointer;
+}
+.retry-link:hover { border-color: #6b5bd0; }
+
+/* Nachrichten-Metadaten und Bewertung */
+.message-meta {
+  margin-top: 6px;
+  color: #8a97bd;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.message-rating {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.message-rating button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #8a97bd;
+  border: 1px solid #273254;
+  border-radius: 9px;
+  background: none;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.message-rating button:hover:not(:disabled) { color: #edf0fc; border-color: #6b5bd0; }
+.message-rating button.rated { color: #8fd6ff; border-color: #6b5bd0; background: #1b2145; }
+.message-rating button:disabled { opacity: 0.5; cursor: default; }
+
+/* Aktive Diktier-Aufnahme */
+.mic-button.listening {
+  color: #ff9d9d;
+  border-color: #5a2c3a;
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 157, 157, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 157, 157, 0); }
+}

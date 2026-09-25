@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import { agentControlLimits, consumeCredentialCheckForTests, consumeGitHubTurnForTests, consumeTurnForTests, credentialCheckLimits, githubControlLimits, isAgentAdminForTests, resetAgentRouterForTests } from "./agent-router";
+import { agentControlLimits, consumeCredentialCheckForTests, consumeGitHubTurnForTests, consumeTurnForTests, credentialCheckLimits, githubControlLimits, isAgentAdminForTests, remainingInWindow, resetAgentRouterForTests } from "./agent-router";
 
 function createContext(role: "user" | "admin", email: string): TrpcContext {
   const now = new Date();
@@ -102,5 +102,28 @@ describe("rate limit window reset", () => {
     for (let i = 0; i < agentControlLimits.maxTurnsPerWindow; i += 1) consumeTurnForTests(100);
     expect(() => consumeTurnForTests(100)).toThrow(TRPCError);
     expect(() => consumeTurnForTests(101)).not.toThrow();
+  });
+});
+
+describe("remainingInWindow", () => {
+  const limit = 5;
+  const windowMs = 1000;
+  let store: Map<number, { start: number; count: number }>;
+
+  beforeEach(() => {
+    store = new Map();
+  });
+
+  it("returns the full limit for fresh and expired windows", () => {
+    expect(remainingInWindow(store, 1, limit, windowMs)).toBe(5);
+    store.set(1, { start: Date.now() - windowMs - 5, count: 5 });
+    expect(remainingInWindow(store, 1, limit, windowMs)).toBe(5);
+  });
+
+  it("counts down inside the active window and never goes negative", () => {
+    store.set(1, { start: Date.now(), count: 3 });
+    expect(remainingInWindow(store, 1, limit, windowMs)).toBe(2);
+    store.set(1, { start: Date.now(), count: 9 });
+    expect(remainingInWindow(store, 1, limit, windowMs)).toBe(0);
   });
 });
