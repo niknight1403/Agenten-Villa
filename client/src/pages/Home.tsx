@@ -37,7 +37,7 @@ const initialVillas: Villa[] = [{ name: "Agent-Villa", specialty: "Generalist", 
 const homeIdeas = ["Erstelle einen Aktionsplan", "Analysiere Chancen & Risiken"];
 const workshopIdeas = [
   "Zeige Repo-Überblick und letzte Commits",
-  "Lies src/pages/Villa.jsx und schlage Verbesserungen vor",
+  "Lies server/agent-engine.ts und schlage Verbesserungen vor",
   "Erstelle ein Issue für eine Sprachgabe-Funktion",
 ];
 
@@ -67,6 +67,7 @@ export default function Home() {
   const [activeVilla, setActiveVilla] = useState(initialVillas[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] = useState(false);
+  const [githubToolsEnabled, setGithubToolsEnabled] = useState(false);
 
   const filteredVillas = useMemo(
     () => villas.filter((villa) => `${villa.name} ${villa.specialty}`.toLowerCase().includes(query.toLowerCase())),
@@ -86,8 +87,10 @@ export default function Home() {
         mode: screen === "workshop" ? "workshop" : "home",
         specialty: activeVilla.specialty,
         allowHuggingFaceFallback,
+        useGitHub: screen === "workshop" && githubToolsEnabled,
       });
-      setMessages((previous) => [...previous, { role: "assistant", text: `${result.answer}\n\n${result.provider} · ${result.model}` }]);
+      const actionInfo = result.githubActions ? ` · ${result.githubActions} GitHub-Aktionen` : "";
+      setMessages((previous) => [...previous, { role: "assistant", text: `${result.answer}\n\n${result.provider} · ${result.model}${actionInfo}` }]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Die Anfrage konnte nicht verarbeitet werden.";
       setMessages((previous) => [...previous, { role: "assistant", text: message }]);
@@ -152,7 +155,7 @@ export default function Home() {
           <span className="brand-tile">{isWorkshop ? <Github /> : <Building2 />}</span>
           <span className="brand-copy">
             <strong>{isWorkshop ? "Superagent · Projekt-Werkstatt" : activeVilla.name}</strong>
-            <span><i className={`status-dot${agentRunning ? " running" : " stopped"}`} />{isWorkshop ? "Projekt-Werkstatt · ohne Repository-Zugriff" : `${activeVilla.specialty} · ${agentRunning ? "Agent läuft" : statusQuery.data?.providers.openrouter ? "Agent gestoppt" : "OpenRouter-Schlüssel fehlt"}`}</span>
+            <span><i className={`status-dot${agentRunning ? " running" : " stopped"}`} />{isWorkshop ? `GitHub · ${statusQuery.data?.github?.configured ? "Repository verbunden" : "Token fehlt"}` : `${activeVilla.specialty} · ${agentRunning ? "Agent läuft" : statusQuery.data?.providers.openrouter ? "Agent gestoppt" : "OpenRouter-Schlüssel fehlt"}`}</span>
           </span>
           <ChevronDown className="brand-chevron" size={16} />
         </button>
@@ -195,7 +198,9 @@ export default function Home() {
                 <div className={`hero-mark ${isWorkshop ? "robot" : "house"}`}>{isWorkshop ? <Bot /> : <Building2 />}</div>
                 <h1>{isWorkshop ? "Superagent bereit" : "Agenten‑Villa"}</h1>
                 <p>{isWorkshop
-                  ? "Beschreibe, was am Projekt weiterentwickelt werden soll. Der Agent kann Vorschläge anhand deiner Beschreibung erstellen. Ein Repository ist nicht verbunden; er liest oder ändert keine Dateien und erstellt keine Issues."
+                  ? statusQuery.data?.github?.configured
+                    ? `Repository ${statusQuery.data.github.repository} ist verbunden. Aktiviere GitHub-Werkzeuge im Eingabebereich, damit der Agent Repo-Daten lesen und begrenzte Aufgaben auf einem Branch ausführen kann.`
+                    : `GitHub ist für ${statusQuery.data?.github?.repository ?? "das konfigurierte Repository"} noch nicht verbunden. Hinterlege zuerst GITHUB_TOKEN als geschütztes Server-Secret; der Agent führt bis dahin keine Repo-Aktionen aus.`
                   : <>Dein Superagent für <strong>{activeVilla.specialty}</strong> ist bereit. Die Abteilungen Strategie, Recherche, Analyse und weitere warten auf deine Anweisung.</>}
                 </p>
                 <div className={`suggestion-list ${isWorkshop ? "workshop-ideas" : "home-ideas"}`}>
@@ -221,6 +226,7 @@ export default function Home() {
           <div className="composer-area">
             {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
             {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING" })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
+            {isWorkshop && statusQuery.data?.isAdmin && <label className="github-tool-toggle"><input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} /><span><strong>GitHub-Werkzeuge aktivieren</strong><small>{statusQuery.data.github?.configured ? `${statusQuery.data.github.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small></span></label>}
             <form className="message-composer" onSubmit={onSubmit}>
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isWorkshop ? "Auftrag an den Superagenten…" : "Anweisung an den Superagenten…"} rows={1} aria-label="Nachricht an den Superagenten" disabled={!isAuthenticated || !agentRunning || chatMutation.isPending} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} />
               {!isWorkshop && <button className="mic-button" type="button" aria-label="Spracheingabe (Vorschau)"><Mic size={20} /></button>}

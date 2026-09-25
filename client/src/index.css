@@ -845,3 +845,25 @@ body:has(.villa-app) {
 @keyframes key-spin { to { transform: rotate(360deg); } }
 .spin { animation: key-spin 800ms linear infinite; }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.5s; } }
+
+.github-tool-toggle {
+  width: min(720px, 100%);
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px auto 0;
+  padding: 11px 13px;
+  border: 1px solid #33416a;
+  border-radius: 14px;
+  color: #c5d2ee;
+  background: #121a35;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.github-tool-toggle input { flex: 0 0 auto; margin-top: 2px; accent-color: #19c7b5; }
+.github-tool-toggle span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.github-tool-toggle strong { color: #e2e9fb; font-size: 12px; font-weight: 600; }
+.github-tool-toggle small { color: #929fbd; font-size: 10px; overflow-wrap: anywhere; }
+.github-tool-toggle:has(input:disabled) { opacity: .65; }
+@media (max-width: 680px) { .github-tool-toggle { padding: 9px 11px; font-size: 11px; } }
