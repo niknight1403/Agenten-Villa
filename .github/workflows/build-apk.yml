@@ -77,15 +77,25 @@ jobs:
         with:
           name: agenten-villa-release-apk
           path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
 
       - name: Verify release APK is signed
         if: steps.signing.outputs.signed == 'true'
         run: |
-          APK=$(ls android/app/build/outputs/apk/release/app-release.apk)
-          if ${ANDROID_HOME}/build-tools/*/apksigner verify --print-certs "$APK" > /dev/null 2>&1 ||              ${ANDROID_HOME}/build-tools/34.0.0/apksigner verify "$APK" 2>&1 | grep -q "^Verifies"; then
-            echo "Release-APK ist signiert: $APK"
-          else
-            echo "Fehler: Release-APK ist nicht signiert" >&2
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          # build-tools-Verzeichnis kann mehrere Versionen enthalten; das
+          # unquoted Glob in Kommando-Position wuerde mehrere Pfade liefern
+          # (erster = Kommando, Rest = Argumente) und die Verifikation brechen.
+          APKSIGNER=$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "Fehler: kein apksigner unter $ANDROID_HOME/build-tools gefunden" >&2
             exit 1
           fi
-          retention-days: 30
+          if "$APKSIGNER" verify --print-certs "$APK" > /dev/null 2>&1; then
+            echo "Release-APK ist signiert: $APK"
+            "$APKSIGNER" verify --print-certs "$APK" | head -3 || true
+          else
+            echo "Fehler: Release-APK ist nicht signiert" >&2
+            "$APKSIGNER" verify "$APK" 2>&1 | head -10 >&2 || true
+            exit 1
+          fi
