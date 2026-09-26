@@ -28,7 +28,9 @@ jobs:
 
       - name: Build web client
         env:
-          VITE_API_URL: ${{ github.event.inputs.server_url || '' }}
+          # Bei push-Runs ist github.event.inputs leer — dann Produktions-URL,
+          # damit die native App immer ein Backend erreicht (Web nutzt relativ).
+          VITE_API_URL: ${{ github.event.inputs.server_url || 'https://agenten-villa.onrender.com' }}
         run: pnpm exec vite build
 
       - name: Sync Capacitor (Android)
@@ -61,6 +63,13 @@ jobs:
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Signatur-Fingerprints ausgeben (fuer Google Cloud Console)
+        if: env.ANDROID_KEYSTORE_FILE != ''
+        run: |
+          echo "SHA-1/SHA-256 des Release-Keystores:"
+          keytool -list -v -keystore "$ANDROID_KEYSTORE_FILE" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" | grep -E "SHA1:|SHA256:" || true
+          echo "Diese Fingerprints als 'Android'-OAuth-Client (Paketname de.niknight1403.agentenvilla) in der Google Cloud Console hinterlegen."
 
       - name: Build release APK
         working-directory: android

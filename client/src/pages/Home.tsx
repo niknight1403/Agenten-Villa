@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
@@ -325,6 +326,16 @@ export default function Home() {
   }
 
   async function handleLogout() {
+    // Nativ: Google-Plugin-Session mit abmelden (Play-Services), damit die
+    // naechste Anmeldung sauber startet. Web: nichts zu tun.
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
+        await GoogleAuth.signOut();
+      } catch (error) {
+        console.warn("[Logout] Google signOut failed", error);
+      }
+    }
     try {
       await logout();
     } finally {

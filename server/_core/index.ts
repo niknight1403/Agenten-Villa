@@ -10,6 +10,8 @@ import { rateLimit } from "./rate-limit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { logStartupDiagnostics } from "./diagnostics";
 import { registerGoogleAuthRoutes } from "./googleAuth";
+import { registerNativeGoogleAuthRoutes } from "./nativeAuth";
+import { nativeCors } from "./nativeCors";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -49,8 +51,12 @@ async function startServer() {
   );
   registerHealthRoute(app);
   registerStorageProxy(app);
+  // CORS fuer native Capacitor-Urspruenge — muss VOR den API-Routen stehen,
+  // damit Preflights (OPTIONS) aus der Android/iOS-WebView durchgehen.
+  app.use("/api", nativeCors());
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
+  registerNativeGoogleAuthRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

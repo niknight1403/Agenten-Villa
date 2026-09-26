@@ -4,4 +4,6 @@
     <string name="title_activity_main">Agenten Villa</string>
     <string name="package_name">de.niknight1403.agentenvilla</string>
     <string name="custom_url_scheme">de.niknight1403.agentenvilla</string>
+    <!-- Web-Client-ID fuer Google Sign-In (Plugin-Fallback, Config hat Vorrang) -->
+    <string name="server_client_id">656137332727-2i47bqt2fk359nj48tc0kdfl3mhjmoo1.apps.googleusercontent.com</string>
 </resources>
