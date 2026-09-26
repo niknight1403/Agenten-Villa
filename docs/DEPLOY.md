@@ -85,3 +85,10 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 | --- | --- |
 | `VITE_API_URL` | Nur für Mobile-Builds (APK): absolute Server-URL, z. B. `https://agenten-villa.onrender.com`. Web-Standard: leer = relative `/api/trpc` |
 | `VITE_ANALYTICS_ENDPOINT` / `VITE_ANALYTICS_WEBSITE_ID` | optionales Umami-Tracking |
+
+## KI-Code-Review (PR-Agent)
+
+Jeder neue Pull Request wird automatisch vom PR-Agenten (Gemini) reviewed:
+`/describe`, `/review` und `/improve` laufen automatisch, im PR sind
+interaktive Kommentare moeglich (`/ask "..."`, `/review`, `/improve`).
+Kein externes Konto noetig — der Gemini-Key liegt als Repo-Secret.
