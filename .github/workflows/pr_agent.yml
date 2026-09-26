@@ -37,8 +37,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Gemini (Google AI Studio) — Key liegt als Repo-Secret bereit.
-          config.model: "gemini/gemini-2.5-flash"
-          config.fallback_models: '["gemini/gemini-2.5-flash"]'
+          config.model: "gemini/gemini-3.8-flash"
+          config.fallback_models: '["gemini/gemini-3.8-flash"]'
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # Automatische Werkzeuge bei neuen PRs:
           github_action_config.auto_review: "true"
