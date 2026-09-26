@@ -9,4 +9,7 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };
