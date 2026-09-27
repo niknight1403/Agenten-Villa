@@ -8,13 +8,13 @@ import {
 } from "./agent-villa";
 
 describe("agent villa orchestration", () => {
-  it("exposes 5,000 lazy logical agent slots without provisioning model calls", () => {
+  it("exposes 1,000 lazy logical agent slots without provisioning model calls", () => {
     const snapshot = getVillaSnapshot("villa-test");
-    expect(LOGICAL_AGENTS_PER_VILLA).toBe(5_000);
-    expect(snapshot.logicalAgentCapacity).toBe(5_000);
+    expect(LOGICAL_AGENTS_PER_VILLA).toBe(1_000);
+    expect(snapshot.logicalAgentCapacity).toBe(1_000);
     expect(snapshot.provisioning).toBe("lazy");
     expect(snapshot.activeLogicalAgents).toBe(0);
-    expect(snapshot.availableLogicalAgents).toBe(5_000);
+    expect(snapshot.availableLogicalAgents).toBe(1_000);
   });
 
   it("enables all declared feature, tool, developer, and system packs", () => {

@@ -1,10 +1,11 @@
 import type { Provider } from "./agent-engine";
+import { CORE_AGENTS, LOGICAL_AGENT_CAPACITY } from "./agent-catalog";
 
 /**
  * A villa is a logical workspace. Its agents are provisioned lazily; this
  * avoids creating 5,000 outbound model requests or paying for idle capacity.
  */
-export const LOGICAL_AGENTS_PER_VILLA = 5_000 as const;
+export const LOGICAL_AGENTS_PER_VILLA = LOGICAL_AGENT_CAPACITY;
 export const DEFAULT_VILLA_ID = "villa-main" as const;
 
 export type PackKind = "feature" | "tool" | "developer" | "system";
@@ -118,6 +119,16 @@ export function getVillaSnapshot(villaId: string = DEFAULT_VILLA_ID) {
     provisioning: "lazy" as const,
     activeLogicalAgents: 0,
     availableLogicalAgents: LOGICAL_AGENTS_PER_VILLA,
+    agentCatalog: {
+      coreAgents: CORE_AGENTS.map(agent => ({
+        id: agent.id,
+        name: agent.name,
+        domain: agent.domain,
+        specialty: agent.specialty,
+        requiresHumanApproval: agent.requiresHumanApproval,
+      })),
+      logicalSpecialists: LOGICAL_AGENT_CAPACITY,
+    },
     packs: CAPABILITY_PACKS.map(({ id, name, kind, description }) => ({
       id,
       name,

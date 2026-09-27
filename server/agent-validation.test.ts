@@ -124,7 +124,7 @@ describe("villa system context", () => {
   it("describes capacity, lazy provisioning, and all pack ids", () => {
     const context = getVillaSystemContext(DEFAULT_VILLA_ID);
     expect(context).toContain("villa-main");
-    expect(context).toContain("5000");
+    expect(context).toContain("1000");
     expect(context).toContain("bei Bedarf gestartet");
     expect(context).toContain("audit-trail");
     expect(context).not.toContain("Umgehung");
