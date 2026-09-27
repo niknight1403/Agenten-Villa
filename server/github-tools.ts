@@ -6,13 +6,17 @@ const API_ROOT = "https://api.github.com";
 const API_VERSION = "2026-03-10";
 const MAX_FILE_BYTES = 48_000;
 const MAX_READ_CHARS = 16_000;
+const MAX_TREE_ITEMS = 500;
 
 export const githubToolSchemas = {
   github_repo_overview: { type: "object", properties: {}, additionalProperties: false },
   github_list_commits: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 10 } }, additionalProperties: false },
   github_list_files: { type: "object", properties: { path: { type: "string", maxLength: 240 } }, additionalProperties: false },
+  github_list_tree: { type: "object", properties: { ref: { type: "string", maxLength: 100 }, limit: { type: "integer", minimum: 1, maximum: MAX_TREE_ITEMS } }, additionalProperties: false },
   github_read_file: { type: "object", required: ["path"], properties: { path: { type: "string", minLength: 1, maxLength: 240 }, ref: { type: "string", maxLength: 100 } }, additionalProperties: false },
   github_list_issues: { type: "object", properties: { state: { type: "string", enum: ["open", "closed", "all"] } }, additionalProperties: false },
+  github_list_pull_requests: { type: "object", properties: { state: { type: "string", enum: ["open", "closed", "all"] }, limit: { type: "integer", minimum: 1, maximum: 30 } }, additionalProperties: false },
+  github_check_runs: { type: "object", properties: { ref: { type: "string", maxLength: 100 } }, additionalProperties: false },
   github_create_issue: { type: "object", required: ["title", "body"], properties: { title: { type: "string", minLength: 1, maxLength: 200 }, body: { type: "string", maxLength: 6000 } }, additionalProperties: false },
   github_create_branch: { type: "object", required: ["purpose"], properties: { purpose: { type: "string", minLength: 1, maxLength: 80 } }, additionalProperties: false },
   github_write_file: { type: "object", required: ["path", "branch", "content", "message"], properties: { path: { type: "string", minLength: 1, maxLength: 240 }, branch: { type: "string", minLength: 1, maxLength: 100 }, content: { type: "string", maxLength: MAX_FILE_BYTES }, message: { type: "string", minLength: 1, maxLength: 120 } }, additionalProperties: false },
@@ -24,8 +28,11 @@ function toolDescription(name: keyof typeof githubToolSchemas) {
     github_repo_overview: "Read basic metadata and the default branch for the configured repository.",
     github_list_commits: "List the most recent commits from the configured repository's default branch.",
     github_list_files: "List file and directory names at a repository path, using the default branch unless path points to root.",
+    github_list_tree: "Read a recursive repository tree for a branch or commit ref, capped to a safe number of entries.",
     github_read_file: "Read a text file from the configured repository; return at most 16000 characters.",
     github_list_issues: "List issues (not pull requests) from the configured repository.",
+    github_list_pull_requests: "List pull requests so autonomous work can avoid duplicate changes and inspect existing delivery state.",
+    github_check_runs: "Read GitHub check-runs for a branch or commit so the agent can observe CI/test status without modifying workflows.",
     github_create_issue: "Create an issue only when the user explicitly requests it.",
     github_create_branch: "Create a new uniquely named agent/<purpose>-<id> branch from the default branch. Never writes to the default branch.",
     github_write_file: "Create or update one text file on an existing agent/* branch only. Never modify workflows, secrets, or files on the default branch.",
@@ -52,12 +59,17 @@ const pathSchema = z.string().trim().min(1).max(240).refine((path) => {
   return true;
 }, "This repository path is not permitted.");
 
+const refSchema = z.string().trim().min(1).max(100);
+
 const inputSchemas: Record<string, z.ZodTypeAny> = {
   github_repo_overview: z.object({}).strict(),
   github_list_commits: z.object({ limit: z.number().int().min(1).max(10).default(5) }).strict(),
   github_list_files: z.object({ path: z.string().max(240).optional() }).strict(),
-  github_read_file: z.object({ path: pathSchema, ref: z.string().trim().min(1).max(100).optional() }).strict(),
+  github_list_tree: z.object({ ref: refSchema.optional(), limit: z.number().int().min(1).max(MAX_TREE_ITEMS).default(300) }).strict(),
+  github_read_file: z.object({ path: pathSchema, ref: refSchema.optional() }).strict(),
   github_list_issues: z.object({ state: z.enum(["open", "closed", "all"]).default("open") }).strict(),
+  github_list_pull_requests: z.object({ state: z.enum(["open", "closed", "all"]).default("open"), limit: z.number().int().min(1).max(30).default(20) }).strict(),
+  github_check_runs: z.object({ ref: refSchema.optional() }).strict(),
   github_create_issue: z.object({ title: z.string().trim().min(1).max(200), body: z.string().max(6000) }).strict(),
   github_create_branch: z.object({ purpose: z.string().trim().min(1).max(80) }).strict(),
   github_write_file: z.object({ path: pathSchema, branch: z.string().trim().min(1).max(100), content: z.string().max(MAX_FILE_BYTES), message: z.string().trim().min(1).max(120) }).strict(),
@@ -136,6 +148,30 @@ export function createGitHubClient(deps: GitHubDependencies = {}) {
       if (!Array.isArray(rows)) return { tool: name, result: [{ name: rows.name, path: rows.path, type: rows.type }] };
       return { tool: name, result: rows.slice(0, 100).map((row) => ({ name: row.name, path: row.path, type: row.type, size: row.size })) };
     }
+    if (name === "github_list_tree") {
+      const ref = args.ref ?? defaultBranch;
+      const commit = await request<any>("GET", `/commits/${encodeURIComponent(ref)}`);
+      const treeSha = commit.commit?.tree?.sha;
+      if (typeof treeSha !== "string") throw new GitHubToolError("INVALID", "GitHub lieferte keinen lesbaren Tree-Commit.");
+      const tree = await request<any>("GET", `/git/trees/${encodeURIComponent(treeSha)}?recursive=1`);
+      const limit = args.limit ?? 300;
+      const entries = Array.isArray(tree.tree) ? tree.tree : [];
+      return {
+        tool: name,
+        result: {
+          ref,
+          truncatedByGitHub: Boolean(tree.truncated),
+          entries: entries.slice(0, limit).map((entry: any) => ({
+            path: entry.path,
+            type: entry.type,
+            size: entry.size ?? null,
+            sha: typeof entry.sha === "string" ? entry.sha.slice(0, 12) : null,
+          })),
+          returned: Math.min(entries.length, limit),
+          totalVisible: entries.length,
+        },
+      };
+    }
     if (name === "github_read_file") {
       const path = pathSchema.parse(args.path);
       const ref = args.ref ?? defaultBranch;
@@ -147,6 +183,17 @@ export function createGitHubClient(deps: GitHubDependencies = {}) {
     if (name === "github_list_issues") {
       const rows = await request<any[]>("GET", `/issues?state=${args.state ?? "open"}&per_page=30`);
       return { tool: name, result: rows.filter((row) => !row.pull_request).slice(0, 30).map((row) => ({ number: row.number, title: row.title, state: row.state, url: row.html_url, updatedAt: row.updated_at })) };
+    }
+    if (name === "github_list_pull_requests") {
+      const limit = args.limit ?? 20;
+      const rows = await request<any[]>("GET", `/pulls?state=${args.state ?? "open"}&per_page=${limit}`);
+      return { tool: name, result: rows.slice(0, limit).map((row) => ({ number: row.number, title: row.title, state: row.state, draft: Boolean(row.draft), head: row.head?.ref ?? null, base: row.base?.ref ?? null, updatedAt: row.updated_at, url: row.html_url })) };
+    }
+    if (name === "github_check_runs") {
+      const ref = args.ref ?? defaultBranch;
+      const data = await request<any>("GET", `/commits/${encodeURIComponent(ref)}/check-runs?per_page=50`);
+      const rows = Array.isArray(data.check_runs) ? data.check_runs : [];
+      return { tool: name, result: { ref, total: data.total_count ?? rows.length, checks: rows.map((row: any) => ({ name: row.name, status: row.status, conclusion: row.conclusion ?? null, startedAt: row.started_at ?? null, completedAt: row.completed_at ?? null, url: row.html_url ?? row.details_url ?? null })) } };
     }
     if (name === "github_create_issue") {
       const row = await request<any>("POST", "/issues", { title: args.title, body: args.body });
@@ -190,4 +237,15 @@ export function createGitHubClient(deps: GitHubDependencies = {}) {
 export async function executeGitHubTool(name: string, rawArgs: unknown, deps: GitHubDependencies = {}) { return createGitHubClient(deps).run(name, rawArgs); }
 export function isSafeGitHubPath(path: string) { return pathSchema.safeParse(path).success; }
 export function isAgentBranchName(branch: string) { return agentBranch(branch); }
-export const GITHUB_TOOL_LIMITS = { filesPerListing: 100, commits: 10, issuesPerListing: 30, readChars: MAX_READ_CHARS, writeBytes: MAX_FILE_BYTES, actionsPerTurn: 3 } as const;
+export const GITHUB_TOOL_LIMITS = {
+  filesPerListing: 100,
+  treeItems: MAX_TREE_ITEMS,
+  commits: 10,
+  issuesPerListing: 30,
+  pullRequestsPerListing: 30,
+  checkRuns: 50,
+  readChars: MAX_READ_CHARS,
+  writeBytes: MAX_FILE_BYTES,
+  actionsPerTurn: 3,
+  actionsPerEliteMission: 24,
+} as const;
