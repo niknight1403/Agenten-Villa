@@ -33,11 +33,13 @@ export function freeModels(): string[] {
  * Cache aktiv: in Produktion standardmäßig an, ueberall sonst aus.
  * FREE_TIER_CACHE=0 erzwingt aus, =1 erzwingt an (z. B. fuer lokale Tests).
  */
-export function cacheEnabled(): boolean {
-  const flag = process.env.FREE_TIER_CACHE?.trim();
+export function cacheEnabled(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  const flag = env.FREE_TIER_CACHE?.trim();
   if (flag === "0") return false;
   if (flag === "1") return true;
-  return process.env.NODE_ENV === "production";
+  return env.NODE_ENV === "production";
 }
 
 export function cacheKey(messages: unknown[]): string {
@@ -70,7 +72,10 @@ export function writeCache(key: string, entry: CachedAnswer): void {
 }
 
 /** Identische gleichzeitige Anfragen teilen sich genau einen Lauf. */
-export async function coalesce<T>(key: string, run: () => Promise<T>): Promise<T> {
+export async function coalesce<T>(
+  key: string,
+  run: () => Promise<T>
+): Promise<T> {
   const existing = inflight.get(key) as Promise<T> | undefined;
   if (existing) return existing;
   const promise = run().finally(() => {

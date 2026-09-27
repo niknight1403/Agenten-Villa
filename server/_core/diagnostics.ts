@@ -40,7 +40,7 @@ export function integrationStatus(
     },
     {
       name: "Free-Tier-Antwortcache",
-      configured: cacheEnabled(),
+      configured: cacheEnabled(env),
     },
   ];
 }
@@ -50,7 +50,9 @@ export function logStartupDiagnostics(): void {
   for (const row of integrationStatus()) {
     console.log(
       `  ${row.configured ? "ok" : "--"} ${row.name}${
-        row.configured ? "" : " – nicht konfiguriert (Render-Dashboard: Environment)"
+        row.configured
+          ? ""
+          : " – nicht konfiguriert (Render-Dashboard: Environment)"
       }`
     );
   }
