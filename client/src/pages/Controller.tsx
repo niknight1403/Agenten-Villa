@@ -8,6 +8,7 @@ import {
   PauseCircle,
   PlayCircle,
   RefreshCw,
+  Rocket,
   ShieldCheck,
   Square,
 } from "lucide-react";
@@ -123,8 +124,9 @@ export default function Controller() {
             </div>
             <p className="mt-3 max-w-2xl text-slate-400">
               Globaler Betriebsstatus für die logisch provisionierten
-              Agentenplätze. Agenten werden nur bei Bedarf aktiviert; der
-              Controller startet keine 10.000 kostenpflichtigen Prozesse.
+              Agentenplätze. Administrator Elite aktiviert autonome
+              Idee-zu-Projekt-Missionen ohne lokales Chat- oder
+              Token-Gesamtkontingent.
             </p>
           </div>
           <button
@@ -140,7 +142,30 @@ export default function Controller() {
           </button>
         </header>
 
-        <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <a
+          href="/core/elite"
+          className="mt-7 flex flex-col gap-4 rounded-3xl border border-violet-500/35 bg-violet-950/30 p-6 transition hover:border-violet-400 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-4">
+            <span className="rounded-2xl bg-violet-500/15 p-3 text-violet-300">
+              <Rocket size={26} />
+            </span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+                Administrator Elite
+              </p>
+              <h2 className="mt-1 text-xl font-bold">Elite Mission Control</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                Idee eingeben, Repository analysieren, auf agent/* implementieren,
+                Tests und Dokumentation ergänzen und als Draft-PR übergeben.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-xl bg-violet-500 px-4 py-2 text-center text-sm font-semibold text-white">
+            Mission starten
+          </span>
+        </a>
+        <section className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div
             className={`rounded-3xl border p-7 shadow-2xl ${isRunning ? "border-emerald-500/40 bg-emerald-950/30" : "border-amber-500/30 bg-slate-900"}`}
           >
@@ -190,7 +215,7 @@ export default function Controller() {
           </div>
 
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-7">
-            <h2 className="text-lg font-semibold">Kapazität & Packs</h2>
+            <h2 className="text-lg font-semibold">Kapazität & Elite</h2>
             <dl className="mt-5 grid grid-cols-2 gap-4">
               <div className="rounded-2xl bg-slate-800/70 p-4">
                 <dt className="text-xs text-slate-400">Logische Plätze</dt>
@@ -205,9 +230,9 @@ export default function Controller() {
                 </dd>
               </div>
               <div className="rounded-2xl bg-slate-800/70 p-4">
-                <dt className="text-xs text-slate-400">Verfügbar</dt>
+                <dt className="text-xs text-slate-400">Elite Aktionen</dt>
                 <dd className="mt-1 text-2xl font-bold">
-                  {formatNumber(villa?.availableLogicalAgents)}
+                  {status?.github.actionsPerEliteMission ?? "—"}
                 </dd>
               </div>
               <div className="rounded-2xl bg-slate-800/70 p-4">
@@ -215,11 +240,25 @@ export default function Controller() {
                 <dd className="mt-1 text-2xl font-bold">{enabledPacks}</dd>
               </div>
             </dl>
-            <div className="mt-5 flex items-center gap-2 text-sm text-slate-400">
-              <ShieldCheck size={16} className="text-emerald-400" /> Admin:{" "}
-              {status?.administrator.fullProductAccess
-                ? "vollständiger Produktzugriff"
-                : "nicht berechtigt"}
+            <div className="mt-5 space-y-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-emerald-400" />
+                {status?.administrator.fullProductAccess
+                  ? "Vollständiger Administratorzugriff"
+                  : "Nicht berechtigt"}
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                {status?.administrator.unlimitedLocalTurns
+                  ? "Kein lokales Chat-Gesamtkontingent"
+                  : "Lokales Chatlimit aktiv"}
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                {status?.administrator.unlimitedLocalTokenQuota
+                  ? "Kein lokales Token-Gesamtkontingent"
+                  : "Lokales Tokenlimit aktiv"}
+              </div>
             </div>
           </div>
         </section>

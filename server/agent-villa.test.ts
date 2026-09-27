@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CAPABILITY_PACKS,
+  ELITE_PLAN,
   LOGICAL_AGENTS_PER_VILLA,
+  getEliteConnectorSnapshot,
   getVillaSnapshot,
   isKnownPack,
   routeProviderForTests,
@@ -17,14 +19,44 @@ describe("agent villa orchestration", () => {
     expect(snapshot.availableLogicalAgents).toBe(5_000);
   });
 
-  it("enables all declared feature, tool, developer, and system packs", () => {
-    expect(CAPABILITY_PACKS.length).toBeGreaterThanOrEqual(8);
+  it("enables the elite feature, tool, developer, system, skill, and connector packs", () => {
+    expect(CAPABILITY_PACKS.length).toBeGreaterThanOrEqual(20);
     expect(new Set(CAPABILITY_PACKS.map(pack => pack.kind))).toEqual(
-      new Set(["feature", "tool", "developer", "system"])
+      new Set([
+        "feature",
+        "tool",
+        "developer",
+        "system",
+        "skill",
+        "connector",
+      ])
     );
     expect(CAPABILITY_PACKS.every(pack => pack.enabledByDefault)).toBe(true);
     expect(isKnownPack("github-read")).toBe(true);
+    expect(isKnownPack("elite-project-factory")).toBe(true);
+    expect(isKnownPack("idea-to-product")).toBe(true);
     expect(isKnownPack("limit-bypass")).toBe(false);
+  });
+
+  it("activates administrator elite without a local total turn/token quota", () => {
+    expect(ELITE_PLAN.enabled).toBe(true);
+    expect(ELITE_PLAN.localTurnQuota).toBeNull();
+    expect(ELITE_PLAN.localTokenQuota).toBeNull();
+    expect(ELITE_PLAN.autonomousProjectMissions).toBe(true);
+    const snapshot = getVillaSnapshot();
+    expect(snapshot.edition).toBe("Administrator Elite");
+    expect(snapshot.autonomy.ideaToProject).toBe(true);
+    expect(snapshot.policy.administratorLocalTurnQuota).toBeNull();
+    expect(snapshot.policy.administratorLocalTokenQuota).toBeNull();
+  });
+
+  it("reports configured connector readiness without exposing secret values", () => {
+    const serialized = JSON.stringify(getEliteConnectorSnapshot());
+    expect(serialized).toContain("openrouter");
+    expect(serialized).toContain("github");
+    expect(serialized).toContain("postgres");
+    expect(serialized).not.toContain("GITHUB_TOKEN");
+    expect(serialized).not.toContain("OPENROUTER_API_KEY");
   });
 
   it("selects the configured free primary route", () => {
@@ -70,5 +102,7 @@ describe("agent villa orchestration", () => {
     expect(policy.providerLimitsRespected).toBe(true);
     expect(policy.noPaidOrRotatingFallback).toBe(true);
     expect(policy.administratorFullProductAccess).toBe(true);
+    expect(policy.defaultBranchProtectedFromAgentWrites).toBe(true);
+    expect(policy.draftReviewBeforeMerge).toBe(true);
   });
 });

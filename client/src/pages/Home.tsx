@@ -805,7 +805,9 @@ export default function Home() {
                 "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}
               {usageQuery.data &&
                 !isWorkshop &&
-                ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`}
+                (usageQuery.data.unlimited
+                  ? " · Elite: kein lokales Chat-Gesamtkontingent"
+                  : ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`)}
             </div>
           </div>
         </section>

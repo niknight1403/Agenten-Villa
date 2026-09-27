@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Auth from "./pages/Auth";
 import Controller from "./pages/Controller";
+import EliteMission from "./pages/EliteMission";
 import Home from "./pages/Home";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/core/controller"} component={Controller} />
+      <Route path={"/core/elite"} component={EliteMission} />
       {/* Account system is Google OAuth only (no password) — one sign-in
           screen for all legacy auth paths. */}
       <Route path={"/login"} component={Auth} />
