@@ -42,11 +42,11 @@ jobs:
           profile: pixel_6
           script: |
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -W -n de.niknight1403.agentenvilla/.MainActivity
+            adb shell am start -n de.niknight1403.agentenvilla/.MainActivity
             sleep 12
             adb shell pidof de.niknight1403.agentenvilla
-            adb shell screencap -p /sdcard/villa-smoke.png
-            adb pull /sdcard/villa-smoke.png villa-smoke.png
+            adb exec-out screencap -p > villa-smoke.png
+            test -s villa-smoke.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
