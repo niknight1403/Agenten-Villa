@@ -18,13 +18,20 @@ export async function createVilla(input: {
   name: string;
   specialty: string;
   icon: "villa" | "bot";
+  projectBrief?: string | null;
 }): Promise<Villa> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const result = await db.insert(villas).values(input);
-  const insertId = Number((result as unknown as { insertId: number | bigint }).insertId);
-  const created = await db.select().from(villas).where(eq(villas.id, insertId)).limit(1);
-  return created[0];
+  const [created] = await db.insert(villas).values(input).returning();
+  return created;
+}
+
+export async function getVilla(villaId: number, userId: number): Promise<Villa | undefined> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  const [villa] = await db.select().from(villas)
+    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId))).limit(1);
+  return villa;
 }
 
 export async function updateVilla(

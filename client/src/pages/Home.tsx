@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Code2,
   FolderGit2,
+  FolderOpen,
   Github,
   KeyRound,
   LayoutGrid,
@@ -44,6 +45,7 @@ type Villa = {
   name: string;
   specialty: string;
   icon: "villa" | "bot";
+  projectBrief: string | null;
 };
 const homeIdeas = [
   "Erstelle einen Aktionsplan",
@@ -103,6 +105,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [villaName, setVillaName] = useState("");
+  const [villaIdea, setVillaIdea] = useState("");
   const [activeVillaId, setActiveVillaId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] =
@@ -111,11 +114,12 @@ export default function Home() {
 
   const villas = useMemo<Villa[]>(
     () =>
-      (villaListQuery.data ?? []).map(({ id, name, specialty, icon }) => ({
+      (villaListQuery.data ?? []).map(({ id, name, specialty, icon, projectBrief }) => ({
         id,
         name,
         specialty,
         icon: icon as Villa["icon"],
+        projectBrief,
       })),
     [villaListQuery.data]
   );
@@ -179,9 +183,13 @@ export default function Home() {
       setNewVillaOpen(true);
       return;
     }
-    const prior = messages
-      .slice(-8)
-      .map(({ role, text: content }) => ({ role, content }));
+    const prior = [
+      ...(screen === "home" && activeVilla?.projectBrief
+        ? [{ role: "user" as const, content: `Projektziel der Villa: ${activeVilla.projectBrief.slice(0, 3900)}` }]
+        : []),
+      ...messages.slice(activeVilla?.projectBrief ? -7 : -8)
+        .map(({ role, text: content }) => ({ role, content })),
+    ];
     setMessages(previous => [...previous, { role: "user", text: prompt }]);
     setDraft("");
     try {
@@ -287,8 +295,14 @@ export default function Home() {
     const cleanName = villaName.trim();
     if (!cleanName || createVillaMutation.isPending) return;
     try {
-      const villa = await createVillaMutation.mutateAsync({ name: cleanName });
+      const villa = await createVillaMutation.mutateAsync({
+        name: cleanName,
+        specialty: villaIdea.trim() ? "Autonome Projektentwicklung" : "Neuer Agent",
+        icon: "villa",
+        ...(villaIdea.trim() ? { projectBrief: villaIdea.trim() } : {}),
+      });
       setVillaName("");
+      setVillaIdea("");
       setNewVillaOpen(false);
       setScreen("home");
       setActiveVillaId(villa.id);
@@ -590,10 +604,25 @@ export default function Home() {
           <div className="conversation-scroll">
             {messages.length === 0 ? (
               <div className="welcome-panel">
-                <div className={`hero-mark ${isWorkshop ? "robot" : "house"}`}>
-                  {isWorkshop ? <Bot /> : <Building2 />}
-                </div>
-                <h1>{isWorkshop ? "Superagent bereit" : "Agenten‑Villa"}</h1>
+                {!isWorkshop && activeVilla ? (
+                  <div className="villa-stage" aria-label={`Villa ${activeVilla.name} mit Superagent`}>
+                    <div className="villa-stage-sky" />
+                    <svg className="villa-stage-house" viewBox="0 0 300 175" fill="none" aria-hidden="true">
+                      <path d="M22 78 148 18l130 60v85H22V78Z" fill="#12264a" stroke="#66d8ef" strokeWidth="2" />
+                      <path d="M22 78 148 18l130 60M148 18v145M22 78h256" stroke="#a099ff" strokeWidth="2" />
+                      <path d="M46 96h62v44H46zm98 0h66v67h-66zm82 0h32v44h-32z" fill="#245783" stroke="#62d8fa" strokeWidth="2" />
+                      <path d="M46 96h62v44H46zm98 0h66v67h-66zm82 0h32v44h-32z" fill="#43caff" opacity=".17" />
+                      <path d="M22 163h256" stroke="#7f71ff" strokeWidth="3" />
+                    </svg>
+                    <span className="villa-stage-agent"><Bot size={31} /><span>SUPERAGENT</span></span>
+                    <span className="villa-stage-state"><i className={`status-dot ${agentRunning ? "running" : "stopped"}`} />{agentRunning ? "Bereit" : "Gestoppt"}</span>
+                  </div>
+                ) : (
+                  <div className={`hero-mark ${isWorkshop ? "robot" : "house"}`}>
+                    {isWorkshop ? <Bot /> : <Building2 />}
+                  </div>
+                )}
+                <h1>{isWorkshop ? "Superagent bereit" : (activeVilla?.name ?? "Agenten‑Villa")}</h1>
                 <p>
                   {isWorkshop ? (
                     statusQuery.data?.github?.configured ? (
@@ -615,6 +644,19 @@ export default function Home() {
                     </>
                   )}
                 </p>
+                {activeVilla && (
+                  <div className="villa-project-actions">
+                    {activeVilla.projectBrief && <p className="villa-project-brief">Projektziel: {activeVilla.projectBrief}</p>}
+                    {statusQuery.data?.isAdmin && (
+                      <a className="villa-project-link" href={`/core/elite?villaId=${activeVilla.id}`}>
+                        <Sparkles size={16} /> Projekt mit Superagent entwickeln
+                      </a>
+                    )}
+                    <a className="villa-project-link secondary" href="/android/files">
+                      <FolderOpen size={16} /> Android-Dateimanager
+                    </a>
+                  </div>
+                )}
                 {activeVilla && (
                   <div
                     className={`suggestion-list ${isWorkshop ? "workshop-ideas" : "home-ideas"}`}
@@ -649,7 +691,7 @@ export default function Home() {
                   >
                     {message.role === "assistant" && (
                       <span className="assistant-avatar">
-                        {isWorkshop ? <Bot size={16} /> : <span>CS</span>}
+                        <Bot size={16} />
                       </span>
                     )}
                     <div className="message-bubble">
@@ -657,7 +699,7 @@ export default function Home() {
                         <div className="message-author">
                           {isWorkshop
                             ? "Superagent · Projekt-Werkstatt"
-                            : "Sarah · KI-Operations"}
+                            : `${activeVilla?.name ?? "Villa"} · Superagent`}
                         </div>
                       )}
                       <p>{message.text}</p>
@@ -935,7 +977,7 @@ export default function Home() {
             <h2 id="new-villa-title">Neue Villa erstellen</h2>
             <p>
               Gib deinem Superagenten einen Namen. Du kannst ihn später
-              spezialisieren.
+              spezialisieren. Beschreibe optional ein Projektziel für eine autonome Elite-Mission.
             </p>
             <label className="modal-label" htmlFor="villa-name">
               Name
@@ -949,8 +991,17 @@ export default function Home() {
               autoFocus
               required
             />
+            <label className="modal-label" htmlFor="villa-idea">Projektidee (optional)</label>
+            <textarea
+              id="villa-idea"
+              className="modal-input villa-idea-input"
+              value={villaIdea}
+              onChange={event => setVillaIdea(event.target.value)}
+              maxLength={4000}
+              placeholder="z. B. Entwickle einen Android-Dateimanager mit Speicheranalyse und bestätigten Dateiaktionen"
+            />
             <button className="modal-submit" type="submit">
-              <Plus size={17} /> Villa erstellen
+              <Plus size={17} /> Villa mit Superagent erstellen
             </button>
           </form>
         </div>

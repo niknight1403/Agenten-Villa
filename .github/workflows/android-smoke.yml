@@ -1,0 +1,55 @@
+name: Android mobile smoke
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'client/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/android-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - name: Build Android client
+        env:
+          VITE_API_URL: https://agenten-villa.onrender.com
+        run: pnpm exec vite build && pnpm exec cap sync android
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Launch in Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n de.niknight1403.agentenvilla/.MainActivity
+            sleep 12
+            adb shell pidof de.niknight1403.agentenvilla
+            adb shell screencap -p /sdcard/villa-smoke.png
+            adb pull /sdcard/villa-smoke.png villa-smoke.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-smoke-screen
+          path: villa-smoke.png
+          if-no-files-found: ignore
