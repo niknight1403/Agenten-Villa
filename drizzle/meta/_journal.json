@@ -8,6 +8,13 @@
       "when": 1790501008484,
       "tag": "0000_sticky_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790508605097,
+      "tag": "0001_aspiring_sunfire",
+      "breakpoints": true
     }
   ]
 }

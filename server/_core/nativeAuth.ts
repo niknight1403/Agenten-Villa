@@ -14,6 +14,7 @@ export type GoogleIdTokenProfile = {
   sub: string;
   email: string | null;
   name: string | null;
+  emailVerified: boolean;
 };
 
 // Remote-JWKS-Set wird lazy und singleton-gebunden (jose cached intern die Keys).
@@ -69,6 +70,7 @@ export async function verifyGoogleIdToken(
     sub,
     email,
     name: typeof payload.name === "string" && payload.name.trim() ? payload.name : null,
+    emailVerified: payload.email_verified === true,
   };
 }
 
@@ -91,7 +93,7 @@ export async function establishGoogleSession(
     email: profile.email,
     loginMethod: "google",
     lastSignedIn: new Date(),
-    ...(isAdmin ? { role: "admin" as const } : {}),
+    ...(isAdmin ? { role: "admin" as const } : !profile.emailVerified ? { role: "user" as const } : {}),
   });
 
   const sessionToken = await sdk.createSessionToken(openId, {
@@ -140,7 +142,7 @@ export function registerNativeGoogleAuthRoutes(app: Express) {
         req,
         res,
         profile,
-        isAdminEmail(profile.email)
+        profile.emailVerified && isAdminEmail(profile.email)
       );
       res.json({ ok: true, sessionToken });
     } catch (err) {

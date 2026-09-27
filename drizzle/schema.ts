@@ -36,6 +36,7 @@ export const villas = pgTable("villas", {
   createdBy: integer("createdBy").notNull(),
   name: varchar("name", { length: 80 }).notNull(),
   specialty: varchar("specialty", { length: 80 }).notNull().default("Neuer Agent"),
+  projectBrief: text("projectBrief"),
   icon: varchar("icon", { length: 8 }).$type<"villa" | "bot">().default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),

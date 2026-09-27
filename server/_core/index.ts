@@ -77,6 +77,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(compression());
   app.use(requestLogger());
+  // Native auth preflights must reach CORS before the auth rate limiter.
+  app.use("/api", nativeCors());
   // Brute-Force-Schutz fuer Login-/OAuth-Endpunkte (20 Anfragen/Minute/IP)
   app.use(
     "/api/auth",
@@ -84,9 +86,6 @@ async function startServer() {
   );
   registerHealthRoute(app);
   registerStorageProxy(app);
-  // CORS fuer native Capacitor-Urspruenge — muss VOR den API-Routen stehen,
-  // damit Preflights (OPTIONS) aus der Android/iOS-WebView durchgehen.
-  app.use("/api", nativeCors());
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
   registerNativeGoogleAuthRoutes(app);

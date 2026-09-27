@@ -20,6 +20,10 @@ import { toast } from "sonner";
 
 export default function EliteMission() {
   const { isAuthenticated, loading } = useAuth();
+  const requestedVillaId = Number(new URLSearchParams(window.location.search).get("villaId"));
+  const villaId = Number.isSafeInteger(requestedVillaId) && requestedVillaId > 0 ? requestedVillaId : null;
+  const villasQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated });
+  const selectedVilla = villasQuery.data?.find(villa => villa.id === villaId);
   const [prompt, setPrompt] = useState("");
   const [lastResult, setLastResult] = useState<{
     answer: string;
@@ -62,6 +66,7 @@ export default function EliteMission() {
         prompt: objective,
         history: [],
         specialty: "Autonomous Product Engineering",
+        ...(villaId ? { villaId } : {}),
       });
       setLastResult({
         answer: result.answer,
@@ -163,6 +168,13 @@ export default function EliteMission() {
               agent/*-Branch, ergänzt Tests und Dokumentation und bereitet
               einen Draft-PR zur Prüfung vor.
             </p>
+            {villaId && (
+              <div className="mt-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm">
+                <p className="font-semibold text-cyan-200">{selectedVilla ? `Villa ${selectedVilla.name} · Superagent` : "Projekt-Villa wird geladen …"}</p>
+                {selectedVilla?.projectBrief && <p className="mt-1 text-slate-300">{selectedVilla.projectBrief}</p>}
+                {villasQuery.isSuccess && !selectedVilla && <p className="mt-1 text-rose-300">Diese Villa gehört nicht zu deinem Konto oder wurde entfernt.</p>}
+              </div>
+            )}
           </div>
           <button
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
@@ -235,7 +247,7 @@ export default function EliteMission() {
               <button
                 className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-violet-500 px-5 py-4 text-lg font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
                 type="submit"
-                disabled={!prompt.trim() || !ready || missionMutation.isPending}
+                disabled={!prompt.trim() || !ready || missionMutation.isPending || Boolean(villaId && !selectedVilla)}
               >
                 {missionMutation.isPending ? (
                   <>

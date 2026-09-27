@@ -25,6 +25,7 @@ const villa: Villa = {
   name: "Villa Alpha",
   specialty: "Code-Analyse",
   icon: "bot",
+  projectBrief: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -69,6 +70,7 @@ describe("villa router validation and ownership", () => {
       name: "Villa Beta",
       specialty: "Neuer Agent",
       icon: "bot",
+      projectBrief: undefined,
     });
   });
 
@@ -78,6 +80,14 @@ describe("villa router validation and ownership", () => {
       code: "BAD_REQUEST",
     });
     await expect(caller.villa.create({} as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("creates a project villa with a stored brief for its superagent", async () => {
+    const spy = vi.spyOn(store, "createVilla").mockResolvedValue({ ...villa, projectBrief: "Baue einen Dateimanager" });
+    await caller.villa.create({ name: "Dateimanager-Villa", icon: "villa", specialty: "Autonome Projektentwicklung", projectBrief: "  Baue einen Dateimanager  " });
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      createdBy: 17, icon: "villa", projectBrief: "Baue einen Dateimanager",
+    }));
   });
 
   it("maps update misses to NOT_FOUND and passes ownership through", async () => {

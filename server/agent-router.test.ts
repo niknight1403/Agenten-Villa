@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "./routers";
+import * as villaStore from "./villa-store";
+import * as agentEngine from "./agent-engine";
 import type { TrpcContext } from "./_core/context";
 import {
   agentControlLimits,
@@ -41,6 +43,21 @@ afterEach(() => {
 });
 
 describe("agent access controls", () => {
+  it("binds an elite mission to the administrator's own project villa", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("GITHUB_TOKEN", "test-github-key");
+    const caller = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    await caller.agent.setState({ state: "RUNNING" });
+    const villa = vi.spyOn(villaStore, "getVilla").mockResolvedValue(undefined);
+    const mission = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub").mockResolvedValue({ answer: "Entwurf", provider: "openrouter", model: "free", attempts: 1, completed: false, branch: null, pullRequest: null, githubActions: 0 });
+    await expect(caller.agent.eliteMission({ villaId: 91, prompt: "Baue das Projekt", history: [] }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mission).not.toHaveBeenCalled();
+    villa.mockResolvedValue({ id: 9, createdBy: 17, name: "Projektvilla", specialty: "Projekt", projectBrief: "Android-Dateimanager", icon: "villa", createdAt: new Date(), updatedAt: new Date() });
+    await caller.agent.eliteMission({ villaId: 9, prompt: "Baue das Projekt", history: [] });
+    expect(villa).toHaveBeenCalledWith(9, 17);
+    expect(mission).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("Android-Dateimanager") }), expect.any(Function), expect.any(Object));
+  });
   it("allows only admin role or the configured OAuth email", () => {
     vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
     expect(

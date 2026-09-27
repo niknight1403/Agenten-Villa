@@ -39,6 +39,7 @@ export const villaRouter = router({
         name: villaNameSchema,
         specialty: specialtySchema.default("Neuer Agent"),
         icon: z.enum(["villa", "bot"]).default("bot"),
+        projectBrief: z.string().trim().min(3).max(4000).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -48,6 +49,7 @@ export const villaRouter = router({
           name: input.name,
           specialty: input.specialty,
           icon: input.icon,
+          projectBrief: input.projectBrief,
         });
       } catch (error) {
         storeError(error);

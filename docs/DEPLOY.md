@@ -30,9 +30,12 @@ DATABASE_URL="postgres://...deine-uri..." pnpm db:push
 1. Auf [render.com](https://render.com) mit GitHub anmelden.
 2. **New → Blueprint** wählen → Repository `niknight1403/Agenten-Villa` verbinden → Render erkennt die `render.yaml` → **Apply**.
 3. Beim ersten Deploy nach den drei Werten fragen (Sync-Dialog):
-   - `DATABASE_URL` = MySQL-URI aus Schritt 1
+   - `DATABASE_URL` = PostgreSQL-URI aus Schritt 1
    - `AGENT_ADMIN_EMAIL` = deine Administrator-E-Mail (Allowlist-Admin, vom Stundenlimit befreit)
    - `OPENROUTER_API_KEY` = Key von <https://openrouter.ai/keys> (kostenlose Modelle)
+   - `GITHUB_TOKEN` = GitHub-Token mit Zugriff auf das Projekt für Elite-Missionen (nur Server-Secret)
+   - `HF_TOKEN` = optionaler Hugging-Face-Fallback
+   - `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` = Google-OAuth-Zugang aus Schritt 4
    - `JWT_SECRET` wird automatisch generiert.
 4. Nach dem Deploy ist die App unter `https://agenten-villa.onrender.com` erreichbar.
 
@@ -72,6 +75,9 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 | `JWT_SECRET` | Signatur der Sitzungen | ja (auto-generiert) |
 | `AGENT_ADMIN_EMAIL` | Allowlist-Administrator | empfohlen |
 | `OPENROUTER_API_KEY` | Kostenlose Modellroute | ja für Agenten |
+| `GITHUB_TOKEN` | Geschützte GitHub-Projektaktionen | ja für Elite-Missionen |
+| `HF_TOKEN` | Optionaler Modell-Fallback | nein |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-Anmeldung | ja für Anmeldung |
 | `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) | nein |
 | `FREE_TIER_CACHE` | Antwort-Cache: Produktion default an | nein |
 | `FREE_TIER_CACHE_TTL_SECONDS` | Cache-TTL (Default 600) | nein |

@@ -29,6 +29,7 @@ describe("verifyGoogleIdToken", () => {
       aud: AUDIENCE,
       sub: "1234567890",
       email: "Niko.Oeben@Gmail.com",
+      email_verified: true,
       name: "Heinz-Nikola Oeben",
     });
     const profile = await verifyGoogleIdToken(token, { audience: AUDIENCE, jwks });
@@ -36,6 +37,7 @@ describe("verifyGoogleIdToken", () => {
       sub: "1234567890",
       email: "niko.oeben@gmail.com",
       name: "Heinz-Nikola Oeben",
+      emailVerified: true,
     });
   });
 
@@ -49,6 +51,7 @@ describe("verifyGoogleIdToken", () => {
     });
     const profile = await verifyGoogleIdToken(token, { audience: AUDIENCE, jwks });
     expect(profile.sub).toBe("sub-2");
+    expect(profile.emailVerified).toBe(false);
   });
 
   it("lehnt ein Token mit falscher audience ab", async () => {

@@ -18,13 +18,20 @@ export async function createVilla(input: {
   name: string;
   specialty: string;
   icon: "villa" | "bot";
+  projectBrief?: string | null;
 }): Promise<Villa> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const result = await db.insert(villas).values(input);
-  const insertId = Number((result as unknown as { insertId: number | bigint }).insertId);
-  const created = await db.select().from(villas).where(eq(villas.id, insertId)).limit(1);
-  return created[0];
+  const [created] = await db.insert(villas).values(input).returning();
+  return created;
+}
+
+export async function getVilla(villaId: number, userId: number): Promise<Villa | undefined> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  const [villa] = await db.select().from(villas)
+    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId))).limit(1);
+  return villa;
 }
 
 export async function updateVilla(
@@ -38,28 +45,29 @@ export async function updateVilla(
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.specialty !== undefined) set.specialty = patch.specialty;
   if (Object.keys(set).length === 0) return undefined;
-  const result = await db
+  const rows = await db
     .update(villas)
     .set(set)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)));
-  if (Number((result as unknown as { rowsAffected: number | bigint }).rowsAffected) === 0) {
-    return undefined;
-  }
-  const rows = await db.select().from(villas).where(eq(villas.id, villaId)).limit(1);
+    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+    .returning();
   return rows[0];
 }
 
 export async function deleteVilla(villaId: number, userId: number): Promise<boolean> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const result = await db
-    .delete(villas)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)));
-  const affected = Number((result as unknown as { rowsAffected: number | bigint }).rowsAffected);
-  if (affected > 0) {
-    await db.delete(villaMessages).where(eq(villaMessages.villaId, villaId));
-  }
-  return affected > 0;
+  // A single transaction keeps the workspace and its history together if a
+  // delete fails. Lock the owned villa so messages cannot be appended midway.
+  return db.transaction(async tx => {
+    const owned = await tx.select({ id: villas.id }).from(villas)
+      .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+      .for("update");
+    if (!owned.length) return false;
+    await tx.delete(villaMessages).where(eq(villaMessages.villaId, villaId));
+    const deleted = await tx.delete(villas)
+      .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId))).returning({ id: villas.id });
+    return deleted.length > 0;
+  });
 }
 
 export async function listMessages(villaId: number, userId: number, limit = 200): Promise<VillaMessage[]> {
@@ -98,16 +106,10 @@ export async function appendMessages(
     .limit(1);
   if (owned.length === 0) return [];
   if (entries.length === 0) return [];
-  const inserted = await db
+  return db
     .insert(villaMessages)
-    .values(entries.map((entry) => ({ ...entry, villaId })));
-  const insertId = Number((inserted as unknown as { insertId: number | bigint }).insertId);
-  const rows = await db
-    .select()
-    .from(villaMessages)
-    .where(and(eq(villaMessages.villaId, villaId), eq(villaMessages.id, insertId)))
-    .limit(entries.length);
-  return rows.sort((a, b) => a.id - b.id);
+    .values(entries.map((entry) => ({ ...entry, villaId })))
+    .returning();
 }
 
 export async function rateMessage(

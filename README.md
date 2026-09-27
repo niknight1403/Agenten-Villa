@@ -59,6 +59,12 @@ Für den konfigurierten Administrator ist das **Elite-Paket** aktiv. Es setzt in
 Jede Villa ist ein pro Nutzer gespeicherter Agent-Arbeitsbereich:
 
 - Tabellen (PostgreSQL/Neon): `villas` (Name, Spezialisierung, Icon, pro `createdBy`) und `villa_messages` (Rollen `user`/`assistant`, Provider/Modell, `-1/1`-Bewertung) — Migration `drizzle/0000_sticky_vindicator.sql`, angelegt über `pnpm db:push`.
+
+### Projekt-Villa und Android-Dateimanager
+
+Eine neue Villa kann optional eine Projektidee speichern. Auf der Startseite ist der Superagent zusammen mit seiner Villa sichtbar; Administratoren können von dort eine Elite-Mission mit dem gespeicherten Projektziel starten. Die Migration `drizzle/0001_aspiring_sunfire.sql` ergänzt dafür `villas.projectBrief`. Vor dem Deployment mit `DATABASE_URL` einmal `pnpm db:push` ausführen.
+
+`/android/files` verwendet in der nativen Android-App den Storage Access Framework Ordnerwähler. Die Freigabe gilt nur für den ausdrücklich ausgewählten Ordner. Der Manager analysiert dessen direkte Dateien, schlägt große Dateien zur Prüfung vor und kann Dateien nach Typ in Unterordner verschieben. Unterstützte lokale Prompts sind beispielsweise „Sortiere Bilder“ und „Lösche Dateien größer als 500 MB“. Eine Vorschau mit Dateiauswahl und zusätzliche Bestätigung stehen vor jeder Änderung; Löschungen sind endgültig. Wenn der Dokumentanbieter `moveDocument` nicht unterstützt, wird das Verschieben mit Fehlermeldung beendet. Im Browser sind native Dateiaktionen nicht verfügbar.
 - tRPC-Router `villa`: `list`, `create`, `update`, `remove`, `messages`, `appendMessages`, `rateMessage` — alles Eigentümer-geprüft (`protectedProcedure`) und mit Eingabegrenzen.
 - Chat-Verläufe werden pro Villa geladen und nach jedem Turn optimistisch gespeichert; ist die Datenbank kurzfristig nicht erreichbar, bleibt die Antwort sichtbar und der Nutzer bekommt eine Meldung.
 - Antworten lassen sich im Chat mit Daumen hoch/runter bewerten; die Bewertung wird an der Nachricht gespeichert.

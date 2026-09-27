@@ -25,6 +25,7 @@ import {
   getVillaSnapshot,
   routeProvider,
 } from "./agent-villa";
+import { getVilla } from "./villa-store";
 
 let controlState: "RUNNING" | "STOPPED" = "STOPPED";
 let adminSystemPrompt: string | null = null;
@@ -150,6 +151,7 @@ const inputSchema = z
   });
 
 const eliteMissionSchema = z.object({
+  villaId: z.number().int().positive().optional(),
   prompt: z
     .string()
     .trim()
@@ -316,8 +318,16 @@ export const agentRouter = router({
         });
 
       try {
+        const villa = input.villaId ? await getVilla(input.villaId, ctx.user.id) : null;
+        if (input.villaId && !villa)
+          throw new TRPCError({ code: "NOT_FOUND", message: "Projekt-Villa nicht gefunden." });
+        const projectContext = villa
+          ? `Projekt-Villa: ${villa.name}\nProjektziel: ${villa.projectBrief ?? "Noch nicht beschrieben"}\n\n`
+          : "";
+        if (projectContext.length + input.prompt.length > ELITE_LIMITS.promptChars)
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Projektziel und Mission sind zusammen zu lang. Bitte kürzer formulieren." });
         const missionInput = {
-          prompt: input.prompt,
+          prompt: `${projectContext}${input.prompt}`,
           history: input.history,
           mode: "workshop" as const,
           specialty: input.specialty,
