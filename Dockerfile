@@ -11,9 +11,11 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# API-URL fest auf die Produktionsumgebung gepinnt (Web-App extern erreichbar).
-# Ueberschreibbar zur Build-Zeit: docker build --build-arg VITE_API_URL=<url>
-ARG VITE_API_URL=https://agenten-villa.onrender.com
+# Web-App und API laufen im selben Container: Standard ist die relative URL
+# (leerer Wert), damit Staging, eigene Domains und geaenderte Render-URLs
+# ohne Rebuild funktionieren. Native Builds (APK-Workflow) setzen die
+# Backend-URL weiterhin explizlich: docker build --build-arg VITE_API_URL=<url>
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 RUN pnpm build
 

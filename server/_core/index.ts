@@ -5,7 +5,8 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
-import { registerHealthRoute } from "./health";
+import { registerHealthRoute, setDatabaseHealthReport } from "./health";
+import { checkDatabaseHealth } from "../db-health";
 import { rateLimit } from "./rate-limit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { logStartupDiagnostics } from "./diagnostics";
@@ -36,9 +37,41 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+/**
+ * Sprint 011: DB-Verfuegbarkeit beim Start pruefen und im Hintergrund
+ * periodisch aktualisieren (60 s, unref — blockiert kein Test-/Tool-Ende).
+ * Nur im Produktionsmodus wird beim Fehlschlag laut gewarnt; lokal ohne
+ * DATABASE_URL ist der Zustand bewusst erlaubt.
+ */
+function startDatabaseHealthWatch(): void {
+  const runCheck = async () => {
+    try {
+      const report = await checkDatabaseHealth();
+      setDatabaseHealthReport(report);
+      if (report.status !== "verbunden") {
+        const message = `[Database] Status: ${report.status} — ${
+          process.env.DATABASE_URL
+            ? "Verbindung fehlgeschlagen; Anmeldung/Chat-Persistenz sind ggf. eingeschraenkt."
+            : "DATABASE_URL ist nicht gesetzt (lokal erlaubt, in Produktion ein Blocker)."
+        }`;
+        if (process.env.NODE_ENV === "production") console.warn(message);
+        else console.log(message);
+      } else {
+        console.log("[Database] Status: verbunden");
+      }
+    } catch (error) {
+      console.warn("[Database] Health-Check fehlgeschlagen:", error);
+    }
+  };
+  void runCheck();
+  const timer = setInterval(() => void runCheck(), 60_000);
+  timer.unref?.();
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  startDatabaseHealthWatch();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
