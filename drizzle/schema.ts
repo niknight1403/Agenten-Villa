@@ -1,4 +1,12 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  index,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,21 +33,26 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-
 /**
  * A villa is one persisted agent workspace ("Agenten-Villa") of a user.
  * Villas are per-user (createdBy = users.id) and store a display name,
  * a specialty label and an icon key used by the client.
  */
-export const villas = mysqlTable("villas", {
-  id: int("id").autoincrement().primaryKey(),
-  createdBy: int("createdBy").notNull(),
-  name: varchar("name", { length: 80 }).notNull(),
-  specialty: varchar("specialty", { length: 80 }).notNull().default("Neuer Agent"),
-  icon: mysqlEnum("icon", ["villa", "bot"]).default("bot").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => [index("villas_createdBy_idx").on(table.createdBy)]);
+export const villas = mysqlTable(
+  "villas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    createdBy: int("createdBy").notNull(),
+    name: varchar("name", { length: 80 }).notNull(),
+    specialty: varchar("specialty", { length: 80 })
+      .notNull()
+      .default("Neuer Agent"),
+    icon: mysqlEnum("icon", ["villa", "bot"]).default("bot").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [index("villas_createdBy_idx").on(table.createdBy)]
+);
 
 export type Villa = typeof villas.$inferSelect;
 export type InsertVilla = typeof villas.$inferInsert;
@@ -48,16 +61,62 @@ export type InsertVilla = typeof villas.$inferInsert;
  * Persisted chat history per villa. Ratings are stored per assistant
  * message (-1 or 1, null = unrated).
  */
-export const villaMessages = mysqlTable("villa_messages", {
-  id: int("id").autoincrement().primaryKey(),
-  villaId: int("villaId").notNull(),
-  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
-  content: text("content").notNull(),
-  provider: varchar("provider", { length: 40 }),
-  model: varchar("model", { length: 128 }),
-  rating: int("rating"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => [index("villa_messages_villaId_idx").on(table.villaId)]);
+export const villaMessages = mysqlTable(
+  "villa_messages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    villaId: int("villaId").notNull(),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    provider: varchar("provider", { length: 40 }),
+    model: varchar("model", { length: 128 }),
+    rating: int("rating"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("villa_messages_villaId_idx").on(table.villaId)]
+);
 
 export type VillaMessage = typeof villaMessages.$inferSelect;
 export type InsertVillaMessage = typeof villaMessages.$inferInsert;
+export const projectTasks = mysqlTable(
+  "project_tasks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    villaId: int("villaId").notNull(),
+    createdBy: int("createdBy").notNull(),
+
+    title: varchar("title", { length: 160 }).notNull(),
+    prompt: text("prompt").notNull(),
+    plan: text("plan"),
+    finalAnswer: text("finalAnswer"),
+    errorMessage: text("errorMessage"),
+
+    status: mysqlEnum("status", [
+      "PLANNING",
+      "QUEUED",
+      "RUNNING",
+      "REVIEWING",
+      "COMPLETED",
+      "BLOCKED",
+      "FAILED",
+      "CANCELLED",
+    ])
+      .notNull()
+      .default("PLANNING"),
+
+    allowGitHub: int("allowGitHub").notNull().default(0),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    startedAt: timestamp("startedAt"),
+    completedAt: timestamp("completedAt"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("project_tasks_villaId_idx").on(table.villaId),
+    index("project_tasks_createdBy_idx").on(table.createdBy),
+    index("project_tasks_status_idx").on(table.status),
+  ]
+);
+
+export type ProjectTask = typeof projectTasks.$inferSelect;
+export type InsertProjectTask = typeof projectTasks.$inferInsert;
