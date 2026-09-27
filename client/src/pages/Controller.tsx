@@ -190,7 +190,7 @@ export default function Controller() {
           </div>
 
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-7">
-            <h2 className="text-lg font-semibold">Kapazität & Packs</h2>
+            <h2 className="text-lg font-semibold">Kapazität & Elite</h2>
             <dl className="mt-5 grid grid-cols-2 gap-4">
               <div className="rounded-2xl bg-slate-800/70 p-4">
                 <dt className="text-xs text-slate-400">Logische Plätze</dt>
