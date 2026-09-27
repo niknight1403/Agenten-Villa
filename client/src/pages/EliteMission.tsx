@@ -151,6 +151,7 @@ export default function EliteMission() {
             >
               <ArrowLeft size={16} /> Mastervillage Controller
             </a>
+            {isAdmin && <a className="mb-4 ml-4 inline-flex items-center text-sm text-cyan-300 hover:text-white" href="/core/demo-requests">Demoanfragen</a>}
             <div className="flex items-center gap-3">
               <Rocket className="text-violet-400" size={34} />
               <div>

@@ -15,6 +15,13 @@
       "when": 1790508605097,
       "tag": "0001_aspiring_sunfire",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790549754598,
+      "tag": "0002_lean_thunderball",
+      "breakpoints": true
     }
   ]
 }

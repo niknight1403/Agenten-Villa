@@ -118,6 +118,7 @@ export default function Auth() {
             <p className="form-notice info" role="status">{errorMessage}</p>
           )}
         </div>
+        <a href="/demo" className="mt-4 inline-block text-sm text-cyan-300 underline">Projekt-Demo anfragen</a>
       </section>
       <span className="sr-only">Agenten-Villa Pro</span>
     </main>

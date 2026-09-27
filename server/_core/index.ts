@@ -8,6 +8,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerHealthRoute, setDatabaseHealthReport } from "./health";
 import { checkDatabaseHealth } from "../db-health";
 import { rateLimit } from "./rate-limit";
+import { demoSubmitRateLimit } from "./demoRateLimit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { logStartupDiagnostics } from "./diagnostics";
 import { registerGoogleAuthRoutes } from "./googleAuth";
@@ -84,6 +85,7 @@ async function startServer() {
     "/api/auth",
     rateLimit({ windowMs: 60_000, max: 20, keyPrefix: "auth" })
   );
+  app.use("/api/trpc", demoSubmitRateLimit);
   registerHealthRoute(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);

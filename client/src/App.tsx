@@ -9,6 +9,8 @@ import Controller from "./pages/Controller";
 import EliteMission from "./pages/EliteMission";
 import Home from "./pages/Home";
 import AndroidFiles from "./pages/AndroidFiles";
+import Demo from "./pages/Demo";
+import DemoAdmin from "./pages/DemoAdmin";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -18,6 +20,8 @@ function Router() {
       <Route path={"/core/controller"} component={Controller} />
       <Route path={"/core/elite"} component={EliteMission} />
       <Route path={"/android/files"} component={AndroidFiles} />
+      <Route path={"/demo"} component={Demo} />
+      <Route path={"/core/demo-requests"} component={DemoAdmin} />
       {/* Account system is Google OAuth only (no password) — one sign-in
           screen for all legacy auth paths. */}
       <Route path={"/login"} component={Auth} />
