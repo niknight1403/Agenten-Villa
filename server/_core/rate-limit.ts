@@ -16,10 +16,9 @@ const hits = new Map<string, number[]>();
 const MAX_TRACKED_KEYS = 5_000;
 
 export function clientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return forwarded.split(",")[0].trim();
-  }
+  // Express only trusts forwarded addresses when its explicitly configured
+  // proxy policy allows it; an arbitrary X-Forwarded-For must not bypass the
+  // auth limiter.
   return req.ip ?? req.socket.remoteAddress ?? "unknown";
 }
 

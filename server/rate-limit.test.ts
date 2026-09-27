@@ -93,11 +93,11 @@ describe("auth rate limit", () => {
     expect(run(limiter, "203.0.113.7")).toEqual({ ok: true });
   });
 
-  it("erkennt die erste Client-IP hinter einem Proxy", () => {
+  it("ignoriert untrusted X-Forwarded-For", () => {
     const req = {
       headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
       socket: { remoteAddress: "10.0.0.1" },
     } as unknown as Request;
-    expect(clientIp(req)).toBe("203.0.113.9");
+    expect(clientIp(req)).toBe("10.0.0.1");
   });
 });

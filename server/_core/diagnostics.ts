@@ -15,7 +15,7 @@ export function integrationStatus(
 ): IntegrationStatus[] {
   return [
     {
-      name: "MySQL-Datenbank (DATABASE_URL)",
+      name: "PostgreSQL-Datenbank (DATABASE_URL)",
       configured: Boolean(env.DATABASE_URL?.trim()),
     },
     {

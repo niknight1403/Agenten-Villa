@@ -39,6 +39,8 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+      - name: Install screenshot text recognition
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu
       - name: Launch in Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -53,5 +55,8 @@ jobs:
         if: always()
         with:
           name: android-smoke-screen
-          path: villa-smoke.png
+          path: |
+            villa-smoke.png
+            villa-ui.xml
+            villa-ocr.txt
           if-no-files-found: ignore

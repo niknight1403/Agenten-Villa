@@ -131,7 +131,11 @@ export function registerGoogleAuthRoutes(app: Express) {
 
       // Prefix to avoid colliding with openIds from the other auth flow.
       const openId = `google:${profile.sub}`;
-      const role = isAdminEmail(profile.email) ? "admin" : undefined;
+      // The account's email must be verified before it grants allowlisted
+      // administrator privileges. A matching, unverified claim is insufficient.
+      const role = profile.email_verified === true && isAdminEmail(profile.email)
+        ? "admin"
+        : profile.email_verified !== true ? "user" : undefined;
 
       await db.upsertUser({
         openId,
