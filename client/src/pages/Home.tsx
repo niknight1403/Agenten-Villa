@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft,
@@ -56,11 +56,8 @@ const workshopIdeas = [
 ];
 
 export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
+  // The useAuth hook provides authentication state. Login is a plain
+  // navigation to /login (Google OAuth sign-in screen).
   const { isAuthenticated, loading, logout } = useAuth();
   const statusQuery = trpc.agent.status.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -329,6 +326,16 @@ export default function Home() {
   }
 
   async function handleLogout() {
+    // Nativ: Google-Plugin-Session mit abmelden (Play-Services), damit die
+    // naechste Anmeldung sauber startet. Web: nichts zu tun.
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
+        await GoogleAuth.signOut();
+      } catch (error) {
+        console.warn("[Logout] Google signOut failed", error);
+      }
+    }
     try {
       await logout();
     } finally {
@@ -762,7 +769,7 @@ export default function Home() {
                   className="send-button"
                   type="button"
                   aria-label="Anmelden"
-                  onClick={() => startLogin()}
+                  onClick={() => window.location.assign("/login")}
                 >
                   <ArrowLeft size={19} />
                 </button>

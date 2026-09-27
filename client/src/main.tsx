@@ -40,7 +40,10 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      // Absolute Backend-Basis-URL via VITE_API_URL (z. B. https://agenten-villa.onrender.com).
+      // /api/trpc wird hier angehaengt. Leer => relative URL (Web: Same-Origin, Default in der lokalen Entwicklung).
+      // Der Produktions-Build (Dockerfile) pint VITE_API_URL auf die Render-URL.
+      url: `${import.meta.env.VITE_API_URL ?? ""}/api/trpc`,
       transformer: superjson,
       headers() {
         // Preview auto-login fallback: when the browser blocks iframe cookies

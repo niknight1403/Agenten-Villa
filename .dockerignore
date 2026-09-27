@@ -1,0 +1,10 @@
+node_modules
+dist
+android/app/build
+android/.gradle
+.git
+.env
+.env.*
+*.md
+designs
+docs

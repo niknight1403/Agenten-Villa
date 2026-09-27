@@ -42,6 +42,71 @@ describe("bounded provider router", () => {
   });
 });
 
+describe("free-tier optimization (cache, dedupe, model chain)", () => {
+  it("serves identical requests from the cache without a second provider call", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("FREE_TIER_CACHE", "1");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200, "free-cache-model"));
+    const first = await runAgentTurn(input, false, { fetcher });
+    const second = await runAgentTurn(input, false, { fetcher });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({ provider: "openrouter" });
+    expect(first.cached).toBeUndefined();
+    expect(second).toMatchObject({ provider: "openrouter", model: "free-cache-model", attempts: 0, cached: true });
+    expect(second.answer).toBe(first.answer);
+  });
+
+  it("respects an explicit cache disable via FREE_TIER_CACHE=0", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("FREE_TIER_CACHE", "0");
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => reply(200));
+    await runAgentTurn(input, false, { fetcher });
+    await runAgentTurn(input, false, { fetcher });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("coalesces identical concurrent requests into a single provider call", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("FREE_TIER_CACHE", "0");
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      await new Promise(resolve => setTimeout(resolve, 25));
+      return reply(200);
+    });
+    const [first, second] = await Promise.all([
+      runAgentTurn(input, false, { fetcher }),
+      runAgentTurn(input, false, { fetcher }),
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(second.answer).toBe(first.answer);
+  });
+
+  it("tries the next free model when the first hits a provider rate limit", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("FREE_TIER_CACHE", "0");
+    vi.stubEnv("OPENROUTER_MODELS", "model-a:free, model-b:free");
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(reply(429))
+      .mockResolvedValueOnce(reply(200, "model-b-live"));
+    await expect(runAgentTurn(input, true, { fetcher })).resolves.toMatchObject({
+      model: "model-b-live",
+      attempts: 2,
+    });
+    const firstPayload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    const secondPayload = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+    expect(firstPayload.model).toBe("model-a:free");
+    expect(secondPayload.model).toBe("model-b:free");
+  });
+
+  it("does not fake a quota bypass: hard LIMIT after the whole chain stays a LIMIT error", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("HF_TOKEN", "hf-test-key");
+    vi.stubEnv("OPENROUTER_MODELS", "model-a:free,model-b:free");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(402));
+    await expect(runAgentTurn(input, true, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("bounded GitHub tool loop", () => {
   it("runs a tool only in workshop mode, sends its result back to OpenRouter, and returns a summary", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");

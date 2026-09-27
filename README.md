@@ -19,6 +19,19 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 | `HF_TOKEN` | Optionaler, explizit aktivierbarer Fallback |
 | `GITHUB_TOKEN` | Server-Secret für geschützte GitHub-Werkzeuge |
 | `AGENT_ADMIN_EMAIL` | Allowlist-Administrator (alternativ: Rolle `admin`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-Anmeldung (OAuth, Redirect: `<Server-URL>/api/auth/google/callback`) |
+| `JWT_SECRET` | Session-Signatur (Render generiert ihn automatisch) |
+| `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) |
+| `FREE_TIER_CACHE` / `FREE_TIER_CACHE_TTL_SECONDS` | Antwort-Cache (Produktion default an, 10 Min) |
+
+## Produktion & Betrieb
+
+- **Live:** https://agenten-villa.onrender.com (Render Free Tier, Auto-Deploy von `main`)
+- **Health-Check:** `GET /api/health` (Version, Modus, Uptime — ohne Datenbankzugriff)
+- **Betriebshärte:** gzip-Kompression, Cache-Header (`/assets/*` 1 Jahr immutable, `index.html` no-cache), Rate-Limiting auf `/api/auth/*` (20/Min/IP), HTTP-Zugriffslogging, JSON-Fallback für unbehandelte Fehler
+- **PWA:** Manifest + Icons — die Web-App lässt sich auf Android direkt „zum Startbildschirm hinzufügen"
+- **Android-APK:** signierte Release-APK aus der CI (siehe `docs/APK.md`)
+- **Deployment:** `docs/DEPLOY.md` (Render + MySQL, Schritt für Schritt)
 
 ## Administratorzugriff
 

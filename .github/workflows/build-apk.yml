@@ -1,0 +1,110 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Backend-URL (ohne /api/trpc). Default: Produktions-URL"
+        required: false
+        default: "https://agenten-villa.onrender.com"
+  push:
+    branches: [main]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web client
+        env:
+          # Bei push-Runs ist github.event.inputs leer — dann Produktions-URL,
+          # damit die native App immer ein Backend erreicht (Web nutzt relativ).
+          VITE_API_URL: ${{ github.event.inputs.server_url || 'https://agenten-villa.onrender.com' }}
+        run: pnpm exec vite build
+
+      - name: Sync Capacitor (Android)
+        run: pnpm exec cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare release signing (optional)
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > /tmp/agenten-villa.keystore
+            echo "ANDROID_KEYSTORE_FILE=/tmp/agenten-villa.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PW" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Signatur-Fingerprints ausgeben (fuer Google Cloud Console)
+        if: env.ANDROID_KEYSTORE_FILE != ''
+        run: |
+          echo "SHA-1/SHA-256 des Release-Keystores:"
+          keytool -list -v -keystore "$ANDROID_KEYSTORE_FILE" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" | grep -E "SHA1:|SHA256:" || true
+          echo "Diese Fingerprints als 'Android'-OAuth-Client (Paketname de.niknight1403.agentenvilla) in der Google Cloud Console hinterlegen."
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agenten-villa-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agenten-villa-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: Verify release APK is signed
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          # build-tools-Verzeichnis kann mehrere Versionen enthalten; das
+          # unquoted Glob in Kommando-Position wuerde mehrere Pfade liefern
+          # (erster = Kommando, Rest = Argumente) und die Verifikation brechen.
+          APKSIGNER=$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "Fehler: kein apksigner unter $ANDROID_HOME/build-tools gefunden" >&2
+            exit 1
+          fi
+          if "$APKSIGNER" verify --print-certs "$APK" > /dev/null 2>&1; then
+            echo "Release-APK ist signiert: $APK"
+            "$APKSIGNER" verify --print-certs "$APK" | head -3 || true
+          else
+            echo "Fehler: Release-APK ist nicht signiert" >&2
+            "$APKSIGNER" verify "$APK" 2>&1 | head -10 >&2 || true
+            exit 1
+          fi

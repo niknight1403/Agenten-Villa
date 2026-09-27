@@ -1,5 +1,6 @@
 import { githubTools } from "./github-tools";
 import { DEFAULT_VILLA_ID, getVillaSystemContext } from "./agent-villa";
+import { cacheEnabled, cacheKey, coalesce, freeModels, readCache, writeCache } from "./free-tier";
 import type { AgentErrorCode } from "./error-codes";
 
 export type Provider = "openrouter" | "huggingface";
@@ -18,6 +19,8 @@ export type AgentResult = {
   model: string;
   attempts: number;
   githubActions?: number;
+  /** true, wenn die Antwort aus dem Free-Tier-Cache kam (0 Token verbraucht). */
+  cached?: boolean;
 };
 export type AgentToolExecutor = (
   name: string,
@@ -187,6 +190,41 @@ async function callProvider(
   };
 }
 
+/**
+ * Ruft OpenRouter mit der freien Modellkette auf: bei LIMIT/UNAVAILABLE wird
+ * das naechste freie Modell probiert (max. freeModels().length Versuche).
+ */
+async function callWithFreeModelChain(
+  fetcher: typeof fetch,
+  key: string,
+  messages: ApiMessage[],
+  tools?: typeof githubTools
+) {
+  const models = freeModels();
+  let lastError: unknown;
+  for (let attempt = 0; attempt < models.length; attempt += 1) {
+    try {
+      const completion = await callProvider(
+        fetcher,
+        OPENROUTER_URL,
+        key,
+        models[attempt],
+        messages,
+        tools
+      );
+      return { completion, attempts: attempt + 1 };
+    } catch (error) {
+      lastError = error;
+      if (
+        !(error instanceof AgentError) ||
+        (error.code !== "LIMIT" && error.code !== "UNAVAILABLE")
+      )
+        throw error;
+    }
+  }
+  throw lastError;
+}
+
 export async function runAgentTurn(
   input: AgentInput,
   allowFallback: boolean,
@@ -199,52 +237,74 @@ export async function runAgentTurn(
       "Der OpenRouter-Schlüssel ist noch nicht sicher eingerichtet."
     );
   const fetcher = deps.fetcher ?? fetch;
-  try {
-    const result = await callProvider(
-      fetcher,
-      OPENROUTER_URL,
-      primaryKey,
-      "openrouter/free",
-      makeMessages(input)
-    );
-    return {
-      answer: result.answer,
-      provider: "openrouter",
-      model: result.model,
-      attempts: 1,
-    };
-  } catch (error) {
-    if (
-      !allowFallback ||
-      !(error instanceof AgentError) ||
-      error.code !== "UNAVAILABLE"
-    )
-      throw error;
-    const hfKey = process.env.HF_TOKEN?.trim();
-    if (!hfKey)
-      throw new AgentError(
-        "MISSING_KEY",
-        "Der optionale Hugging-Face-Fallback hat keinen Server-Schlüssel."
-      );
-    if (deps.beforeFallback && !(await deps.beforeFallback()))
-      throw new AgentError(
-        "STOPPED",
-        "Der Agent wurde vor dem optionalen Fallback gestoppt."
-      );
-    const result = await callProvider(
-      fetcher,
-      HUGGINGFACE_URL,
-      hfKey,
-      HF_MODEL,
-      makeMessages(input)
-    );
-    return {
-      answer: result.answer,
-      provider: "huggingface",
-      model: result.model,
-      attempts: 2,
-    };
+  const messages = makeMessages(input);
+  const key = cacheKey(messages);
+
+  // Free-Tier-Optimierung 1: identische Anfrage im Cache -> 0 Token.
+  if (cacheEnabled()) {
+    const hit = readCache(key);
+    if (hit)
+      return {
+        answer: hit.answer,
+        provider: hit.provider as Provider,
+        model: hit.model,
+        attempts: 0,
+        cached: true,
+      };
   }
+
+  // Free-Tier-Optimierung 2 + 3: Dedupe identischer Parallelanfragen und
+  // freie Modellkette, alles in einem einzigen Lauf pro Anfrage-Signatur.
+  const run = coalesce(key, async (): Promise<AgentResult> => {
+    try {
+      const { completion, attempts } = await callWithFreeModelChain(
+        fetcher,
+        primaryKey,
+        messages
+      );
+      return {
+        answer: completion.answer,
+        provider: "openrouter",
+        model: completion.model,
+        attempts,
+      };
+    } catch (error) {
+      if (
+        !allowFallback ||
+        !(error instanceof AgentError) ||
+        error.code !== "UNAVAILABLE"
+      )
+        throw error;
+      const hfKey = process.env.HF_TOKEN?.trim();
+      if (!hfKey)
+        throw new AgentError(
+          "MISSING_KEY",
+          "Der optionale Hugging-Face-Fallback hat keinen Server-Schlüssel."
+        );
+      if (deps.beforeFallback && !(await deps.beforeFallback()))
+        throw new AgentError(
+          "STOPPED",
+          "Der Agent wurde vor dem optionalen Fallback gestoppt."
+        );
+      const result = await callProvider(
+        fetcher,
+        HUGGINGFACE_URL,
+        hfKey,
+        HF_MODEL,
+        messages
+      );
+      return {
+        answer: result.answer,
+        provider: "huggingface",
+        model: result.model,
+        attempts: freeModels().length + 1,
+      };
+    }
+  });
+
+  const result = await run;
+  if (cacheEnabled()) writeCache(key, { answer: result.answer, model: result.model, provider: result.provider });
+  return result;
 }
 
 export async function runAgentTurnWithGitHub(
@@ -269,11 +329,9 @@ export async function runAgentTurnWithGitHub(
   let selectedModel = "openrouter/free";
   const branchesCreatedThisTurn = new Set<string>();
   for (let round = 0; round <= LIMITS.githubToolRounds; round += 1) {
-    const completion = await callProvider(
+    const { completion } = await callWithFreeModelChain(
       fetcher,
-      OPENROUTER_URL,
       key,
-      "openrouter/free",
       messages,
       githubTools
     );

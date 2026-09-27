@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { fetchWithFallback, assertAnyApiKey } from "./llm-router";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -217,6 +218,7 @@ const resolveApiUrl = () =>
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
     : "https://forge.manus.im/v1/chat/completions";
 
+// assertApiKey ersetzt durch assertAnyApiKey aus llm-router
 const assertApiKey = () => {
   if (!ENV.forgeApiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
@@ -340,7 +342,7 @@ const fetchWithBackoff = async (
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  assertAnyApiKey();
 
   const {
     messages,
@@ -401,7 +403,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
+  const response = await fetchWithFallback(payload, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -433,7 +435,7 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
+  assertAnyApiKey();
 
   const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
