@@ -8,13 +8,13 @@ Die Orchestrierung bündelt Feature-, Tool-, Entwickler- und System-Packs. Stand
 
 Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. `openrouter/free` ist die primäre kostenlose Route. Ein Hugging-Face-Fallback ist nur nach ausdrücklicher Aktivierung und bei einem vorübergehenden Ausfall vorgesehen. HTTP-Status 402 und 429 werden als erschöpftes Kontingent behandelt und nicht umgangen.
 
-**Stack:** React 19 + Vite (Client, tRPC über `@tanstack/react-query`), Express + tRPC (Server), Drizzle ORM mit MySQL (`mysql2`), pnpm als Paketmanager.
+**Stack:** React 19 + Vite (Client, tRPC über `@tanstack/react-query`), Express + tRPC (Server), Drizzle ORM mit PostgreSQL (`postgres-js`, Neon), pnpm als Paketmanager.
 
 ## Umgebungsvariablen
 
 | Variable | Zweck |
 | --- | --- |
-| `DATABASE_URL` | MySQL-Verbindung (Pflicht, auch für `pnpm db:push`) |
+| `DATABASE_URL` | PostgreSQL-Verbindung, Neon (Pflicht, auch für `pnpm db:push`) |
 | `OPENROUTER_API_KEY` | Primäre kostenlose Modellroute |
 | `HF_TOKEN` | Optionaler, explizit aktivierbarer Fallback |
 | `GITHUB_TOKEN` | Server-Secret für geschützte GitHub-Werkzeuge |
@@ -31,7 +31,7 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 - **Betriebshärte:** gzip-Kompression, Cache-Header (`/assets/*` 1 Jahr immutable, `index.html` no-cache), Rate-Limiting auf `/api/auth/*` (20/Min/IP), HTTP-Zugriffslogging, JSON-Fallback für unbehandelte Fehler
 - **PWA:** Manifest + Icons — die Web-App lässt sich auf Android direkt „zum Startbildschirm hinzufügen"
 - **Android-APK:** signierte Release-APK aus der CI (siehe `docs/APK.md`)
-- **Deployment:** `docs/DEPLOY.md` (Render + MySQL, Schritt für Schritt)
+- **Deployment:** `docs/DEPLOY.md` (Render + Neon-PostgreSQL, Schritt für Schritt)
 
 ## Administratorzugriff
 
@@ -45,7 +45,7 @@ Es gibt bewusst keinen Limit-Umgehungsagenten, keine Schlüsselrotation, keine I
 
 Jede Villa ist ein pro Nutzer gespeicherter Agent-Arbeitsbereich:
 
-- Tabellen: `villas` (Name, Spezialisierung, Icon, pro `createdBy`) und `villa_messages` (Rollen `user`/`assistant`, Provider/Modell, `-1/1`-Bewertung) — Migration `drizzle/0001_sparkling_human_robot.sql`, angelegt über `pnpm db:push`.
+- Tabellen (PostgreSQL/Neon): `villas` (Name, Spezialisierung, Icon, pro `createdBy`) und `villa_messages` (Rollen `user`/`assistant`, Provider/Modell, `-1/1`-Bewertung) — Migration `drizzle/0000_sticky_vindicator.sql`, angelegt über `pnpm db:push`.
 - tRPC-Router `villa`: `list`, `create`, `update`, `remove`, `messages`, `appendMessages`, `rateMessage` — alles Eigentümer-geprüft (`protectedProcedure`) und mit Eingabegrenzen.
 - Chat-Verläufe werden pro Villa geladen und nach jedem Turn optimistisch gespeichert; ist die Datenbank kurzfristig nicht erreichbar, bleibt die Antwort sichtbar und der Nutzer bekommt eine Meldung.
 - Antworten lassen sich im Chat mit Daumen hoch/runter bewerten; die Bewertung wird an der Nachricht gespeichert.

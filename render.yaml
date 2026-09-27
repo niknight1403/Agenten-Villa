@@ -11,7 +11,7 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      # MySQL-Verbindung (Aiven Free / TiDB Serverless) – in docs/DEPLOY.md
+      # PostgreSQL-Verbindung (Neon) – in docs/DEPLOY.md
       - key: DATABASE_URL
         sync: false
       # Admin-Allowlist (deine E-Mail)

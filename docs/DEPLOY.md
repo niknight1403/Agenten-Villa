@@ -1,22 +1,20 @@
 # Deployment – kostenloser Server (Schritt für Schritt)
 
-Diese Anleitung bringt Agenten Villa **kostenlos** ans Netz: ein Docker-Web-Service (Client + Express-API gemeinsam) plus kostenlose MySQL-Datenbank. Der gesamte Client-Build wird vom Service mit ausgeliefert, es gibt nur **einen** Service.
+Diese Anleitung bringt Agenten Villa **kostenlos** ans Netz: ein Docker-Web-Service (Client + Express-API gemeinsam) plus kostenlose PostgreSQL-Datenbank (Neon). Der gesamte Client-Build wird vom Service mit ausgeliefert, es gibt nur **einen** Service.
 
 ## Überblick
 
 | Baustein | Kostenloser Anbieter | Konto nötig |
 | --- | --- | --- |
 | Web-Service (Docker) | [Render](https://render.com) Free Plan | ja (GitHub-Login) |
-| MySQL-Datenbank | [Aiven Free](https://aiven.io) oder [TiDB Serverless](https://tidbcloud.com) | ja |
+| PostgreSQL-Datenbank | [Neon](https://neon.tech) (Free) | ja |
 | LLM-Modellroute | [OpenRouter](https://openrouter.ai/keys) (Free-Modelle) | ja |
 
 > Hinweis: Render Free-Services gehen nach ~15 Min. Inaktivität schlafen und brauchen beim ersten Aufruf ~30–60 Sek. Aufwachzeit.
 
-## 1. MySQL-Datenbank anlegen
+## 1. PostgreSQL-Datenbank anlegen (Neon)
 
-**Aiven Free:** Projekt anlegen → Service `MySQL` (Free Plan) → nach dem Start die `Service URI` kopieren (Format: `mysql://user:pass@host:port/defaultdb?ssl-mode=REQUIRED`).
-
-**Alternativ TiDB Serverless (Free):** Cluster anlegen → Connection String (Format: `mysql://user:pass@host:4000/test?ssl-mode=VERIFY_IDENTITY`).
+**Neon Free:** Projekt anlegen → Connection String kopieren (Format: `postgres://user:pass@host/dbname?sslmode=require`). Alternativ: Datenbank in einem bestehenden Neon-Projekt anlegen.
 
 Die URI später als `DATABASE_URL` eintragen.
 
@@ -24,7 +22,7 @@ Die URI später als `DATABASE_URL` eintragen.
 
 ```bash
 pnpm install
-DATABASE_URL="mysql://...deine-uri..." pnpm db:push
+DATABASE_URL="postgres://...deine-uri..." pnpm db:push
 ```
 
 ## 3. Web-Service auf Render deployen
@@ -70,7 +68,7 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 
 | Variable | Zweck | Pflicht |
 | --- | --- | --- |
-| `DATABASE_URL` | MySQL-Verbindung | ja |
+| `DATABASE_URL` | PostgreSQL-Verbindung (Neon) | ja |
 | `JWT_SECRET` | Signatur der Sitzungen | ja (auto-generiert) |
 | `AGENT_ADMIN_EMAIL` | Allowlist-Administrator | empfohlen |
 | `OPENROUTER_API_KEY` | Kostenlose Modellroute | ja für Agenten |
