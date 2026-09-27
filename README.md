@@ -41,7 +41,20 @@ Der konfigurierte Administrator (`AGENT_ADMIN_EMAIL`) oder ein Benutzer mit der 
 
 Es gibt bewusst keinen Limit-Umgehungsagenten, keine Schlüsselrotation, keine Identitätsvortäuschung und keine kostenpflichtige oder nicht autorisierte Ausweichroute. Diese Grenzen schützen Konten, Anbieter und das Repository.
 
-## Administrator Elite & autonome Projektfabrik\n\nFür den konfigurierten Administrator ist das **Elite-Paket** aktiv. Es setzt in der Anwendung kein lokales Chat-Gesamtkontingent und kein lokales Token-Gesamtkonto. Technische Kontext-/Ausgabelimits sowie kostenlose Kontingente externer Anbieter bleiben davon unberührt und werden nicht umgangen.\n\n- **Elite Mission Control:** `/core/elite` nimmt eine Projektidee entgegen und führt einen kontrollierten Idee-zu-Projekt-Lauf aus.\n- **Pipeline:** Repository analysieren → Akzeptanzkriterien/Architektur → neuer `agent/*`-Branch → Implementierung/Refactoring → Tests & Dokumentation → Selbstprüfung → CI-/PR-Status lesen → Draft-PR übergeben.\n- **Missionsbudget:** bis zu 24 GitHub-Werkzeugaktionen und 12 Werkzeugrunden je Elite-Mission. Das ist kein Benutzer-/Token-Kontingent, sondern eine technische Sicherheitsgrenze gegen Endlosschleifen.\n- **Werkzeug-Packs:** Repository-Baum, Dateien, Commits, Issues, Pull Requests und vorhandene Check-Runs lesen; Dateien nur auf einem in derselben Mission erstellten `agent/*`-Branch schreiben; Draft-PR öffnen.\n- **Connectoren:** OpenRouter Free (primär), optional Hugging Face, GitHub, PostgreSQL/Neon und Google OAuth. Der Status ist im Elite Mission Control sichtbar.\n- **Free-Tier-First:** freie Modellkette, Cache und In-Flight-Deduplizierung reduzieren unnötige Provider-Aufrufe.\n- **Geschützte Grenzen:** kein autonomes Merge, kein Schreiben auf `main`, keine Secrets-/Berechtigungs-/Repository-Verwaltung und keine Änderungen an `.github/workflows`.\n\n`ELITE_MAX_OUTPUT_TOKENS` steuert die maximale Ausgabe eines einzelnen Elite-Provider-Aufrufs (Default 4096, maximal 8192). Dies ist eine technische Einzelanfrage-Grenze und keine lokale Gesamtquote.\n## Villen & Verlauf (persistiert)
+## Administrator Elite & autonome Projektfabrik
+
+Für den konfigurierten Administrator ist das **Elite-Paket** aktiv. Es setzt in der Anwendung kein lokales Chat-Gesamtkontingent und kein lokales Token-Gesamtkonto. Technische Kontext-/Ausgabelimits sowie kostenlose Kontingente externer Anbieter bleiben davon unberührt und werden nicht umgangen.
+
+- **Elite Mission Control:** `/core/elite` nimmt eine Projektidee entgegen und führt einen kontrollierten Idee-zu-Projekt-Lauf aus.
+- **Pipeline:** Repository analysieren → Akzeptanzkriterien/Architektur → neuer `agent/*`-Branch → Implementierung/Refactoring → Tests & Dokumentation → Selbstprüfung → CI-/PR-Status lesen → Draft-PR übergeben.
+- **Missionsbudget:** bis zu 24 GitHub-Werkzeugaktionen und 12 Werkzeugrunden je Elite-Mission. Das ist kein Benutzer-/Token-Kontingent, sondern eine technische Sicherheitsgrenze gegen Endlosschleifen.
+- **Werkzeug-Packs:** Repository-Baum, Dateien, Commits, Issues, Pull Requests und vorhandene Check-Runs lesen; Dateien nur auf einem in derselben Mission erstellten `agent/*`-Branch schreiben; Draft-PR öffnen.
+- **Connectoren:** OpenRouter Free (primär), optional Hugging Face, GitHub, PostgreSQL/Neon und Google OAuth. Der Status ist im Elite Mission Control sichtbar.
+- **Free-Tier-First:** freie Modellkette, Cache und In-Flight-Deduplizierung reduzieren unnötige Provider-Aufrufe.
+- **Geschützte Grenzen:** kein autonomes Merge, kein Schreiben auf `main`, keine Secrets-/Berechtigungs-/Repository-Verwaltung und keine Änderungen an `.github/workflows`.
+
+`ELITE_MAX_OUTPUT_TOKENS` steuert die maximale Ausgabe eines einzelnen Elite-Provider-Aufrufs (Default 4096, maximal 8192). Dies ist eine technische Einzelanfrage-Grenze und keine lokale Gesamtquote.
+## Villen & Verlauf (persistiert)
 
 Jede Villa ist ein pro Nutzer gespeicherter Agent-Arbeitsbereich:
 
