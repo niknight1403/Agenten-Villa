@@ -1,5 +1,5 @@
 import { ONE_YEAR_MS, COOKIE_NAME } from "@shared/const";
-import { parse as parseCookieHeader } from "cookie";
+import { parseCookieHeader } from "./cookie-compat";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
