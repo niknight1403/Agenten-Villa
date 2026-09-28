@@ -7,12 +7,15 @@ import {
   createVilla,
   deleteVilla,
   listMessages,
+  getLimitConfig,
   getVilla,
   listVillaEvents,
   listVillas,
   rateMessage,
+  setLimitConfig,
   setVillaArchived,
   updateVilla,
+  VillaLimitError,
 } from "./villa-store";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
@@ -31,6 +34,37 @@ function storeError(error: unknown): never {
 }
 
 export const villaRouter = router({
+  /** Sprint 017 — eigene Kapazitaetsgrenzen lesen (Nutzer-Sicht). */
+  limits: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await getLimitConfig(ctx.user.id);
+    } catch (error) {
+      storeError(error);
+    }
+  }),
+
+  /** Sprint 017 — Limit-Konfiguration aendern (nur Admin). */
+  setLimits: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        maxVillas: z.number().int().min(1).max(50),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Nur Administratoren dürfen Limits ändern.",
+        });
+      }
+      try {
+        return await setLimitConfig(input.userId, input.maxVillas);
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     try {
       return await listVillas(ctx.user.id);
@@ -62,6 +96,12 @@ export const villaRouter = router({
           capacity: input.capacity,
         });
       } catch (error) {
+        if (error instanceof VillaLimitError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+          });
+        }
         storeError(error);
       }
     }),
@@ -181,6 +221,16 @@ export const villaRouter = router({
             code: "FORBIDDEN",
             message: "Diese Villa ist archiviert und nimmt keine neuen Nachrichten an.",
           });
+        }
+        // Sprint 017 — Kapazität der Villa erzwingen (Tausend Zeichen je Nachricht).
+        const capacityChars = (villa.capacity ?? 8) * 1000;
+        for (const message of input.messages) {
+          if (message.content.length > capacityChars) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Nachricht überschreitet die Kapazität der Villa (max. ${capacityChars} Zeichen je Nachricht).`,
+            });
+          }
         }
         const rows = await appendMessages(input.villaId, ctx.user.id, input.messages);
         return rows;

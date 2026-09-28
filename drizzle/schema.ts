@@ -89,6 +89,20 @@ export type AgentProfile = typeof agentProfiles.$inferSelect;
 export type InsertAgentProfile = typeof agentProfiles.$inferInsert;
 
 /**
+ * Sprint 017 — Kapazitätsgrenzen pro Nutzer, konfigurierbar und erzwungen:
+ * maxVillas begrenzt die Zahl aktiver Villen, villa.capacity bleibt die
+ * Eingabegrenze je Nachricht (Tausend Zeichen).
+ */
+export const limitConfigs = pgTable("limit_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull().unique(),
+  maxVillas: integer("maxVillas").notNull().default(20),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("limit_configs_userId_idx").on(table.userId)]);
+
+export type LimitConfig = typeof limitConfigs.$inferSelect;
+
+/**
  * Sprint 013 — Audit-Spur pro Villa: jede ändernde Aktion (create, update,
  * archive, delete, import) wird mit Zeit, Akteur und serialisiertem Detail
  * festgehalten. Detail enthält ausschließlich nicht-geheime Feldnamen und

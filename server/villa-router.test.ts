@@ -10,10 +10,10 @@ vi.mock("./villa-store", async (importOriginal) => {
   return { ...actual };
 });
 
-function createContext(userId = 17): TrpcContext {
+function createContext(userId = 17, role: "user" | "admin" = "user"): TrpcContext {
   const now = new Date();
   return {
-    user: { id: userId, openId: "test-open-id", email: "user@example.com", name: "Test User", loginMethod: "test", role: "user", createdAt: now, updatedAt: now, lastSignedIn: now },
+    user: { id: userId, openId: "test-open-id", email: "user@example.com", name: "Test User", loginMethod: "test", role, createdAt: now, updatedAt: now, lastSignedIn: now },
     req: {} as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
@@ -292,6 +292,54 @@ describe("villa router validation and ownership", () => {
     await expect(
       caller.villa.appendMessages({ villaId: 3, messages: [{ role: "user", content: "x" }] })
     ).resolves.toHaveLength(1);
+  });
+
+  it("rejects messages over the villa capacity and manages limits (Sprint 017)", async () => {
+    const villaWithCapacity = { ...villa, capacity: 1, archivedAt: null };
+    vi.spyOn(store, "getVilla").mockResolvedValue(villaWithCapacity);
+    const appendSpy = vi.spyOn(store, "appendMessages").mockResolvedValue([message]);
+    const oversized = [{ role: "user" as const, content: "x".repeat(1001) }];
+    await expect(
+      caller.villa.appendMessages({ villaId: 3, messages: oversized })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(appendSpy).not.toHaveBeenCalled();
+    const fitting = [{ role: "user" as const, content: "x".repeat(1000) }];
+    await expect(
+      caller.villa.appendMessages({ villaId: 3, messages: fitting })
+    ).resolves.toHaveLength(1);
+
+    const limits = { maxVillas: 20 };
+    const getLimitsSpy = vi.spyOn(store, "getLimitConfig").mockResolvedValue(limits);
+    await expect(caller.villa.limits()).resolves.toEqual(limits);
+    expect(getLimitsSpy).toHaveBeenCalledWith(17);
+
+    const setLimitsSpy = vi.spyOn(store, "setLimitConfig").mockResolvedValue({
+      id: 1, userId: 17, maxVillas: 30, updatedAt: new Date(),
+    } as never);
+    const adminCaller = appRouter.createCaller(createContext(1, "admin"));
+    await expect(
+      adminCaller.villa.setLimits({ userId: 17, maxVillas: 30 })
+    ).resolves.toMatchObject({ maxVillas: 30 });
+    expect(setLimitsSpy).toHaveBeenCalledWith(17, 30);
+    await expect(
+      caller.villa.setLimits({ userId: 17, maxVillas: 99 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("blocks limit changes for non-admin callers (Sprint 017)", async () => {
+    await expect(caller.villa.setLimits({ userId: 17, maxVillas: 10 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("maps createVilla limit errors to FORBIDDEN (Sprint 017)", async () => {
+    const createSpy = vi
+      .spyOn(store, "createVilla")
+      .mockRejectedValue(new store.VillaLimitError(5));
+    await expect(
+      caller.villa.create({ name: "Zu viel" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(createSpy).toHaveBeenCalled();
   });
 
   it("maps database outages to a clear service error", async () => {

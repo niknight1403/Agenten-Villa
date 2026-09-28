@@ -43,6 +43,13 @@
       "when": 1790625704127,
       "tag": "0005_long_shiver_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790625964669,
+      "tag": "0006_broken_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

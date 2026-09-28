@@ -22,7 +22,8 @@
 | 014 | Grün | Archivierte Villen (archivedAt + Audit-Eintrag) akzeptieren keine neuen Nachrichten (FORBIDDEN) und starten keine Elite-Missionen; Client zeigt Archiv-Badge, Umschalten und sperrt die Chat-Eingabe. |
 | 015 | Grün | Projekte (Tabelle projects) sind pro Nutzer verwaltet; ein Projekt lässt sich einer oder mehreren eigenen Villen zuordnen (villa.projectId, Migration 0004), Ownership beider Seiten wird transaktional geprüft. |
 | 016 | Grün | Superagenten-Profile (Rollen strategie/entwicklung/review/support + Aufgabenprofil, Migration 0005) sind pro Nutzer verwaltbar und einer Villa zuordenbar; villa.profileId mit transaktionaler Ownership-Prüfung. |
-| 017–100 | Geplant | Fortsetzung nach Sprint 016. |
+| 017 | Grün | Kapazitätsgrenzen liegen in limit_configs (Migration 0006, Standard 20 Villen) und werden erzwungen: createVilla lehnt bei Limit FORBIDDEN ab, Nachrichten über villa.capacity × 1000 Zeichen werden BAD_REQUEST; setLimits nur für Admins (1–50). |
+| 018–100 | Geplant | Fortsetzung nach Sprint 017. |
 
 ## Grüner Validierungsweg
 

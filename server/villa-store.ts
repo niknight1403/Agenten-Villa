@@ -1,7 +1,7 @@
 import { and, asc, desc, eq } from "drizzle-orm";
-import type { Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
+import type { LimitConfig, Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
 import { getDb } from "./db";
-import { villaEvents, villaMessages, villas } from "../drizzle/schema";
+import { limitConfigs, villaEvents, villaMessages, villas } from "../drizzle/schema";
 
 function requireDb() {
   return getDb();
@@ -31,6 +31,63 @@ export async function listVillas(userId: number): Promise<Villa[]> {
   return db.select().from(villas).where(eq(villas.createdBy, userId)).orderBy(asc(villas.createdAt));
 }
 
+type VillaTx = Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0];
+
+/** Sprint 017 — Villa-Limit überschritten (wird zu FORBIDDEN gemappt). */
+export class VillaLimitError extends Error {
+  constructor(public readonly maxVillas: number) {
+    super(`VILLA_LIMIT_REACHED:${maxVillas}`);
+  }
+}
+
+/**
+ * Sprint 017 — Limit-Konfiguration des Nutzers lesen (lazy, Standard 20).
+ */
+export async function getLimitConfig(userId: number, tx?: VillaTx): Promise<{ maxVillas: number }> {
+  if (tx) {
+    const [rowTx] = await tx.select().from(limitConfigs)
+      .where(eq(limitConfigs.userId, userId))
+      .limit(1);
+    return rowTx ? { maxVillas: rowTx.maxVillas } : { maxVillas: 20 };
+  }
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  const [row] = await db.select().from(limitConfigs)
+    .where(eq(limitConfigs.userId, userId))
+    .limit(1);
+  return row ? { maxVillas: row.maxVillas } : { maxVillas: 20 };
+}
+
+/**
+ * Sprint 017 — Limit-Konfiguration setzen (Upsert, Admin-gesteuert).
+ */
+export async function setLimitConfig(userId: number, maxVillas: number): Promise<LimitConfig> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  const [row] = await db
+    .insert(limitConfigs)
+    .values({ userId, maxVillas })
+    .onConflictDoUpdate({
+      target: limitConfigs.userId,
+      set: { maxVillas },
+    })
+    .returning();
+  return row;
+}
+
+/**
+ * Sprint 017 — Aktive Villa-Anzahl inkl. erzwingtem Limit.
+ * Wirft VillaLimitError, wenn das Limit erreicht ist.
+ */
+export async function assertVillaCapacity(userId: number, tx: VillaTx): Promise<void> {
+  const config = await getLimitConfig(userId, tx);
+  const owned = await tx.select({ id: villas.id }).from(villas)
+    .where(eq(villas.createdBy, userId));
+  if (owned.length >= config.maxVillas) {
+    throw new VillaLimitError(config.maxVillas);
+  }
+}
+
 export async function createVilla(input: {
   createdBy: number;
   name: string;
@@ -43,6 +100,7 @@ export async function createVilla(input: {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
   return db.transaction(async tx => {
+    await assertVillaCapacity(input.createdBy, tx);
     const [created] = await tx.insert(villas).values(input).returning();
     await tx.insert(villaEvents).values({
       villaId: created.id,
