@@ -25,7 +25,8 @@
 | 017 | Grün | Kapazitätsgrenzen liegen in limit_configs (Migration 0006, Standard 20 Villen) und werden erzwungen: createVilla lehnt bei Limit FORBIDDEN ab, Nachrichten über villa.capacity × 1000 Zeichen werden BAD_REQUEST; setLimits nur für Admins (1–50). |
 | 018 | Grün | villa.export liefert Villa + Verlauf als portables JSON (Version 1) nur für eigene Villen; villa.import legt eine neue Villa mit bis zu 200 Nachrichten an, erzwingt Kapazität und Limit und schreibt einen Audit-Eintrag. |
 | 019 | Grün | villa.activity liefert je Villa Nachrichtenzähler, letzten Aktivitätszeitpunkt und Status (aktiv/archiviert) als SQL-Aggregat — ohne Nachrichteninhalte. |
-| 020 | Geplant | Abschließender Review-Sprint: Validierung, Live-Deploy, Statusdokumentation. |
+| 020 | Grün | Abschluss-Review: 136 Tests grün (4 übersprungen), Typecheck und Build sauber; Sprints 011–019 gemerged, 6 Migrationen (0001–0006) erforderlich; Client-Typen (description, capacity, archivedAt) nachgezogen. |
+| 021–100 | Geplant | Neue Sprints nach Review durch den Eigentümer. |
 
 ## Grüner Validierungsweg
 
