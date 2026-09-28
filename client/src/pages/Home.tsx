@@ -63,9 +63,13 @@ const workshopIdeas = [
 ];
 
 export default function Home() {
-  // The useAuth hook provides authentication state. Login is a plain
-  // navigation to /login (Google OAuth sign-in screen).
-  const { isAuthenticated, loading, logout } = useAuth();
+  // The useAuth hook provides authentication state. Unauthenticated
+  // visitors are shown the login screen at app start — no need to find
+  // the small sign-in button on the Home screen first.
+  const { isAuthenticated, loading, logout } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/login",
+  });
   const statusQuery = trpc.agent.status.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,

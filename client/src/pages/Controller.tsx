@@ -22,7 +22,10 @@ function formatNumber(value: number | undefined) {
 }
 
 export default function Controller() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/login",
+  });
   const statusQuery = trpc.agent.status.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchInterval: 5_000,
