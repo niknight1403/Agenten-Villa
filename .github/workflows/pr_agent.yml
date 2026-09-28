@@ -21,12 +21,16 @@ permissions:
   contents: write
 
 concurrency:
+  # Serialisiert Runs pro PR, bricht aber NIE laufende Reviews ab:
+  # Bot-Kommentare (z. B. CodeRabbit) feuern issue_comment-Events in
+  # dieselbe Gruppe und haben mit cancel-in-progress den laufenden
+  # Review immer abgebrochen, bevor er fertig wurde.
   group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   pr_agent_job:
-    if: ${{ github.event.sender.type != 'Bot' }}
+    if: ${{ github.event.sender.type != 'Bot' && (github.event_name != 'issue_comment' || github.event.issue.pull_request) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     name: KI-Review durch PR-Agent
@@ -46,6 +50,6 @@ jobs:
           github_action_config.auto_improve: "true"
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
           # Projektkonventionen (Deutsch, Repo-Stil):
-          pr_reviewer.extra_instructions: "Das Projekt nutzt deutsche, konventionelle Commit- und PR-Titel ('fix(build-apk): ...', 'docs: ...'). Antworte auf Deutsch. Achte auf: keine Secrets im Code, Node 22 + pnpm (nicht npm/yarn), MariaDB/MySQL als Datenbank, Deploy als Docker-Container auf Render, android/ ist Quelle der Wahrheit fuer Natives."
+          pr_reviewer.extra_instructions: "Das Projekt nutzt deutsche, konventionelle Commit- und PR-Titel ('fix(build-apk): ...', 'docs: ...'). Antworte auf Deutsch. Achte auf: keine Secrets im Code, Node 22 + pnpm (nicht npm/yarn), Neon-Postgres via drizzle-orm als Datenbank (drizzle/schema.ts ist Quelle der Wahrheit), Deploy als Render-Web-Service (kein Docker), android/ ist Quelle der Wahrheit fuer Natives."
           pr_description.extra_instructions: "Beschreibe den PR auf Deutsch, klar und sachlich, passend zum Stil der Doku in docs/."
           pr_description.publish_labels: "false"
