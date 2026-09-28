@@ -147,7 +147,55 @@ describe("villa router validation and ownership", () => {
     await expect(caller.villa.update({ id: 99, name: "Neu" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect(store.updateVilla).toHaveBeenCalledWith(99, 17, { name: "Neu", specialty: undefined });
+    expect(store.updateVilla).toHaveBeenCalledWith(99, 17, {
+      name: "Neu",
+      specialty: undefined,
+      description: undefined,
+      capacity: undefined,
+    });
+  });
+
+  it("persists edited fields and exposes an audited event trail (Sprint 013)", async () => {
+    const updateSpy = vi.spyOn(store, "updateVilla").mockResolvedValue({
+      ...villa,
+      name: "Villa Alpha 2",
+      capacity: 12,
+      description: "Neue Beschreibung",
+    });
+    const updated = await caller.villa.update({
+      id: 3,
+      name: "  Villa Alpha 2  ",
+      capacity: 12,
+      description: "Neue Beschreibung",
+    });
+    expect(updated.name).toBe("Villa Alpha 2");
+    expect(updateSpy).toHaveBeenCalledWith(3, 17, {
+      name: "Villa Alpha 2",
+      specialty: undefined,
+      description: "Neue Beschreibung",
+      capacity: 12,
+    });
+    await expect(
+      caller.villa.update({ id: 3, capacity: 0 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.villa.update({ id: 3, description: "x".repeat(1001) })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const event = {
+      id: 7,
+      villaId: 3,
+      actorId: 17,
+      action: "updated",
+      detail: JSON.stringify({ fields: ["capacity"], values: { capacity: 12 } }),
+      createdAt: new Date(),
+    };
+    const eventsSpy = vi.spyOn(store, "listVillaEvents").mockResolvedValue([event]);
+    const trail = await caller.villa.events({ villaId: 3 });
+    expect(trail).toEqual([event]);
+    expect(eventsSpy).toHaveBeenCalledWith(3, 17);
+    vi.spyOn(store, "listVillaEvents").mockResolvedValue([]);
+    await expect(caller.villa.events({ villaId: 99 })).resolves.toEqual([]);
   });
 
   it("deletes only existing own villas", async () => {

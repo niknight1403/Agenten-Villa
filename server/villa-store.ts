@@ -1,7 +1,7 @@
 import { and, asc, desc, eq } from "drizzle-orm";
-import type { Villa, VillaMessage } from "../drizzle/schema";
+import type { Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
 import { getDb } from "./db";
-import { villaMessages, villas } from "../drizzle/schema";
+import { villaEvents, villaMessages, villas } from "../drizzle/schema";
 
 function requireDb() {
   return getDb();
@@ -42,8 +42,34 @@ export async function createVilla(input: {
 }): Promise<Villa> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const [created] = await db.insert(villas).values(input).returning();
-  return created;
+  return db.transaction(async tx => {
+    const [created] = await tx.insert(villas).values(input).returning();
+    await tx.insert(villaEvents).values({
+      villaId: created.id,
+      actorId: input.createdBy,
+      action: "created",
+      detail: JSON.stringify({ name: created.name, icon: created.icon }),
+    });
+    return created;
+  });
+}
+
+/**
+ * Sprint 013 — Audit-Eintrag innerhalb derselben Transaktion wie die Änderung.
+ */
+async function recordVillaEvent(
+  tx: Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0] extends infer T ? T : never,
+  villaId: number,
+  actorId: number,
+  action: string,
+  detail: Record<string, unknown>
+): Promise<void> {
+  await tx.insert(villaEvents).values({
+    villaId,
+    actorId,
+    action,
+    detail: JSON.stringify(detail),
+  });
 }
 
 export async function getVilla(villaId: number, userId: number): Promise<Villa | undefined> {
@@ -58,21 +84,30 @@ export async function getVilla(villaId: number, userId: number): Promise<Villa |
 export async function updateVilla(
   villaId: number,
   userId: number,
-  patch: { name?: string; specialty?: string }
+  patch: {
+    name?: string;
+    specialty?: string;
+    description?: string | null;
+    capacity?: number;
+  }
 ): Promise<Villa | undefined> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const set: Record<string, string> = {};
+  const set: Record<string, string | number | null> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.specialty !== undefined) set.specialty = patch.specialty;
+  if (patch.description !== undefined) set.description = patch.description;
+  if (patch.capacity !== undefined) set.capacity = patch.capacity;
   if (Object.keys(set).length === 0) return undefined;
-  if (!(await isOwnedVilla(db, villaId, userId))) return undefined;
-  const rows = await db
-    .update(villas)
-    .set(set)
-    .where(eq(villas.id, villaId))
-    .returning();
-  return rows[0];
+  return db.transaction(async tx => {
+    const owned = await tx.select().from(villas)
+      .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+      .for("update");
+    if (owned.length === 0) return undefined;
+    const rows = await tx.update(villas).set(set).where(eq(villas.id, villaId)).returning();
+    await recordVillaEvent(tx, villaId, userId, "updated", { fields: Object.keys(set), values: set });
+    return rows[0];
+  });
 }
 
 export async function deleteVilla(villaId: number, userId: number): Promise<boolean> {
@@ -85,11 +120,26 @@ export async function deleteVilla(villaId: number, userId: number): Promise<bool
       .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
       .for("update");
     if (!owned.length) return false;
+    await recordVillaEvent(tx, villaId, userId, "deleted", { messagesRemoved: true });
     await tx.delete(villaMessages).where(eq(villaMessages.villaId, villaId));
     const deleted = await tx.delete(villas)
       .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId))).returning({ id: villas.id });
     return deleted.length > 0;
   });
+}
+
+export async function listVillaEvents(
+  villaId: number,
+  userId: number,
+  limit = 50
+): Promise<VillaEvent[]> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  if (!(await isOwnedVilla(db, villaId, userId))) return [];
+  return db.select().from(villaEvents)
+    .where(eq(villaEvents.villaId, villaId))
+    .orderBy(desc(villaEvents.id))
+    .limit(limit);
 }
 
 export async function listMessages(villaId: number, userId: number, limit = 200): Promise<VillaMessage[]> {

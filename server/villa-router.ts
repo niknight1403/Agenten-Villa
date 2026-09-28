@@ -7,6 +7,7 @@ import {
   createVilla,
   deleteVilla,
   listMessages,
+  listVillaEvents,
   listVillas,
   rateMessage,
   updateVilla,
@@ -69,6 +70,8 @@ export const villaRouter = router({
         id: z.number().int().positive(),
         name: villaNameSchema.optional(),
         specialty: specialtySchema.optional(),
+        description: z.string().trim().max(1000).nullable().optional(),
+        capacity: z.number().int().min(1).max(25).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -76,6 +79,8 @@ export const villaRouter = router({
         const villa = await updateVilla(input.id, ctx.user.id, {
           name: input.name,
           specialty: input.specialty,
+          description: input.description,
+          capacity: input.capacity,
         });
         if (!villa) {
           throw new TRPCError({
@@ -112,6 +117,17 @@ export const villaRouter = router({
       try {
         const rows = await listMessages(input.villaId, ctx.user.id);
         return rows.sort((a, b) => a.id - b.id);
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 013 — Audit-Spur der Villa (letzte 50 Einträge). */
+  events: protectedProcedure
+    .input(z.object({ villaId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listVillaEvents(input.villaId, ctx.user.id);
       } catch (error) {
         storeError(error);
       }

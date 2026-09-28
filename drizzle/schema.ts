@@ -52,6 +52,24 @@ export type Villa = typeof villas.$inferSelect;
 export type InsertVilla = typeof villas.$inferInsert;
 
 /**
+ * Sprint 013 — Audit-Spur pro Villa: jede ändernde Aktion (create, update,
+ * archive, delete, import) wird mit Zeit, Akteur und serialisiertem Detail
+ * festgehalten. Detail enthält ausschließlich nicht-geheime Feldnamen und
+ * Werte der Villa selbst.
+ */
+export const villaEvents = pgTable("villa_events", {
+  id: serial("id").primaryKey(),
+  villaId: integer("villaId").notNull(),
+  actorId: integer("actorId").notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  detail: text("detail").notNull().default("{}"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("villa_events_villaId_idx").on(table.villaId)]);
+
+export type VillaEvent = typeof villaEvents.$inferSelect;
+export type InsertVillaEvent = typeof villaEvents.$inferInsert;
+
+/**
  * Persisted chat history per villa. Ratings are stored per assistant
  * message (-1 or 1, null = unrated).
  */
