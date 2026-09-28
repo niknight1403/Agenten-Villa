@@ -110,6 +110,32 @@ export async function updateVilla(
   });
 }
 
+/**
+ * Sprint 014 — Villa archivieren bzw. wiederherstellen. Archivierte Villen
+ * starten keine neuen Läufe und nehmen keine neuen Nachrichten an.
+ */
+export async function setVillaArchived(
+  villaId: number,
+  userId: number,
+  archived: boolean
+): Promise<Villa | undefined> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  return db.transaction(async tx => {
+    const owned = await tx.select({ id: villas.id }).from(villas)
+      .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+      .for("update");
+    if (owned.length === 0) return undefined;
+    const rows = await tx
+      .update(villas)
+      .set(archived ? { archivedAt: new Date() } : { archivedAt: null })
+      .where(eq(villas.id, villaId))
+      .returning();
+    await recordVillaEvent(tx, villaId, userId, archived ? "archived" : "unarchived", { archived });
+    return rows[0];
+  });
+}
+
 export async function deleteVilla(villaId: number, userId: number): Promise<boolean> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");

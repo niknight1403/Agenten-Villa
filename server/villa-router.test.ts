@@ -135,11 +135,13 @@ describe("villa router validation and ownership", () => {
       code: "NOT_FOUND",
     });
     expect(updateSpy).toHaveBeenCalledWith(3, 42, { name: "Fremd", specialty: undefined });
+    const villaSpy = vi.spyOn(store, "getVilla").mockResolvedValue(undefined);
     const appendSpy = vi.spyOn(store, "appendMessages").mockResolvedValue([]);
     await expect(
       otherCaller.villa.appendMessages({ villaId: 3, messages: [{ role: "user", content: "x" }] })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(appendSpy).toHaveBeenCalledWith(3, 42, [{ role: "user", content: "x" }]);
+    expect(villaSpy).toHaveBeenCalledWith(3, 42);
+    expect(appendSpy).not.toHaveBeenCalled();
   });
 
   it("maps update misses to NOT_FOUND and passes ownership through", async () => {
@@ -214,6 +216,7 @@ describe("villa router validation and ownership", () => {
   });
 
   it("appends a bounded batch of messages and requires ownership", async () => {
+    vi.spyOn(store, "getVilla").mockResolvedValue({ ...villa, archivedAt: null });
     const spy = vi
       .spyOn(store, "appendMessages")
       .mockResolvedValue([{ ...message, id: 12, content: "Frage" }, message]);
@@ -230,6 +233,7 @@ describe("villa router validation and ownership", () => {
       { role: "assistant", content: "Zusammenfassung", provider: "openrouter/free", model: "m" },
     ]);
     spy.mockResolvedValue([]);
+    vi.spyOn(store, "getVilla").mockResolvedValue(undefined);
     await expect(
       caller.villa.appendMessages({ villaId: 99, messages: [{ role: "user", content: "x" }] })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -260,6 +264,34 @@ describe("villa router validation and ownership", () => {
     await expect(caller.villa.rateMessage({ messageId: 11, rating: -1 })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("archives and restores villas with an audit entry (Sprint 014)", async () => {
+    const spy = vi.spyOn(store, "setVillaArchived");
+    spy.mockResolvedValue({ ...villa, archivedAt: new Date() });
+    const archived = await caller.villa.archive({ id: 3, archived: true });
+    expect(archived.archivedAt).toBeInstanceOf(Date);
+    expect(spy).toHaveBeenCalledWith(3, 17, true);
+    spy.mockResolvedValue({ ...villa, archivedAt: null });
+    const restored = await caller.villa.archive({ id: 3, archived: false });
+    expect(restored.archivedAt).toBeNull();
+    expect(spy).toHaveBeenCalledWith(3, 17, false);
+    spy.mockResolvedValue(undefined);
+    await expect(caller.villa.archive({ id: 99, archived: true })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("rejects appends to archived villas with FORBIDDEN (Sprint 014)", async () => {
+    vi.spyOn(store, "getVilla").mockResolvedValue({ ...villa, archivedAt: new Date() });
+    await expect(
+      caller.villa.appendMessages({ villaId: 3, messages: [{ role: "user", content: "x" }] })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    vi.spyOn(store, "getVilla").mockResolvedValue({ ...villa, archivedAt: null });
+    vi.spyOn(store, "appendMessages").mockResolvedValue([message]);
+    await expect(
+      caller.villa.appendMessages({ villaId: 3, messages: [{ role: "user", content: "x" }] })
+    ).resolves.toHaveLength(1);
   });
 
   it("maps database outages to a clear service error", async () => {

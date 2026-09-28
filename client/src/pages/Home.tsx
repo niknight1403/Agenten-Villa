@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { trpc } from "@/lib/trpc";
 import {
+  Archive,
   ArrowLeft,
   Bot,
   Building2,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Mic,
   Plus,
+  RotateCcw,
   Search,
   Send,
   ShieldCheck,
@@ -46,6 +48,9 @@ type Villa = {
   specialty: string;
   icon: "villa" | "bot";
   projectBrief: string | null;
+  description?: string | null;
+  capacity?: number;
+  archivedAt?: string | null;
 };
 const homeIdeas = [
   "Erstelle einen Aktionsplan",
@@ -74,6 +79,9 @@ export default function Home() {
     refetchOnWindowFocus: false,
   });
   const createVillaMutation = trpc.villa.create.useMutation({
+    onSuccess: () => villaListQuery.refetch(),
+  });
+  const archiveVillaMutation = trpc.villa.archive.useMutation({
     onSuccess: () => villaListQuery.refetch(),
   });
   const deleteVillaMutation = trpc.villa.remove.useMutation({
@@ -568,11 +576,28 @@ export default function Home() {
                   </span>
                   <span className="villa-row-copy">
                     <strong>{villa.name}</strong>
-                    <span>{villa.specialty}</span>
+                    <span>
+                      {villa.archivedAt ? `Archiv · ${villa.specialty}` : villa.specialty}
+                    </span>
                   </span>
                   {activeVilla?.id === villa.id && (
                     <Check className="selected-check" size={18} />
                   )}
+                </button>
+                <button
+                  className="villa-row-archive"
+                  aria-label={
+                    villa.archivedAt
+                      ? `Villa ${villa.name} wiederherstellen`
+                      : `Villa ${villa.name} archivieren`
+                  }
+                  title={villa.archivedAt ? "Villa wiederherstellen" : "Villa archivieren"}
+                  disabled={archiveVillaMutation.isPending}
+                  onClick={() =>
+                    archiveVillaMutation.mutate({ id: villa.id, archived: !villa.archivedAt })
+                  }
+                >
+                  {villa.archivedAt ? <RotateCcw size={16} /> : <Archive size={16} />}
                 </button>
                 <button
                   className="villa-row-delete"
@@ -777,7 +802,10 @@ export default function Home() {
                 rows={1}
                 aria-label="Nachricht an den Superagenten"
                 disabled={
-                  !isAuthenticated || !agentRunning || chatMutation.isPending
+                  !isAuthenticated ||
+                  !agentRunning ||
+                  chatMutation.isPending ||
+                  Boolean(activeVilla?.archivedAt)
                 }
                 onKeyDown={event => {
                   if (event.key === "Enter" && !event.shiftKey) {
@@ -905,7 +933,9 @@ export default function Home() {
                   </span>
                   <span className="villa-row-copy">
                     <strong>{villa.name}</strong>
-                    <span>{villa.specialty}</span>
+                    <span>
+                      {villa.archivedAt ? `Archiv · ${villa.specialty}` : villa.specialty}
+                    </span>
                   </span>
                 </button>
               ))}

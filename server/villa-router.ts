@@ -7,9 +7,11 @@ import {
   createVilla,
   deleteVilla,
   listMessages,
+  getVilla,
   listVillaEvents,
   listVillas,
   rateMessage,
+  setVillaArchived,
   updateVilla,
 } from "./villa-store";
 
@@ -94,6 +96,21 @@ export const villaRouter = router({
       }
     }),
 
+  /** Sprint 014 — Villa archivieren oder wiederherstellen. */
+  archive: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), archived: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const villa = await setVillaArchived(input.id, ctx.user.id, input.archived);
+        if (!villa) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Villa nicht gefunden." });
+        }
+        return villa;
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
   remove: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
@@ -152,13 +169,20 @@ export const villaRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const rows = await appendMessages(input.villaId, ctx.user.id, input.messages);
-        if (rows.length === 0) {
+        const villa = await getVilla(input.villaId, ctx.user.id);
+        if (!villa) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Villa nicht gefunden.",
           });
         }
+        if (villa.archivedAt) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Diese Villa ist archiviert und nimmt keine neuen Nachrichten an.",
+          });
+        }
+        const rows = await appendMessages(input.villaId, ctx.user.id, input.messages);
         return rows;
       } catch (error) {
         storeError(error);
