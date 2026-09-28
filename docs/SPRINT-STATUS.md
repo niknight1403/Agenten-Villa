@@ -21,7 +21,8 @@
 | 013 | Grün | Villa-Bearbeitung umfasst Name, Spezialisierung, Beschreibung und Kapazität; jede Änderung schreibt transaktional einen Audit-Eintrag (villa_events), abfragbar über villa.events (Migration 0003). |
 | 014 | Grün | Archivierte Villen (archivedAt + Audit-Eintrag) akzeptieren keine neuen Nachrichten (FORBIDDEN) und starten keine Elite-Missionen; Client zeigt Archiv-Badge, Umschalten und sperrt die Chat-Eingabe. |
 | 015 | Grün | Projekte (Tabelle projects) sind pro Nutzer verwaltet; ein Projekt lässt sich einer oder mehreren eigenen Villen zuordnen (villa.projectId, Migration 0004), Ownership beider Seiten wird transaktional geprüft. |
-| 016–100 | Geplant | Fortsetzung nach Sprint 015. |
+| 016 | Grün | Superagenten-Profile (Rollen strategie/entwicklung/review/support + Aufgabenprofil, Migration 0005) sind pro Nutzer verwaltbar und einer Villa zuordenbar; villa.profileId mit transaktionaler Ownership-Prüfung. |
+| 017–100 | Geplant | Fortsetzung nach Sprint 016. |
 
 ## Grüner Validierungsweg
 

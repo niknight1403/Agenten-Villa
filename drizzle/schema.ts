@@ -45,6 +45,8 @@ export const villas = pgTable("villas", {
   archivedAt: timestamp("archivedAt"),
   /** Sprint 015 — zugeordnetes Projekt; eine Villa hat höchstens ein Projekt. */
   projectId: integer("projectId"),
+  /** Sprint 016 — Superagenten-Profil der Villa (Rolle + Aufgabenprofil). */
+  profileId: integer("profileId"),
   icon: varchar("icon", { length: 8 }).$type<"villa" | "bot">().default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
@@ -68,6 +70,23 @@ export const projects = pgTable("projects", {
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
+
+/**
+ * Sprint 016 — Superagenten-Profile: konfigurierbare Rollen und
+ * Aufgabenprofile; eine Villa kann genau einem Profil folgen.
+ */
+export const agentProfiles = pgTable("agent_profiles", {
+  id: serial("id").primaryKey(),
+  createdBy: integer("createdBy").notNull(),
+  name: varchar("name", { length: 80 }).notNull(),
+  role: varchar("role", { length: 20 }).$type<"strategie" | "entwicklung" | "review" | "support">().notNull().default("entwicklung"),
+  taskProfile: text("taskProfile"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("agent_profiles_createdBy_idx").on(table.createdBy)]);
+
+export type AgentProfile = typeof agentProfiles.$inferSelect;
+export type InsertAgentProfile = typeof agentProfiles.$inferInsert;
 
 /**
  * Sprint 013 — Audit-Spur pro Villa: jede ändernde Aktion (create, update,
