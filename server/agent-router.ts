@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { createHash, randomUUID } from "node:crypto";
 import { router, protectedProcedure } from "./_core/trpc";
 import {
   configuredProviders,
@@ -26,6 +27,12 @@ import {
   routeProvider,
 } from "./agent-villa";
 import { getVilla } from "./villa-store";
+import {
+  findMissionByKey, finishMission, getMissionRun, listMissionRuns,
+  missionLeaseIntervalMs, releaseActiveMission, renewMissionLease,
+  reserveMission, restartInterruptedMission, type SavedMissionInput,
+} from "./elite-mission-store";
+import type { EliteMissionRun } from "../drizzle/schema";
 
 let controlState: "RUNNING" | "STOPPED" = "STOPPED";
 let adminSystemPrompt: string | null = null;
@@ -151,6 +158,7 @@ const inputSchema = z
   });
 
 const eliteMissionSchema = z.object({
+  idempotencyKey: z.uuid().optional(),
   villaId: z.number().int().positive().optional(),
   prompt: z
     .string()
@@ -164,6 +172,67 @@ const eliteMissionSchema = z.object({
     .max(80)
     .default("Autonomous Product Engineering"),
 });
+
+type EliteOutput = Awaited<ReturnType<typeof runAutonomousProjectWithGitHub>> & {
+  elite: true;
+  plan: string;
+  workflow: string[];
+  notice: string;
+  missionId: number;
+};
+
+function missionHash(input: z.infer<typeof eliteMissionSchema>) {
+  return createHash("sha256").update(JSON.stringify({
+    villaId: input.villaId ?? null, prompt: input.prompt,
+    history: input.history, specialty: input.specialty,
+  })).digest("hex");
+}
+
+function replayOrConflict(run: EliteMissionRun, expectedHash: string): EliteOutput {
+  if (run.requestHash !== expectedHash)
+    throw new TRPCError({ code: "CONFLICT", message: "Dieser Idempotenzschlüssel gehört zu einem anderen Missionsauftrag." });
+  if (run.status === "completed" && run.result) return run.result as EliteOutput;
+  throw new TRPCError({ code: "CONFLICT", message: `Mission ${run.id} ist ${run.status}. Status abfragen; unterbrochene Läufe nur nach Prüfung ausdrücklich neu starten.` });
+}
+
+async function executePersistedMission(run: EliteMissionRun, missionInput: SavedMissionInput): Promise<EliteOutput> {
+  const heartbeat = setInterval(() => {
+    void renewMissionLease(run).catch(() => { /* no secrets or history in logs */ });
+  }, missionLeaseIntervalMs());
+  heartbeat.unref?.();
+  try {
+    const result = await runAutonomousProjectWithGitHub(
+      missionInput,
+      async (name, args) => {
+        if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
+        return executeGitHubTool(name, args);
+      },
+      { beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run) }
+    );
+    const output: EliteOutput = {
+      ...result,
+      elite: true,
+      plan: ELITE_PLAN.name,
+      workflow: [
+        "Repository analysieren", "Akzeptanzkriterien & Architektur", "agent/*-Branch",
+        "Implementierung", "Tests & Dokumentation", "Selbstprüfung",
+        "CI/PR-Status beobachten", "Draft-PR Übergabe",
+      ],
+      notice: "Elite-Missionen haben für Administratoren kein lokales Chat- oder Token-Gesamtkontingent. Der Lauf bleibt technisch begrenzt, damit er kontrollierbar ist: maximal 24 GitHub-Aktionen und 12 Werkzeugrunden pro Mission. Externe Modellkontingente, Kontextfenster, GitHub-Berechtigungen und Sicherheitsregeln werden nicht umgangen.",
+      missionId: run.id,
+    };
+    await finishMission(run, output);
+    return output;
+  } catch (error) {
+    // A lost lease is never overwritten by this attempt. The old GitHub side
+    // effects may already exist and require manual review before restarting.
+    try { await finishMission(run, null, "MISSION_FAILED"); } catch { /* preserve original error */ }
+    throw error;
+  } finally {
+    clearInterval(heartbeat);
+    releaseActiveMission(run.id);
+  }
+}
 
 function mapAgentError(error: unknown): never {
   if (error instanceof TRPCError) throw error;
@@ -298,6 +367,18 @@ export const agentRouter = router({
     .input(eliteMissionSchema)
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user);
+      const key = input.idempotencyKey ?? randomUUID();
+      const requestHash = missionHash(input);
+      try {
+        // Completed requests can be replayed without a provider call even if
+        // the agent is currently stopped or its provider has become unavailable.
+        if (input.idempotencyKey) {
+          const previous = await findMissionByKey(ctx.user.id, key);
+          if (previous) return replayOrConflict(previous, requestHash);
+        }
+      } catch (error) {
+        mapAgentError(error);
+      }
       if (controlState !== "RUNNING")
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -326,7 +407,7 @@ export const agentRouter = router({
           : "";
         if (projectContext.length + input.prompt.length > ELITE_LIMITS.promptChars)
           throw new TRPCError({ code: "BAD_REQUEST", message: "Projektziel und Mission sind zusammen zu lang. Bitte kürzer formulieren." });
-        const missionInput = {
+        const missionInput: SavedMissionInput = {
           prompt: `${projectContext}${input.prompt}`,
           history: input.history,
           mode: "workshop" as const,
@@ -335,32 +416,45 @@ export const agentRouter = router({
             ? { systemOverride: adminSystemPrompt }
             : {}),
         };
-        const result = await runAutonomousProjectWithGitHub(
-          missionInput,
-          (name, args) => executeGitHubTool(name, args),
-          { beforeFallback: async () => controlState === "RUNNING" }
-        );
-        return {
-          ...result,
-          elite: true,
-          plan: ELITE_PLAN.name,
-          workflow: [
-            "Repository analysieren",
-            "Akzeptanzkriterien & Architektur",
-            "agent/*-Branch",
-            "Implementierung",
-            "Tests & Dokumentation",
-            "Selbstprüfung",
-            "CI/PR-Status beobachten",
-            "Draft-PR Übergabe",
-          ],
-          notice:
-            "Elite-Missionen haben für Administratoren kein lokales Chat- oder Token-Gesamtkontingent. Der Lauf bleibt technisch begrenzt, damit er kontrollierbar ist: maximal 24 GitHub-Aktionen und 12 Werkzeugrunden pro Mission. Externe Modellkontingente, Kontextfenster, GitHub-Berechtigungen und Sicherheitsregeln werden nicht umgangen.",
-        };
+        const reservation = await reserveMission({ userId: ctx.user.id, idempotencyKey: key, requestHash, missionInput });
+        if (!reservation.created) return replayOrConflict(reservation.run, requestHash);
+        return await executePersistedMission(reservation.run, missionInput);
       } catch (error) {
         mapAgentError(error);
       }
     }),
+  eliteMissionRuns: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.user);
+    try {
+      const rows = await listMissionRuns(ctx.user.id);
+      return rows.map(({ id, idempotencyKey, status, attempt, createdAt, updatedAt, finishedAt }) =>
+        ({ id, idempotencyKey, status, attempt, createdAt, updatedAt, finishedAt }));
+    } catch (error) { mapAgentError(error); }
+  }),
+  eliteMissionRun: protectedProcedure.input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      try {
+        const run = await getMissionRun(input.id, ctx.user.id);
+        if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Mission nicht gefunden." });
+        return { id: run.id, status: run.status, attempt: run.attempt,
+          result: run.status === "completed" ? run.result as EliteOutput : null,
+          createdAt: run.createdAt, updatedAt: run.updatedAt, finishedAt: run.finishedAt };
+      } catch (error) { mapAgentError(error); }
+    }),
+  restartInterruptedMission: protectedProcedure.input(z.object({
+    id: z.number().int().positive(),
+    acknowledgeExternalChanges: z.literal(true),
+  })).mutation(async ({ ctx, input }) => {
+    requireAdmin(ctx.user);
+    if (controlState !== "RUNNING" || !process.env.GITHUB_TOKEN?.trim() || !process.env.OPENROUTER_API_KEY?.trim())
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Agent und Provider-Zugang müssen für einen ausdrücklich neu gestarteten Versuch bereit sein." });
+    try {
+      const run = await restartInterruptedMission(input.id, ctx.user.id);
+      if (!run) throw new TRPCError({ code: "CONFLICT", message: "Die Mission ist nicht unterbrochen, die Lease läuft noch, oder der Auftrag gehört einem anderen Konto." });
+      return await executePersistedMission(run, run.input as SavedMissionInput);
+    } catch (error) { mapAgentError(error); }
+  }),
   chat: protectedProcedure
     .input(inputSchema)
     .mutation(async ({ ctx, input }) => {
