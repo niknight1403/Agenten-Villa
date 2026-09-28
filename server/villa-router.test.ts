@@ -342,6 +342,60 @@ describe("villa router validation and ownership", () => {
     expect(createSpy).toHaveBeenCalled();
   });
 
+  it("exports own villas as portable JSON (Sprint 018)", async () => {
+    const data = {
+      name: "Villa Alpha",
+      specialty: "Code-Analyse",
+      icon: "bot" as const,
+      projectBrief: null,
+      description: null,
+      capacity: 8,
+      messages: [{ role: "user" as const, content: "Frage", createdAt: new Date() }],
+      exportedAt: new Date(),
+      version: 1 as const,
+    };
+    const spy = vi.spyOn(store, "exportVilla").mockResolvedValue(data);
+    const result = await caller.villa.export({ villaId: 3 });
+    expect(result.name).toBe("Villa Alpha");
+    expect(result.messages).toHaveLength(1);
+    expect(spy).toHaveBeenCalledWith(3, 17);
+    spy.mockResolvedValue(undefined);
+    const otherCaller = appRouter.createCaller(createContext(42));
+    await expect(otherCaller.villa.export({ villaId: 3 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("imports villas with messages and rejects oversized payloads (Sprint 018)", async () => {
+    const spy = vi.spyOn(store, "importVilla").mockResolvedValue(villa);
+    const created = await caller.villa.import({
+      name: "Import",
+      messages: [{ role: "user", content: "Vorherige Frage" }],
+    });
+    expect(created.name).toBe("Villa Alpha");
+    expect(spy).toHaveBeenCalledWith(17, expect.objectContaining({
+      name: "Import",
+      capacity: 8,
+      messages: [{ role: "user", content: "Vorherige Frage" }],
+    }));
+    await expect(
+      caller.villa.import({
+        name: "Import",
+        messages: new Array(201).fill({ role: "user", content: "x" }),
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.villa.import({
+        name: "Import",
+        messages: [{ role: "system", content: "x" } as never],
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    spy.mockRejectedValue(new store.VillaLimitError(20));
+    await expect(caller.villa.import({ name: "Import" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
   it("maps database outages to a clear service error", async () => {
     vi.spyOn(store, "listVillas").mockRejectedValue(new Error("DATABASE_UNAVAILABLE"));
     await expect(caller.villa.list()).rejects.toMatchObject({

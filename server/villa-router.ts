@@ -6,6 +6,8 @@ import {
   appendMessages,
   createVilla,
   deleteVilla,
+  exportVilla,
+  importVilla,
   listMessages,
   getLimitConfig,
   getVilla,
@@ -175,6 +177,68 @@ export const villaRouter = router({
         const rows = await listMessages(input.villaId, ctx.user.id);
         return rows.sort((a, b) => a.id - b.id);
       } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 018 — Villa als JSON exportieren (nur eigene Villen). */
+  export: protectedProcedure
+    .input(z.object({ villaId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const data = await exportVilla(input.villaId, ctx.user.id);
+        if (!data) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Villa nicht gefunden.",
+          });
+        }
+        return data;
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 018 — Villa aus Export anlegen (Kapazität wird erzwungen). */
+  import: protectedProcedure
+    .input(
+      z.object({
+        name: villaNameSchema,
+        specialty: specialtySchema.default("Importierte Villa"),
+        icon: z.enum(["villa", "bot"]).default("bot"),
+        projectBrief: z.string().trim().min(3).max(4000).nullable().optional(),
+        description: descriptionSchema,
+        capacity: capacitySchema,
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(25000),
+            })
+          )
+          .max(200)
+          .default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const villa = await importVilla(ctx.user.id, {
+          name: input.name,
+          specialty: input.specialty,
+          icon: input.icon,
+          projectBrief: input.projectBrief,
+          description: input.description,
+          capacity: input.capacity,
+          messages: input.messages,
+        });
+        return villa;
+      } catch (error) {
+        if (error instanceof VillaLimitError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+          });
+        }
         storeError(error);
       }
     }),

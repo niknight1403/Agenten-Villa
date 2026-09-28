@@ -212,6 +212,94 @@ export async function deleteVilla(villaId: number, userId: number): Promise<bool
   });
 }
 
+/**
+ * Sprint 018 — Villa als portables JSON exportieren (villa + Verlauf,
+ * ohne sensible Metadaten).
+ */
+export async function exportVilla(
+  villaId: number,
+  userId: number
+): Promise<{
+  name: string;
+  specialty: string;
+  icon: "villa" | "bot";
+  projectBrief: string | null;
+  description: string | null;
+  capacity: number;
+  messages: { role: "user" | "assistant"; content: string; createdAt: Date }[];
+  exportedAt: Date;
+  version: 1;
+} | undefined> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  if (!(await isOwnedVilla(db, villaId, userId))) return undefined;
+  const [villa] = await db.select().from(villas).where(eq(villas.id, villaId)).limit(1);
+  if (!villa) return undefined;
+  const messages = await db.select().from(villaMessages)
+    .where(eq(villaMessages.villaId, villaId))
+    .orderBy(asc(villaMessages.id));
+  return {
+    name: villa.name,
+    specialty: villa.specialty,
+    icon: villa.icon,
+    projectBrief: villa.projectBrief,
+    description: villa.description,
+    capacity: villa.capacity,
+    messages: messages.map(m => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+      createdAt: m.createdAt,
+    })),
+    exportedAt: new Date(),
+    version: 1,
+  };
+}
+
+/**
+ * Sprint 018 — Villa aus einem Export anlegen: Kapazität erzwingen,
+ * Nachrichten übernehmen und Audit-Eintrag schreiben.
+ */
+export async function importVilla(
+  userId: number,
+  payload: {
+    name: string;
+    specialty: string;
+    icon: "villa" | "bot";
+    projectBrief?: string | null;
+    description?: string | null;
+    capacity: number;
+    messages: { role: "user" | "assistant"; content: string }[];
+  }
+): Promise<Villa | undefined> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  return db.transaction(async tx => {
+    await assertVillaCapacity(userId, tx);
+    const [created] = await tx.insert(villas).values({
+      createdBy: userId,
+      name: payload.name,
+      specialty: payload.specialty,
+      icon: payload.icon,
+      ...(payload.projectBrief ? { projectBrief: payload.projectBrief } : {}),
+      ...(payload.description ? { description: payload.description } : {}),
+      capacity: payload.capacity,
+    }).returning();
+    if (payload.messages.length > 0) {
+      await tx.insert(villaMessages).values(
+        payload.messages.map(m => ({
+          villaId: created.id,
+          role: m.role,
+          content: m.content,
+        }))
+      );
+    }
+    await recordVillaEvent(tx, created.id, userId, "imported", {
+      messages: payload.messages.length,
+    });
+    return created;
+  });
+}
+
 export async function listVillaEvents(
   villaId: number,
   userId: number,
