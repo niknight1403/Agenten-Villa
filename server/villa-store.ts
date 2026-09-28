@@ -7,6 +7,24 @@ function requireDb() {
   return getDb();
 }
 
+/**
+ * Sprint 011 — zentraler Ownership-Guard: Jede villa-bezogene Operation
+ * muss diesen Check durchlaufen, damit Nutzer ausschließlich berechtigte
+ * Villen lesen oder ändern können.
+ */
+async function isOwnedVilla(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  villaId: number,
+  userId: number
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: villas.id })
+    .from(villas)
+    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function listVillas(userId: number): Promise<Villa[]> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
@@ -29,8 +47,9 @@ export async function createVilla(input: {
 export async function getVilla(villaId: number, userId: number): Promise<Villa | undefined> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  if (!(await isOwnedVilla(db, villaId, userId))) return undefined;
   const [villa] = await db.select().from(villas)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId))).limit(1);
+    .where(eq(villas.id, villaId)).limit(1);
   return villa;
 }
 
@@ -45,10 +64,11 @@ export async function updateVilla(
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.specialty !== undefined) set.specialty = patch.specialty;
   if (Object.keys(set).length === 0) return undefined;
+  if (!(await isOwnedVilla(db, villaId, userId))) return undefined;
   const rows = await db
     .update(villas)
     .set(set)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
+    .where(eq(villas.id, villaId))
     .returning();
   return rows[0];
 }
@@ -73,12 +93,7 @@ export async function deleteVilla(villaId: number, userId: number): Promise<bool
 export async function listMessages(villaId: number, userId: number, limit = 200): Promise<VillaMessage[]> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const owned = await db
-    .select({ id: villas.id })
-    .from(villas)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
-    .limit(1);
-  if (owned.length === 0) return [];
+  if (!(await isOwnedVilla(db, villaId, userId))) return [];
   return db
     .select()
     .from(villaMessages)
@@ -99,13 +114,8 @@ export async function appendMessages(
 ): Promise<VillaMessage[]> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
-  const owned = await db
-    .select({ id: villas.id })
-    .from(villas)
-    .where(and(eq(villas.id, villaId), eq(villas.createdBy, userId)))
-    .limit(1);
-  if (owned.length === 0) return [];
   if (entries.length === 0) return [];
+  if (!(await isOwnedVilla(db, villaId, userId))) return [];
   return db
     .insert(villaMessages)
     .values(entries.map((entry) => ({ ...entry, villaId })))

@@ -16,7 +16,8 @@
 | 008 | Grün | Agentenfehler besitzen zentrale Codes, Kategorien und sichere öffentliche Meldungen. |
 | 009 | Grün | Deterministische lokale Villa- und Agenten-Fixtures samt Reset-Test sind vorhanden. |
 | 010 | Grün | Gesamt-Review, 62 bestandene Tests, Build und Diff-Prüfung sind dokumentiert. |
-| 011–100 | Geplant | Start nach Abschluss und Review der vorherigen Sprintgruppe. |
+| 011 | Grün | Zentraler Ownership-Guard im Villa-Store; jeder Lese- und Schreibpfad läuft über die Nutzer-ID des Aufrufers, Cross-User-Zugriffe liefern keine fremden Daten (13 Router-Tests grün). |
+| 012–100 | Geplant | Fortsetzung nach Sprint 011. |
 
 ## Grüner Validierungsweg
 

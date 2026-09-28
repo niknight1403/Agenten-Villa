@@ -90,6 +90,32 @@ describe("villa router validation and ownership", () => {
     }));
   });
 
+
+  it("lists only villas of the calling user id (Sprint 011)", async () => {
+    const otherCaller = appRouter.createCaller(createContext(42));
+    const spy = vi.spyOn(store, "listVillas").mockResolvedValue([]);
+    await otherCaller.villa.list();
+    expect(spy).toHaveBeenCalledWith(42);
+    expect(spy).not.toHaveBeenCalledWith(17);
+  });
+
+  it("routes every read and write through the caller id and never leaks foreign villas (Sprint 011)", async () => {
+    const otherCaller = appRouter.createCaller(createContext(42));
+    const listSpy = vi.spyOn(store, "listMessages").mockResolvedValue([]);
+    await expect(otherCaller.villa.messages({ villaId: 3 })).resolves.toEqual([]);
+    expect(listSpy).toHaveBeenCalledWith(3, 42);
+    const updateSpy = vi.spyOn(store, "updateVilla").mockResolvedValue(undefined);
+    await expect(otherCaller.villa.update({ id: 3, name: "Fremd" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(updateSpy).toHaveBeenCalledWith(3, 42, { name: "Fremd", specialty: undefined });
+    const appendSpy = vi.spyOn(store, "appendMessages").mockResolvedValue([]);
+    await expect(
+      otherCaller.villa.appendMessages({ villaId: 3, messages: [{ role: "user", content: "x" }] })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(appendSpy).toHaveBeenCalledWith(3, 42, [{ role: "user", content: "x" }]);
+  });
+
   it("maps update misses to NOT_FOUND and passes ownership through", async () => {
     vi.spyOn(store, "updateVilla").mockResolvedValue(undefined);
     await expect(caller.villa.update({ id: 99, name: "Neu" })).rejects.toMatchObject({
