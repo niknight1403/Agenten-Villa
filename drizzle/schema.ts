@@ -43,6 +43,8 @@ export const villas = pgTable("villas", {
   capacity: integer("capacity").notNull().default(8),
   /** Sprint 014 — Archivierungszeitpunkt; null = aktiv. */
   archivedAt: timestamp("archivedAt"),
+  /** Sprint 015 — zugeordnetes Projekt; eine Villa hat höchstens ein Projekt. */
+  projectId: integer("projectId"),
   icon: varchar("icon", { length: 8 }).$type<"villa" | "bot">().default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
@@ -50,6 +52,22 @@ export const villas = pgTable("villas", {
 
 export type Villa = typeof villas.$inferSelect;
 export type InsertVilla = typeof villas.$inferInsert;
+
+/**
+ * Sprint 015 — Projekte: einem Projekt des Eigentümers können eine oder
+ * mehrere seiner Villen zugeordnet werden (villa.projectId).
+ */
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  createdBy: integer("createdBy").notNull(),
+  name: varchar("name", { length: 80 }).notNull(),
+  brief: text("brief"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("projects_createdBy_idx").on(table.createdBy)]);
+
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
 
 /**
  * Sprint 013 — Audit-Spur pro Villa: jede ändernde Aktion (create, update,

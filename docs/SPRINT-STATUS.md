@@ -20,7 +20,8 @@
 | 012 | Grün | Villa-Erstellung validiert Name, Projekt (Brief), Beschreibung (max. 1000) und Kapazität (1–25, Standard 8) zentral per Schema; Migration 0002 und Client-Modal erweitert (114 Tests grün). |
 | 013 | Grün | Villa-Bearbeitung umfasst Name, Spezialisierung, Beschreibung und Kapazität; jede Änderung schreibt transaktional einen Audit-Eintrag (villa_events), abfragbar über villa.events (Migration 0003). |
 | 014 | Grün | Archivierte Villen (archivedAt + Audit-Eintrag) akzeptieren keine neuen Nachrichten (FORBIDDEN) und starten keine Elite-Missionen; Client zeigt Archiv-Badge, Umschalten und sperrt die Chat-Eingabe. |
-| 015–100 | Geplant | Fortsetzung nach Sprint 014. |
+| 015 | Grün | Projekte (Tabelle projects) sind pro Nutzer verwaltet; ein Projekt lässt sich einer oder mehreren eigenen Villen zuordnen (villa.projectId, Migration 0004), Ownership beider Seiten wird transaktional geprüft. |
+| 016–100 | Geplant | Fortsetzung nach Sprint 015. |
 
 ## Grüner Validierungsweg
 

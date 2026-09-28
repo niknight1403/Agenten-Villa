@@ -29,6 +29,13 @@
       "when": 1790625428583,
       "tag": "0003_wide_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790625660482,
+      "tag": "0004_clumsy_wrecking_crew",
+      "breakpoints": true
     }
   ]
 }
