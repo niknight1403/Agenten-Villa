@@ -37,6 +37,8 @@ export async function createVilla(input: {
   specialty: string;
   icon: "villa" | "bot";
   projectBrief?: string | null;
+  description?: string | null;
+  capacity?: number;
 }): Promise<Villa> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");

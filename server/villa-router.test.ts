@@ -26,6 +26,9 @@ const villa: Villa = {
   specialty: "Code-Analyse",
   icon: "bot",
   projectBrief: null,
+  description: null,
+  capacity: 8,
+  archivedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -71,6 +74,8 @@ describe("villa router validation and ownership", () => {
       specialty: "Neuer Agent",
       icon: "bot",
       projectBrief: undefined,
+      description: undefined,
+      capacity: 8,
     });
   });
 
@@ -80,6 +85,27 @@ describe("villa router validation and ownership", () => {
       code: "BAD_REQUEST",
     });
     await expect(caller.villa.create({} as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("validates capacity and description on create (Sprint 012)", async () => {
+    const spy = vi.spyOn(store, "createVilla").mockResolvedValue(villa);
+    await caller.villa.create({ name: "Kapazitaetsvilla", capacity: 25, description: "  Kurzbeschreibung  " });
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      capacity: 25,
+      description: "Kurzbeschreibung",
+    }));
+    await expect(caller.villa.create({ name: "Null", capacity: 0 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller.villa.create({ name: "Zu viel", capacity: 26 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller.villa.create({ name: "Bruch", capacity: 2.5 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(
+      caller.villa.create({ name: "Text", description: "x".repeat(1001) })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("creates a project villa with a stored brief for its superagent", async () => {

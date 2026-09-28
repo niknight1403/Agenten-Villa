@@ -17,7 +17,8 @@
 | 009 | Grün | Deterministische lokale Villa- und Agenten-Fixtures samt Reset-Test sind vorhanden. |
 | 010 | Grün | Gesamt-Review, 62 bestandene Tests, Build und Diff-Prüfung sind dokumentiert. |
 | 011 | Grün | Zentraler Ownership-Guard im Villa-Store; jeder Lese- und Schreibpfad läuft über die Nutzer-ID des Aufrufers, Cross-User-Zugriffe liefern keine fremden Daten (13 Router-Tests grün). |
-| 012–100 | Geplant | Fortsetzung nach Sprint 011. |
+| 012 | Grün | Villa-Erstellung validiert Name, Projekt (Brief), Beschreibung (max. 1000) und Kapazität (1–25, Standard 8) zentral per Schema; Migration 0002 und Client-Modal erweitert (114 Tests grün). |
+| 013–100 | Geplant | Fortsetzung nach Sprint 012. |
 
 ## Grüner Validierungsweg
 

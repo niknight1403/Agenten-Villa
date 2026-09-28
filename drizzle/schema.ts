@@ -37,6 +37,12 @@ export const villas = pgTable("villas", {
   name: varchar("name", { length: 80 }).notNull(),
   specialty: varchar("specialty", { length: 80 }).notNull().default("Neuer Agent"),
   projectBrief: text("projectBrief"),
+  /** Sprint 012 — kurze Beschreibung der Villa (max. 1000 Zeichen). */
+  description: text("description"),
+  /** Sprint 012 — Kapazitätsgrenze (1–25), Standard 8; Basis für Sprint 017. */
+  capacity: integer("capacity").notNull().default(8),
+  /** Sprint 014 — Archivierungszeitpunkt; null = aktiv. */
+  archivedAt: timestamp("archivedAt"),
   icon: varchar("icon", { length: 8 }).$type<"villa" | "bot">().default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),

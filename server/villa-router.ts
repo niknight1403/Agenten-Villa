@@ -14,6 +14,9 @@ import {
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
+/** Sprint 012 — Kapazitätsgrenze 1–25, Standard 8. */
+const capacitySchema = z.number().int().min(1).max(25).default(8);
+const descriptionSchema = z.string().trim().max(1000).optional();
 
 function storeError(error: unknown): never {
   if (error instanceof TRPCError) throw error;
@@ -40,6 +43,8 @@ export const villaRouter = router({
         specialty: specialtySchema.default("Neuer Agent"),
         icon: z.enum(["villa", "bot"]).default("bot"),
         projectBrief: z.string().trim().min(3).max(4000).optional(),
+        description: descriptionSchema,
+        capacity: capacitySchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -50,6 +55,8 @@ export const villaRouter = router({
           specialty: input.specialty,
           icon: input.icon,
           projectBrief: input.projectBrief,
+          description: input.description,
+          capacity: input.capacity,
         });
       } catch (error) {
         storeError(error);

@@ -105,6 +105,8 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [villaName, setVillaName] = useState("");
+  const [villaDescription, setVillaDescription] = useState("");
+  const [villaCapacity, setVillaCapacity] = useState(8);
   const [villaIdea, setVillaIdea] = useState("");
   const [activeVillaId, setActiveVillaId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -295,13 +297,18 @@ export default function Home() {
     const cleanName = villaName.trim();
     if (!cleanName || createVillaMutation.isPending) return;
     try {
+      const cleanDescription = villaDescription.trim();
       const villa = await createVillaMutation.mutateAsync({
         name: cleanName,
         specialty: villaIdea.trim() ? "Autonome Projektentwicklung" : "Neuer Agent",
         icon: "villa",
+        capacity: villaCapacity,
         ...(villaIdea.trim() ? { projectBrief: villaIdea.trim() } : {}),
+        ...(cleanDescription ? { description: cleanDescription } : {}),
       });
       setVillaName("");
+      setVillaDescription("");
+      setVillaCapacity(8);
       setVillaIdea("");
       setNewVillaOpen(false);
       setScreen("home");
@@ -1000,6 +1007,30 @@ export default function Home() {
               maxLength={4000}
               placeholder="z. B. Entwickle einen Android-Dateimanager mit Speicheranalyse und bestätigten Dateiaktionen"
             />
+            <label className="modal-label" htmlFor="villa-description">
+              Beschreibung (optional, max. 1000 Zeichen)
+            </label>
+            <textarea
+              id="villa-description"
+              className="modal-input villa-idea-input"
+              value={villaDescription}
+              onChange={event => setVillaDescription(event.target.value)}
+              maxLength={1000}
+              placeholder="z. B. Analysiert Repositorys und schlägt Verbesserungen vor"
+            />
+            <label className="modal-label" htmlFor="villa-capacity">
+              Kapazität (Eingabegrenze in Tausend Zeichen)
+            </label>
+            <select
+              id="villa-capacity"
+              className="modal-input"
+              value={villaCapacity}
+              onChange={event => setVillaCapacity(Number(event.target.value))}
+            >
+              {Array.from({ length: 25 }, (_, index) => index + 1).map(value => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
             <button className="modal-submit" type="submit">
               <Plus size={17} /> Villa mit Superagent erstellen
             </button>
