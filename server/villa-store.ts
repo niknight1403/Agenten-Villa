@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { LimitConfig, Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
 import { getDb } from "./db";
 import { limitConfigs, villaEvents, villaMessages, villas } from "../drizzle/schema";
@@ -216,6 +216,46 @@ export async function deleteVilla(villaId: number, userId: number): Promise<bool
  * Sprint 018 — Villa als portables JSON exportieren (villa + Verlauf,
  * ohne sensible Metadaten).
  */
+export type VillaActivity = {
+  villaId: number;
+  name: string;
+  archived: boolean;
+  capacity: number;
+  messageCount: number;
+  lastActiveAt: Date | null;
+};
+
+/**
+ * Sprint 019 — Aktivitätsübersicht aller Villen des Nutzers: nur
+ * aggregierte Zähler und Zeitstempel, kein Nachrichteninhalt.
+ */
+export async function villaActivity(userId: number): Promise<VillaActivity[]> {
+  const db = await requireDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+  const rows = await db
+    .select({
+      villaId: villas.id,
+      name: villas.name,
+      archivedAt: villas.archivedAt,
+      capacity: villas.capacity,
+      messageCount: sql<number>`count(${villaMessages.id})::int`,
+      lastActiveAt: sql<Date | null>`max(${villaMessages.createdAt})`,
+    })
+    .from(villas)
+    .leftJoin(villaMessages, eq(villaMessages.villaId, villas.id))
+    .where(eq(villas.createdBy, userId))
+    .groupBy(villas.id, villas.name, villas.archivedAt, villas.capacity)
+    .orderBy(desc(sql`max(${villaMessages.createdAt})`));
+  return rows.map(row => ({
+    villaId: row.villaId,
+    name: row.name,
+    archived: row.archivedAt !== null,
+    capacity: row.capacity,
+    messageCount: row.messageCount,
+    lastActiveAt: row.lastActiveAt ? new Date(row.lastActiveAt) : null,
+  }));
+}
+
 export async function exportVilla(
   villaId: number,
   userId: number

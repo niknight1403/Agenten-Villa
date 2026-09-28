@@ -396,6 +396,27 @@ describe("villa router validation and ownership", () => {
     });
   });
 
+  it("returns per-villa activity counters without content (Sprint 019)", async () => {
+    const activity = [
+      {
+        villaId: 3,
+        name: "Villa Alpha",
+        archived: false,
+        capacity: 8,
+        messageCount: 12,
+        lastActiveAt: new Date("2026-09-28T10:00:00Z"),
+      },
+    ];
+    const spy = vi.spyOn(store, "villaActivity").mockResolvedValue(activity);
+    const result = await caller.villa.activity();
+    expect(result[0].messageCount).toBe(12);
+    expect(result[0].name).toBe("Villa Alpha");
+    expect(spy).toHaveBeenCalledWith(17);
+    const otherCaller = appRouter.createCaller(createContext(42));
+    await otherCaller.villa.activity();
+    expect(spy).toHaveBeenCalledWith(42);
+  });
+
   it("maps database outages to a clear service error", async () => {
     vi.spyOn(store, "listVillas").mockRejectedValue(new Error("DATABASE_UNAVAILABLE"));
     await expect(caller.villa.list()).rejects.toMatchObject({

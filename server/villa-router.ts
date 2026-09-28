@@ -12,6 +12,7 @@ import {
   getLimitConfig,
   getVilla,
   listVillaEvents,
+  villaActivity,
   listVillas,
   rateMessage,
   setLimitConfig,
@@ -180,6 +181,15 @@ export const villaRouter = router({
         storeError(error);
       }
     }),
+
+  /** Sprint 019 — Aktivitätsübersicht: Zähler je Villa, ohne Inhalte. */
+  activity: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await villaActivity(ctx.user.id);
+    } catch (error) {
+      storeError(error);
+    }
+  }),
 
   /** Sprint 018 — Villa als JSON exportieren (nur eigene Villen). */
   export: protectedProcedure
