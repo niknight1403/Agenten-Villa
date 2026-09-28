@@ -1,5 +1,8 @@
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
+  // VITE_APP_ID fehlt im Render-Deployment; ohne Fallback waere appId ein
+  // Leerstring und verifySession() wuerde jede Session ablehnen (appId muss
+  // non-empty sein). Der Wert ist fuer den Google-Flow rein deklarativ.
+  appId: process.env.VITE_APP_ID ?? "agenten-villa",
   cookieSecret: process.env.JWT_SECRET ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
