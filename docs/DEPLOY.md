@@ -81,6 +81,7 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 | `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) | nein |
 | `FREE_TIER_CACHE` | Antwort-Cache: Produktion default an | nein |
 | `FREE_TIER_CACHE_TTL_SECONDS` | Cache-TTL (Default 600) | nein |
+| `PROVIDER_GUARDIAN_INTERVAL_MS` | Prüfintervall des Provider-Wächters (Default 300000) | nein |
 | `PORT` | von Render gesetzt | nein |
 
 ## Client (Web)

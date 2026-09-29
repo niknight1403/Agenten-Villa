@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentError, LIMITS, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
+import { resetProviderGuardianForTests } from "./provider-guardian";
 
 const input = { prompt: "Erstelle einen kurzen Plan", history: [], mode: "home" as const, specialty: "Generalist" };
 const workshopInput = { ...input, prompt: "Zeige den Repo-Überblick", mode: "workshop" as const };
 const reply = (status: number, model = "free-test") => new Response(JSON.stringify({ model, choices: [{ message: { content: "1. Ziel festlegen. 2. Ergebnis prüfen." } }] }), { status, headers: { "Content-Type": "application/json" } });
 const toolReply = (id: string, name: string, args: unknown) => new Response(JSON.stringify({ model: "free-tool-model", choices: [{ message: { content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); });
 
 describe("bounded provider router", () => {
   it("calls OpenRouter Free once and returns provider metadata", async () => {

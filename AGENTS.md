@@ -42,6 +42,28 @@ Für echte Laufzeittests ohne externen Anbieter:
 Nützliche Helfer: `pnpm seed:villa -- --user <id>` bzw. `--email <adresse>` legt die
 Projekt-Villa direkt per Store-Funktion an.
 
+## Provider-Wächter & Free-Routen
+
+`server/provider-guardian.ts` pflegt den Gesundheitszustand der kostenlosen Modellkette.
+Er wird beim Serverstart (`server/_core/index.ts`) gestartet und läuft autonom im
+Intervall `PROVIDER_GUARDIAN_INTERVAL_MS` (Default 300000, min. 30000, max 3600000).
+
+- `guardianChain()` sortiert `OPENROUTER_MODELS` nach echter Gesundheit: funktionsfähig
+  zuerst, ungeprüft danach, Cooldown zuletzt. Die Liste ist nie leer.
+- `reportProviderOutcome()` wird im echten Chat-Pfad aufgerufen, damit Health auf echtem
+  Verkehr basiert, nicht nur auf geplanten Probes.
+- `server/provider-endpoints.ts` ist die einzige Quelle für Provider-URLs. `OPENROUTER_BASE_URL`
+  wird sowohl von Probes als auch vom Chat verwendet — deshalb funktioniert der lokale Mock.
+- tRPC: `agent.guardian` (Query), `agent.runProviderGuardian`, `agent.setProviderGuardian` —
+  alle admin-gated. `agent.status` liefert zusätzlich `providerGuardian` und `eliteUnlimited`.
+- Tests: `server/provider-guardian.test.ts`. Bei Änderungen an der Kette
+  `resetProviderGuardianForTests()` in `afterEach` aufrufen, sonst leckt Modulzustand
+  zwischen Testdateien.
+
+Harte Grenze: Der Wächter erzeugt keine Token, rotiert keine Schlüssel und umgeht keine
+Anbieterkontingente. „Elite/Unlimited" heißt ausschließlich: kein lokales Villa-Kontingent.
+Es gibt bewusst kein `limit-bypass`-Pack — `agent-villa.test.ts` prüft das.
+
 ## Design-Themes
 
 Vier wählbare Dashboard-Designs liegen in `client/src/styles/themes.css` und werden über

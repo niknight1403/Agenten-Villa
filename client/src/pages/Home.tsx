@@ -25,6 +25,7 @@ import {
   Mic,
   Plus,
   RotateCcw,
+  Route,
   Search,
   Send,
   ShieldCheck,
@@ -121,6 +122,16 @@ export default function Home() {
   const [promptDraft, setPromptDraft] = useState<string | null>(null);
   const effectivePrompt = promptDraft ?? statusQuery.data?.systemPrompt ?? "";
   const keyTestMutation = trpc.agent.testOpenRouterKey.useMutation({ gcTime: 0 });
+  const guardianQuery = trpc.agent.guardian.useQuery(undefined, {
+    enabled: Boolean(isAuthenticated && statusQuery.data?.isAdmin),
+    refetchInterval: 60_000,
+  });
+  const runGuardianMutation = trpc.agent.runProviderGuardian.useMutation({
+    onSuccess: () => guardianQuery.refetch(),
+  });
+  const setGuardianMutation = trpc.agent.setProviderGuardian.useMutation({
+    onSuccess: () => guardianQuery.refetch(),
+  });
 
   const [screen, setScreen] = useState<Screen>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -560,6 +571,74 @@ export default function Home() {
                 : villaSnapshotQuery.data.provisioning}{" "}
               · {villaSnapshotQuery.data.packs.length} Capability-Packs aktiv
             </p>
+          )}
+          {statusQuery.data?.isAdmin && guardianQuery.data && (
+            <section className="guardian-panel" aria-label="Provider-Wächter">
+              <header className="guardian-heading">
+                <span>
+                  <Route size={16} /> Provider-Wächter
+                </span>
+                <span
+                  className={`guardian-state guardian-state-${guardianQuery.data.enabled ? "on" : "off"}`}
+                >
+                  {guardianQuery.data.enabled ? "autonom aktiv" : "pausiert"}
+                </span>
+              </header>
+              <p className="guardian-active">
+                Aktive Free-Route:{" "}
+                <strong>{guardianQuery.data.activeModel ?? "keine"}</strong>
+              </p>
+              <ul className="guardian-routes">
+                {guardianQuery.data.routes.map(route => (
+                  <li key={route.model} className={`guardian-route status-${route.status}`}>
+                    <span className="guardian-model">{route.model}</span>
+                    <span className="guardian-badge">
+                      {route.cooling
+                        ? "Cooldown"
+                        : route.status === "healthy"
+                          ? "funktionsfähig"
+                          : route.status === "unavailable"
+                            ? "nicht erreichbar"
+                            : "ungeprüft"}
+                    </span>
+                    <span className="guardian-detail">
+                      {route.lastLatencyMs !== null
+                        ? `${route.lastLatencyMs} ms`
+                        : "—"}
+                      {route.lastDetail ? ` · ${route.lastDetail}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="guardian-note">
+                {guardianQuery.data.note}
+                {guardianQuery.data.lastRunAt
+                  ? ` Letzte Prüfung: ${new Date(guardianQuery.data.lastRunAt).toLocaleTimeString("de-DE")}.`
+                  : ""}
+              </p>
+              <div className="guardian-actions">
+                <button
+                  type="button"
+                  className="guardian-button"
+                  disabled={runGuardianMutation.isPending}
+                  onClick={() => runGuardianMutation.mutate()}
+                >
+                  {runGuardianMutation.isPending ? "Prüfe …" : "Jetzt prüfen"}
+                </button>
+                <button
+                  type="button"
+                  className="guardian-button secondary"
+                  disabled={setGuardianMutation.isPending}
+                  onClick={() =>
+                    setGuardianMutation.mutate({
+                      enabled: !guardianQuery.data?.enabled,
+                    })
+                  }
+                >
+                  {guardianQuery.data.enabled ? "Pausieren" : "Aktivieren"}
+                </button>
+              </div>
+            </section>
           )}
           <div className="villa-list">
             {villaListQuery.isLoading && (
@@ -1026,6 +1105,16 @@ export default function Home() {
                 }}
               >
                 <KeyRound size={18} /> OpenRouter-Key prüfen
+              </button>
+            )}
+            {statusQuery.data?.isAdmin && (
+              <button
+                className="drawer-link"
+                type="button"
+                disabled={runGuardianMutation.isPending}
+                onClick={() => runGuardianMutation.mutate()}
+              >
+                <Route size={18} /> Free-Routen jetzt prüfen
               </button>
             )}
             <button

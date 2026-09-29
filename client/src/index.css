@@ -900,6 +900,66 @@ body:has(.villa-app) {
   letter-spacing: 0.01em;
 }
 
+/* Provider-Wächter: autonomer Free-Route-Status im Administratorbereich */
+.guardian-panel {
+  margin: 0 0 21px;
+  padding: 14px 15px;
+  border: 1px solid #273254;
+  border-radius: 14px;
+  background: #111730;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.guardian-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e9fb;
+}
+.guardian-heading > span:first-child { display: inline-flex; align-items: center; gap: 7px; }
+.guardian-state { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; }
+.guardian-state-on { color: #7ff0c4; background: #123a2d; border: 1px solid #1d6a52; }
+.guardian-state-off { color: #ffd79a; background: #3a2c12; border: 1px solid #6a4f1d; }
+.guardian-active { margin: 0; font-size: 12px; color: #9fadd0; }
+.guardian-active strong { color: #cdd8f5; }
+.guardian-routes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.guardian-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #222d53;
+  border-radius: 10px;
+  background: #0e1429;
+  font-size: 11px;
+}
+.guardian-model { color: #cdd8f5; font-weight: 600; overflow-wrap: anywhere; }
+.guardian-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #1b2350; color: #aab6da; }
+.guardian-route.status-healthy .guardian-badge { background: #123a2d; color: #7ff0c4; }
+.guardian-route.status-cooling .guardian-badge { background: #3a2c12; color: #ffd79a; }
+.guardian-route.status-unavailable .guardian-badge { background: #3a1616; color: #ffb0b0; }
+.guardian-detail { color: #7786aa; margin-left: auto; }
+.guardian-note { margin: 0; font-size: 10.5px; line-height: 1.5; color: #7786aa; }
+.guardian-actions { display: flex; gap: 8px; }
+.guardian-button {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid #5248df;
+  background: #241c52;
+  color: #e6e8ff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guardian-button.secondary { border-color: #2b365b; background: #131a37; color: #b8c3e3; }
+.guardian-button:disabled { opacity: .6; cursor: default; }
+
 /* Persistierte Villen-Verwaltung (CRUD-Zeilen mit Löschen) */
 .villa-row-main {
   flex: 1;

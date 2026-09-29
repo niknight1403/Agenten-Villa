@@ -23,9 +23,16 @@ import {
   ELITE_PLAN,
   VILLA_NOTICE,
   getEliteConnectorSnapshot,
+  getEliteUnlimitedProjection,
   getVillaSnapshot,
   routeProvider,
 } from "./agent-villa";
+import {
+  getGuardianSnapshot,
+  runGuardianCycle,
+  setGuardianEnabled,
+  setGuardianIntervalMs,
+} from "./provider-guardian";
 import { getVilla } from "./villa-store";
 import {
   findMissionByKey, finishMission, getMissionRun, listMissionRuns,
@@ -304,6 +311,8 @@ export const agentRouter = router({
         huggingFaceConfigured: Boolean(process.env.HF_TOKEN?.trim()),
         allowExplicitFallback: true,
       }),
+      eliteUnlimited: admin ? getEliteUnlimitedProjection() : null,
+      providerGuardian: admin ? getGuardianSnapshot() : null,
       notice: PROVIDER_NOTICE,
       villaNotice: VILLA_NOTICE,
       limits: {
@@ -318,6 +327,28 @@ export const agentRouter = router({
     };
   }),
   capabilityPacks: protectedProcedure.query(() => CAPABILITY_PACKS),
+  guardian: protectedProcedure.query(({ ctx }) => {
+    requireAdmin(ctx.user);
+    return getGuardianSnapshot();
+  }),
+  runProviderGuardian: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.user);
+    return runGuardianCycle();
+  }),
+  setProviderGuardian: protectedProcedure
+    .input(
+      z.object({
+        enabled: z.boolean().optional(),
+        intervalMs: z.number().int().min(30_000).max(3_600_000).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      if (input.enabled !== undefined) setGuardianEnabled(input.enabled);
+      if (input.intervalMs !== undefined)
+        setGuardianIntervalMs(input.intervalMs);
+      return getGuardianSnapshot();
+    }),
   eliteConnectors: protectedProcedure.query(({ ctx }) => {
     requireAdmin(ctx.user);
     return getEliteConnectorSnapshot();

@@ -16,6 +16,7 @@ import {
   remainingInWindow,
   resetAgentRouterForTests,
 } from "./agent-router";
+import { resetProviderGuardianForTests } from "./provider-guardian";
 
 function createContext(role: "user" | "admin", email: string): TrpcContext {
   const now = new Date();
@@ -38,6 +39,7 @@ function createContext(role: "user" | "admin", email: string): TrpcContext {
 
 afterEach(() => {
   resetAgentRouterForTests();
+  resetProviderGuardianForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -282,5 +284,79 @@ describe("Mastervillage controller", () => {
     await expect(
       caller.agent.setState({ state: "RUNNING" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("provider guardian access and elite unlimited status", () => {
+  it("reserves the guardian snapshot and control for the administrator", async () => {
+    const member = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await expect(member.agent.guardian()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(member.agent.runProviderGuardian()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      member.agent.setProviderGuardian({ enabled: false })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("exposes the autonomous free-route guardian to the administrator", async () => {
+    vi.stubEnv("OPENROUTER_MODELS", "model-a:free,model-b:free");
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const snapshot = await admin.agent.guardian();
+    expect(snapshot.enabled).toBe(true);
+    expect(snapshot.freeTierFirst).toBe(true);
+    expect(snapshot.configuredChain).toEqual([
+      "model-a:free",
+      "model-b:free",
+    ]);
+    expect(snapshot.intervalMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("lets the administrator toggle the guardian and reports the new state", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    await expect(
+      admin.agent.setProviderGuardian({ enabled: false })
+    ).resolves.toMatchObject({ enabled: false });
+    await expect(
+      admin.agent.setProviderGuardian({ enabled: true, intervalMs: 60_000 })
+    ).resolves.toMatchObject({ enabled: true, intervalMs: 60_000 });
+  });
+
+  it("projects the elite unlimited package only to the administrator", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const adminStatus = await admin.agent.status();
+    expect(adminStatus.eliteUnlimited).toMatchObject({
+      localChatQuota: "unlimited",
+      localTokenQuota: "unlimited",
+      externalProviderQuotasApply: true,
+      technicalModelLimitsApply: true,
+    });
+    expect(adminStatus.providerGuardian?.enabled).toBe(true);
+
+    const member = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    const memberStatus = await member.agent.status();
+    expect(memberStatus.eliteUnlimited).toBeNull();
+    expect(memberStatus.providerGuardian).toBeNull();
+  });
+
+  it("never claims unlimited external tokens in the elite projection", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const status = await admin.agent.status();
+    expect(status.eliteUnlimited?.tokenCreation).toBe("provider-defined");
+    expect(status.eliteUnlimited?.note).toMatch(/keine Token/);
   });
 });
