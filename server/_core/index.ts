@@ -72,6 +72,12 @@ function startDatabaseHealthWatch(): void {
 
 async function startServer() {
   const app = express();
+  // Render (und jeder andere Reverse-Proxy) beendet TLS vor dem Prozess.
+  // Ohne diese Zeile liest Express die Proxy-IP als req.ip — dann teilen sich
+  // ALLE Besucher einen einzigen Rate-Limit-Bucket (der 21. Loginversuch pro
+  // Minute wird fuer jeden blockiert) — und req.protocol bleibt "http", was
+  // das Secure-Attribut des Sitzungs-Cookies verhindern kann.
+  app.set("trust proxy", 1);
   const server = createServer(app);
   startDatabaseHealthWatch();
   // Configure body parser with larger size limit for file uploads

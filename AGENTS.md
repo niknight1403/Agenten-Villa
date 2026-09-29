@@ -71,6 +71,21 @@ Vier wählbare Dashboard-Designs liegen in `client/src/styles/themes.css` und we
 Theme-Klasse `theme-<id>` sitzt auf `.villa-app`; ohne Klasse gilt weiter das bisherige
 Design. Die Wahl wird in `localStorage["villa-dashboard-theme"]` gespeichert.
 
+## Web-Login (Google OAuth) — Betrieb hinter dem Proxy
+
+- `app.set("trust proxy", 1)` ist Pflicht (siehe `server/_core/index.ts`). Ohne das liest
+  Express die Proxy-IP als `req.ip`; dann teilen sich ALLE Besucher einen einzigen
+  Rate-Limit-Bucket (`/api/auth`, 20/Minute) und ab der 21. Anfrage bekommt jeder 429 —
+  der Login wirkt dadurch „kaputt", obwohl die OAuth-Kette intakt ist. Live reproduziert:
+  die Produktions-URL lieferte nach 20 schnellen Aufrufen 429, auch mit fremder
+  `X-Forwarded-For`.
+- `getRedirectUri()` (`server/_core/googleAuth.ts`) muss in Start und Token-Tausch exakt
+  dieselbe URI liefern. Proxy-Header können Komma-Listen sein ("https, http"); es gilt der
+  erste Eintrag. `PUBLIC_BASE_URL` pinnt die URI auf die in der Google Cloud Console
+  registrierte und entfernt die Abhängigkeit von Proxy-Headern.
+- `redirect_uri_mismatch` beim Token-Tausch äußert sich als
+  `/login?error=token_exchange_failed`.
+
 ## Nativer Google-Sign-In (Android)
 
 Der native Login läuft über `@codetrix-studio/capacitor-google-auth`. Zwei Fallstricke:

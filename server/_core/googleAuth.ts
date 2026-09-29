@@ -16,9 +16,27 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function getRedirectUri(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
+/**
+ * Baut die Redirect-URI fuer Start und Token-Tausch. Beide Aufrufe muessen
+ * exakt denselben Wert liefern, sonst lehnt Google den Token-Tausch mit
+ * redirect_uri_mismatch ab. Reverse-Proxies koennen X-Forwarded-Proto/Host als
+ * Komma-Liste senden ("https, http"); ungefiltert entstuende daraus eine nicht
+ * registrierte URI. Es gilt daher immer der erste (client-naechste) Eintrag.
+ */
+function firstForwardedValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const first = raw?.split(",")[0]?.trim();
+  return first || undefined;
+}
+
+export function getRedirectUri(req: Request): string {
+  const configured = process.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  if (configured) {
+    return `${configured}/api/auth/google/callback`;
+  }
+  // req.protocol/res.host beruecksichtigen bereits app.set("trust proxy", 1).
+  const proto = firstForwardedValue(req.headers["x-forwarded-proto"]) || req.protocol;
+  const host = firstForwardedValue(req.headers["x-forwarded-host"]) || req.get("host");
   return `${proto}://${host}/api/auth/google/callback`;
 }
 
