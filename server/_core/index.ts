@@ -6,6 +6,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerHealthRoute, setDatabaseHealthReport } from "./health";
+import { startProviderGuardian } from "../provider-guardian";
 import { checkDatabaseHealth } from "../db-health";
 import { rateLimit } from "./rate-limit";
 import { demoSubmitRateLimit } from "./demoRateLimit";
@@ -119,6 +120,8 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     logStartupDiagnostics();
+    // Autonomer Provider-Waechter: haelt die kostenlosen Routen funktionsfaehig.
+    startProviderGuardian();
   });
 }
 

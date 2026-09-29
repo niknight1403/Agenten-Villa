@@ -23,9 +23,16 @@ import {
   ELITE_PLAN,
   VILLA_NOTICE,
   getEliteConnectorSnapshot,
+  getEliteUnlimitedProjection,
   getVillaSnapshot,
   routeProvider,
 } from "./agent-villa";
+import {
+  getGuardianSnapshot,
+  runGuardianCycle,
+  setGuardianEnabled,
+  setGuardianIntervalMs,
+} from "./provider-guardian";
 import { getVilla } from "./villa-store";
 import {
   findMissionByKey, finishMission, getMissionRun, listMissionRuns,
@@ -34,7 +41,9 @@ import {
 } from "./elite-mission-store";
 import type { EliteMissionRun } from "../drizzle/schema";
 
-let controlState: "RUNNING" | "STOPPED" = "STOPPED";
+// The assistant is ready out of the box so a signed-in user can chat
+// immediately. Administrators can still stop/start it via the controller.
+let controlState: "RUNNING" | "STOPPED" = "RUNNING";
 let adminSystemPrompt: string | null = null;
 const usage = new Map<number, { start: number; count: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
@@ -302,6 +311,8 @@ export const agentRouter = router({
         huggingFaceConfigured: Boolean(process.env.HF_TOKEN?.trim()),
         allowExplicitFallback: true,
       }),
+      eliteUnlimited: admin ? getEliteUnlimitedProjection() : null,
+      providerGuardian: admin ? getGuardianSnapshot() : null,
       notice: PROVIDER_NOTICE,
       villaNotice: VILLA_NOTICE,
       limits: {
@@ -316,6 +327,28 @@ export const agentRouter = router({
     };
   }),
   capabilityPacks: protectedProcedure.query(() => CAPABILITY_PACKS),
+  guardian: protectedProcedure.query(({ ctx }) => {
+    requireAdmin(ctx.user);
+    return getGuardianSnapshot();
+  }),
+  runProviderGuardian: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.user);
+    return runGuardianCycle();
+  }),
+  setProviderGuardian: protectedProcedure
+    .input(
+      z.object({
+        enabled: z.boolean().optional(),
+        intervalMs: z.number().int().min(30_000).max(3_600_000).optional(),
+      })
+    )
+    .mutation(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      if (input.enabled !== undefined) setGuardianEnabled(input.enabled);
+      if (input.intervalMs !== undefined)
+        setGuardianIntervalMs(input.intervalMs);
+      return getGuardianSnapshot();
+    }),
   eliteConnectors: protectedProcedure.query(({ ctx }) => {
     requireAdmin(ctx.user);
     return getEliteConnectorSnapshot();
@@ -351,7 +384,9 @@ export const agentRouter = router({
     .input(z.object({ apiKey: z.string().trim().min(8).max(512) }))
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user);
-      consumeCredentialCheck(ctx.user.id);
+      // Administrators have no local application limit; the endpoint stays
+      // admin-only and each call still hits the provider's own policy.
+      if (!isAdmin(ctx.user)) consumeCredentialCheck(ctx.user.id);
       const status = await verifyOpenRouterKey(input.apiKey);
       return {
         status,
@@ -537,7 +572,7 @@ export const githubControlLimits = {
   maxTurnsPerWindow: MAX_GITHUB_TURNS_PER_WINDOW,
 } as const;
 export function resetAgentRouterForTests() {
-  controlState = "STOPPED";
+  controlState = "RUNNING";
   adminSystemPrompt = null;
   usage.clear();
   credentialChecks.clear();

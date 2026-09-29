@@ -16,6 +16,7 @@ import {
   remainingInWindow,
   resetAgentRouterForTests,
 } from "./agent-router";
+import { resetProviderGuardianForTests } from "./provider-guardian";
 
 function createContext(role: "user" | "admin", email: string): TrpcContext {
   const now = new Date();
@@ -38,6 +39,7 @@ function createContext(role: "user" | "admin", email: string): TrpcContext {
 
 afterEach(() => {
   resetAgentRouterForTests();
+  resetProviderGuardianForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -155,6 +157,90 @@ describe("agent access controls", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("never throttles administrator key checks locally", async () => {
+    vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    // Well past the member limit of five per window: the administrator stays
+    // unthrottled and every call still reaches the provider.
+    for (let i = 0; i < 8; i += 1) {
+      await expect(
+        admin.agent.testOpenRouterKey({ apiKey: "sk-or-test-key" })
+      ).resolves.toMatchObject({ status: "valid" });
+    }
+    expect(fetcher).toHaveBeenCalledTimes(8);
+  });
+
+  it("does not spend an administrator's local turn budget on repeated chat", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("FREE_TIER_CACHE", "0");
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          model: "free-model",
+          choices: [{ message: { content: "Antwort" } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    await admin.agent.setState({ state: "RUNNING" });
+    const before = await admin.agent.usage();
+    expect(before.unlimited).toBe(true);
+    expect(before.remainingTurns).toBeNull();
+
+    // Far beyond the member limit of twelve turns per window.
+    for (let i = 0; i < 14; i += 1) {
+      await admin.agent.chat({
+        prompt: `Auftrag ${i}`,
+        history: [],
+        mode: "home",
+        specialty: "Generalist",
+      });
+    }
+    const after = await admin.agent.usage();
+    expect(after.remainingTurns).toBeNull();
+    expect(after.resetsAt).toBeNull();
+  });
+
+  it("still enforces the local turn limit for non-administrators", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("FREE_TIER_CACHE", "0");
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          model: "free-model",
+          choices: [{ message: { content: "Antwort" } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const caller = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await caller.agent.setState({ state: "RUNNING" }).catch(() => undefined);
+    for (let i = 0; i < agentControlLimits.maxTurnsPerWindow; i += 1)
+      consumeTurnForTests(17);
+    await expect(
+      caller.agent.chat({
+        prompt: "Weiter",
+        history: [],
+        mode: "home",
+        specialty: "Generalist",
+      })
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("returns only a validation status to the allowlisted administrator", async () => {
     vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
     const key = "sk-or-secret-test-key";
@@ -251,6 +337,15 @@ describe("admin system prompt configuration", () => {
 });
 
 describe("Mastervillage controller", () => {
+  it("starts the assistant by default so chat works after sign-in", async () => {
+    const caller = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await expect(caller.agent.status()).resolves.toMatchObject({
+      state: "RUNNING",
+    });
+  });
+
   it("allows the administrator to start and stop the global controller", async () => {
     const caller = appRouter.createCaller(
       createContext("admin", "admin@example.com")
@@ -273,5 +368,79 @@ describe("Mastervillage controller", () => {
     await expect(
       caller.agent.setState({ state: "RUNNING" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("provider guardian access and elite unlimited status", () => {
+  it("reserves the guardian snapshot and control for the administrator", async () => {
+    const member = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await expect(member.agent.guardian()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(member.agent.runProviderGuardian()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      member.agent.setProviderGuardian({ enabled: false })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("exposes the autonomous free-route guardian to the administrator", async () => {
+    vi.stubEnv("OPENROUTER_MODELS", "model-a:free,model-b:free");
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const snapshot = await admin.agent.guardian();
+    expect(snapshot.enabled).toBe(true);
+    expect(snapshot.freeTierFirst).toBe(true);
+    expect(snapshot.configuredChain).toEqual([
+      "model-a:free",
+      "model-b:free",
+    ]);
+    expect(snapshot.intervalMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("lets the administrator toggle the guardian and reports the new state", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    await expect(
+      admin.agent.setProviderGuardian({ enabled: false })
+    ).resolves.toMatchObject({ enabled: false });
+    await expect(
+      admin.agent.setProviderGuardian({ enabled: true, intervalMs: 60_000 })
+    ).resolves.toMatchObject({ enabled: true, intervalMs: 60_000 });
+  });
+
+  it("projects the elite unlimited package only to the administrator", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const adminStatus = await admin.agent.status();
+    expect(adminStatus.eliteUnlimited).toMatchObject({
+      localChatQuota: "unlimited",
+      localTokenQuota: "unlimited",
+      externalProviderQuotasApply: true,
+      technicalModelLimitsApply: true,
+    });
+    expect(adminStatus.providerGuardian?.enabled).toBe(true);
+
+    const member = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    const memberStatus = await member.agent.status();
+    expect(memberStatus.eliteUnlimited).toBeNull();
+    expect(memberStatus.providerGuardian).toBeNull();
+  });
+
+  it("never claims unlimited external tokens in the elite projection", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const status = await admin.agent.status();
+    expect(status.eliteUnlimited?.tokenCreation).toBe("provider-defined");
+    expect(status.eliteUnlimited?.note).toMatch(/keine Token/);
   });
 });

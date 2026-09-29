@@ -23,6 +23,7 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 | `JWT_SECRET` | Session-Signatur (Render generiert ihn automatisch) |
 | `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) |
 | `FREE_TIER_CACHE` / `FREE_TIER_CACHE_TTL_SECONDS` | Antwort-Cache (Produktion default an, 10 Min) |
+| `PROVIDER_GUARDIAN_INTERVAL_MS` | Prüfintervall des Provider-Wächters (Default 300000, min. 30000) |
 
 ## Produktion & Betrieb
 
@@ -35,9 +36,19 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 
 ## Administratorzugriff
 
-Administratoren (Rolle `admin` oder `AGENT_ADMIN_EMAIL`) sind vom Stundenlimit ausgenommen und können über `agent.setSystemPrompt` eine eigene Systemanweisung setzen, die die Standard-Persona ersetzt (UI-Feld im Composer, max. 4000 Zeichen). Der GitHub-Werkzeug-Sicherheitsblock bleibt davon unberührt; Anbieter-Moderation und Nutzungsbedingungen der Provider gelten weiterhin und werden nicht umgangen.
+Administratoren (Rolle `admin` oder `AGENT_ADMIN_EMAIL`) sind von **allen lokalen Anwendungslimits** ausgenommen: Stundenlimit für Chats, GitHub-Auftragslimit und die Begrenzung der OpenRouter-Schlüsselprüfungen greifen für sie nicht. `agent.usage` meldet für Administratoren `unlimited: true` mit `remainingTurns`/`resetsAt: null`. Für normale Benutzer bleiben die Limits unverändert aktiv.
+
+Administratoren können über `agent.setSystemPrompt` eine eigene Systemanweisung setzen, die die Standard-Persona ersetzt (UI-Feld im Composer, max. 4000 Zeichen). Der GitHub-Werkzeug-Sicherheitsblock bleibt davon unberührt; Anbieter-Moderation und Nutzungsbedingungen der Provider gelten weiterhin und werden nicht umgangen.
+
+Wichtig zur Einordnung: „unbegrenzt" bezieht sich ausschließlich auf das lokale Villa-Kontingent. Es werden keine Token erzeugt, keine Schlüssel rotiert und keine Anbieterkontingente umgangen. Gratisverfügbarkeit, Kontext-/Ausgabelimits und Kontingente externer Anbieter legt weiterhin der jeweilige Dienst fest.
 
 Der konfigurierte Administrator (`AGENT_ADMIN_EMAIL`) oder ein Benutzer mit der Rolle `admin` besitzt vollständigen **Anwendungszugriff** auf Agentensteuerung, Werkstatt und geschützte GitHub-Funktionen. Anwendungslimits für normale Benutzer blockieren den Administrator nicht. Pro-Anfrage-Sicherheitsgrenzen, Provider-Kontingente, Zugangsschutz, Audit-Regeln und die GitHub-Branch-/Draft-PR-Regeln bleiben für alle Benutzer aktiv.
+
+### Provider-Wächter (Free-Route Health)
+
+Der Provider-Wächter ist ein autonomer Administrator-Agent (`server/provider-guardian.ts`). Beim Serverstart und danach in festem Intervall prüft er jede konfigurierte kostenlose Modellroute mit einer minimalen echten Anfrage, setzt tote oder limitierte Routen in einen Cooldown und hält automatisch die funktionsfähige kostenlose Route als aktive Route. Zusätzlich fließt jeder echte Chat-Aufruf in die Bewertung ein (`reportProviderOutcome`), sodass die Reihenfolge auf echtem Verkehr basiert. Die Kette ist nie leer — ein harter Fehler bleibt ein sichtbarer Fehler und wird nicht stillschweigend verschluckt.
+
+Status im Administratorbereich (Drawer → „Free-Routen jetzt prüfen") sowie über `agent.guardian`, `agent.runProviderGuardian` und `agent.setProviderGuardian` (jeweils nur für Administratoren). Die Projektion `agent.status.eliteUnlimited` weist für Administratoren `localChatQuota`/`localTokenQuota: "unlimited"` aus — ausdrücklich nur für das lokale Villa-Kontingent. Technische Modell- und Anbieterkontingente gelten weiter (`externalProviderQuotasApply`, `technicalModelLimitsApply`); der Wächter erzeugt keine Token und umgeht keine Quoten.
 
 Es gibt bewusst keinen Limit-Umgehungsagenten, keine Schlüsselrotation, keine Identitätsvortäuschung und keine kostenpflichtige oder nicht autorisierte Ausweichroute. Diese Grenzen schützen Konten, Anbieter und das Repository.
 

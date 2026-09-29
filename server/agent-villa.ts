@@ -60,6 +60,15 @@ export const CAPABILITY_PACKS: readonly CapabilityPack[] = [
     enabledByDefault: true,
   },
   {
+    id: "provider-guardian",
+    name: "Provider-Wächter (Free-Route Health)",
+    kind: "system",
+    description:
+      "Autonomer Administrator-Agent, der die kostenlosen Modellrouten fortlaufend prüft, tote oder limitierte Routen in einen Cooldown setzt und automatisch die funktionsfähige kostenlose Route aktiv hält.",
+    enabledByDefault: true,
+    administratorOnly: true,
+  },
+  {
     id: "project-workshop",
     name: "Projekt-Werkstatt",
     kind: "feature",
@@ -122,6 +131,56 @@ export const CAPABILITY_PACKS: readonly CapabilityPack[] = [
     kind: "skill",
     description:
       "Erstellt technische Dokumentation, Setup-Hinweise, Änderungszusammenfassungen und PR-Beschreibungen.",
+    enabledByDefault: true,
+  },
+  {
+    id: "acceptance-criteria",
+    name: "Akzeptanzkriterien & Definition of Done",
+    kind: "skill",
+    description:
+      "Leitet aus einer Idee prüfbare Akzeptanzkriterien und eine Definition of Done ab, damit eine Mission ein überprüfbares Ergebnis statt eines bloßen Plans liefert.",
+    enabledByDefault: true,
+    administratorOnly: true,
+  },
+  {
+    id: "regression-guard",
+    name: "Regressionsschutz",
+    kind: "developer",
+    description:
+      "Hält bestehende Tests grün, ergänzt bei Verhaltenänderungen gezielte Regressionstests und verhindert stille Brüche in bereits funktionierenden Bereichen.",
+    enabledByDefault: true,
+  },
+  {
+    id: "dependency-hygiene",
+    name: "Abhängigkeits-Hygiene",
+    kind: "developer",
+    description:
+      "Prüft Abhängigkeiten und Lockfile-Konsistenz, vermeidet unnötige neue Pakete und bevorzugt bestehende, kostenlose Standardbibliotheken.",
+    enabledByDefault: true,
+  },
+  {
+    id: "build-verify",
+    name: "Build- & Test-Verifikation",
+    kind: "tool",
+    description:
+      "Führt Typecheck, Tests und Build über die vorhandenen Projekt-Skripte aus und berichtet echte Ergebnisse statt behaupteter Erfolge.",
+    enabledByDefault: true,
+    administratorOnly: true,
+  },
+  {
+    id: "change-review",
+    name: "Änderungs-Review",
+    kind: "developer",
+    description:
+      "Liest die eigenen Änderungen erneut, prüft Konsistenz, Sicherheitsgrenzen und Vollständigkeit gegenüber den Akzeptanzkriterien.",
+    enabledByDefault: true,
+  },
+  {
+    id: "handoff-summary",
+    name: "Übergabe-Zusammenfassung",
+    kind: "tool",
+    description:
+      "Erzeugt eine prüfbare Übergabe mit geänderten Dateien, Teststand, offenen Punkten und Draft-PR-Verweis.",
     enabledByDefault: true,
   },
   {
@@ -206,6 +265,25 @@ export const ELITE_PLAN = {
   protectedRepositoryWrites: true,
   externalProviderQuotasStillApply: true,
 } as const;
+
+/**
+ * Admin-Projektion des Elite-Pakets. "Unlimited" bedeutet ausschliesslich:
+ * kein lokales Chat-/Token-Gesamtkontingent in der Villa und automatische
+ * Free-Route-Pflege. Technische Kontext-/Ausgabelimits und Kontingente
+ * externer Anbieter gelten unveraendert und werden nie umgangen.
+ */
+export function getEliteUnlimitedProjection() {
+  return {
+    plan: ELITE_PLAN.name,
+    localChatQuota: "unlimited" as const,
+    localTokenQuota: "unlimited" as const,
+    externalProviderQuotasApply: true as const,
+    technicalModelLimitsApply: true as const,
+    guardianMaintainsFreeRoutes: true as const,
+    tokenCreation: "provider-defined" as const,
+    note: "Unbegrenzt bezieht sich nur auf das lokale Villa-Kontingent. Der Waechter erzeugt keine Token und umgeht keine Anbieterkontingente.",
+  };
+}
 
 export function getEliteConnectorSnapshot() {
   return [
@@ -300,6 +378,7 @@ export function getVillaSnapshot(villaId: string = DEFAULT_VILLA_ID) {
       documentation: true,
       draftPullRequestDelivery: true,
       ciObservation: true,
+      autonomousFreeRouteGuardian: true,
     },
     packs: CAPABILITY_PACKS.map(
       ({ id, name, kind, description, administratorOnly }) => ({

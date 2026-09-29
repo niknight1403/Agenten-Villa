@@ -20,6 +20,7 @@ const errorMessages: Record<string, string> = {
   userinfo_failed: "Das Nutzerprofil konnte nicht geladen werden. Bitte erneut versuchen.",
   server_error: "Ein Serverfehler ist aufgetreten. Bitte später erneut versuchen.",
   native_failed: "Die Anmeldung ist fehlgeschlagen. Bitte erneut versuchen.",
+  native_config: "Die Google-Anmeldung ist für diese App-Version noch nicht freigeschaltet. Bitte den Support kontaktieren.",
 };
 
 /**
@@ -54,7 +55,17 @@ export default function Auth() {
     setPending(true);
     try {
       const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
-      await GoogleAuth.initialize();
+      // Der TS-Typ InitOptions.scopes ist string[], GoogleAuth.java liest den
+      // Wert aber mit getString("scopes"). Ein Array fuehrt dort zu einer
+      // JSONException, der Default "" greift, und daraus entsteht
+      // scopeArray = [""]; new Scope("") wirft in Google Play Services
+      // IllegalArgumentException, was Capacitor als RuntimeException
+      // weiterreicht und den Prozess beendet. Daher der Cast auf string[].
+      const scopes = "profile,email" as unknown as string[];
+      await GoogleAuth.initialize({
+        scopes,
+        grantOfflineAccess: false,
+      });
       const result = await GoogleAuth.signIn();
       const idToken = result.authentication?.idToken;
       if (!idToken) throw new Error("missing id token");
@@ -78,7 +89,10 @@ export default function Auth() {
       window.location.assign("/");
     } catch (err) {
       console.error("[NativeLogin] failed", err);
-      setErrorCode("native_failed");
+      // ApiException-Code 10 = DEVELOPER_ERROR: der SHA-1-Fingerprint der
+      // signierenden APK fehlt als Android-Client im Google-Cloud-Projekt.
+      const code = (err as { code?: string })?.code;
+      setErrorCode(code === "10" ? "native_config" : "native_failed");
     } finally {
       setPending(false);
     }

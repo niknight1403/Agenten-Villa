@@ -6,6 +6,7 @@ import {
   appendMessages,
   createVilla,
   deleteVilla,
+  ensureStarterVilla,
   exportVilla,
   importVilla,
   listMessages,
@@ -72,6 +73,25 @@ export const villaRouter = router({
     try {
       return await listVillas(ctx.user.id);
     } catch (error) {
+      storeError(error);
+    }
+  }),
+
+  /**
+   * Creates the default project villa for a user who has none yet. Idempotent
+   * from the client's perspective (it is only requested when the list is
+   * empty); the normal villa limit still applies.
+   */
+  ensureStarter: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      return await ensureStarterVilla(ctx.user.id);
+    } catch (error) {
+      if (error instanceof VillaLimitError) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+        });
+      }
       storeError(error);
     }
   }),
