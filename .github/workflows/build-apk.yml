@@ -7,6 +7,10 @@ on:
         description: "Backend-URL (ohne /api/trpc). Default: Produktions-URL"
         required: false
         default: "https://agenten-villa.onrender.com"
+      ref:
+        description: "Branch oder Tag zum Bauen. Default: aktueller Branch"
+        required: false
+        default: ""
   push:
     branches: [main]
 
@@ -15,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: pnpm/action-setup@v4
 
