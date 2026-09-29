@@ -1,4 +1,4 @@
-import { index, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
@@ -161,3 +161,26 @@ export const demoContactOptOuts = pgTable("demo_contact_opt_outs", {
   email: varchar("email", { length: 320 }).primaryKey(),
   optedOutAt: timestamp("optedOutAt").defaultNow().notNull(),
 });
+
+/** Durable ledger for synchronous Elite executions and explicit recovery. */
+export const eliteMissionRuns = pgTable("elite_mission_runs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 100 }).notNull(),
+  requestHash: varchar("requestHash", { length: 64 }).notNull(),
+  input: jsonb("input").notNull(),
+  status: varchar("status", { length: 16 }).$type<"running" | "completed" | "failed" | "interrupted">().notNull(),
+  attempt: integer("attempt").default(1).notNull(),
+  ownerId: varchar("ownerId", { length: 36 }).notNull(),
+  leaseUntil: timestamp("leaseUntil").notNull(),
+  result: jsonb("result"),
+  errorCode: varchar("errorCode", { length: 40 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+}, (table) => [
+  uniqueIndex("elite_mission_user_key_unique").on(table.userId, table.idempotencyKey),
+  index("elite_mission_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export type EliteMissionRun = typeof eliteMissionRuns.$inferSelect;

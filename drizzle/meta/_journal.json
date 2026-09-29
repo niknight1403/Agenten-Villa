@@ -57,6 +57,13 @@
       "when": 1790641546173,
       "tag": "0007_demo_consent_crm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790641905278,
+      "tag": "0008_elite_mission_state",
+      "breakpoints": true
     }
   ]
 }

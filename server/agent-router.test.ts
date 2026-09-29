@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { appRouter } from "./routers";
 import * as villaStore from "./villa-store";
 import * as agentEngine from "./agent-engine";
+import * as missionStore from "./elite-mission-store";
 import type { TrpcContext } from "./_core/context";
 import {
   agentControlLimits,
@@ -49,6 +50,12 @@ describe("agent access controls", () => {
     const caller = appRouter.createCaller(createContext("admin", "admin@example.com"));
     await caller.agent.setState({ state: "RUNNING" });
     const villa = vi.spyOn(villaStore, "getVilla").mockResolvedValue(undefined);
+    vi.spyOn(missionStore, "reserveMission").mockResolvedValue({
+      created: true,
+      run: { id: 22, ownerId: "test-owner", status: "running" } as never,
+    });
+    vi.spyOn(missionStore, "renewMissionLease").mockResolvedValue(true);
+    vi.spyOn(missionStore, "finishMission").mockResolvedValue();
     const mission = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub").mockResolvedValue({ answer: "Entwurf", provider: "openrouter", model: "free", attempts: 1, completed: false, branch: null, pullRequest: null, githubActions: 0 });
     await expect(caller.agent.eliteMission({ villaId: 91, prompt: "Baue das Projekt", history: [] }))
       .rejects.toMatchObject({ code: "NOT_FOUND" });

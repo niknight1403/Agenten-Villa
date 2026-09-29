@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import {
   ArrowLeft,
   Boxes,
@@ -28,6 +28,7 @@ export default function EliteMission() {
   const villasQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated });
   const selectedVilla = villasQuery.data?.find(villa => villa.id === villaId);
   const [prompt, setPrompt] = useState("");
+  const pendingMissionKey = useRef<{ signature: string; key: string } | null>(null);
   const [lastResult, setLastResult] = useState<{
     answer: string;
     completed: boolean;
@@ -53,6 +54,14 @@ export default function EliteMission() {
 
   const status = statusQuery.data;
   const isAdmin = Boolean(status?.isAdmin);
+  const runsQuery = trpc.agent.eliteMissionRuns.useQuery(undefined, {
+    enabled: isAuthenticated && isAdmin,
+    refetchOnWindowFocus: true,
+  });
+  const restartMutation = trpc.agent.restartInterruptedMission.useMutation({
+    onError: error => toast.error(error.message),
+  });
+  const pendingRun = runsQuery.data?.find(run => run.idempotencyKey === pendingMissionKey.current?.key);
   const running = status?.state === "RUNNING";
   const ready =
     running &&
@@ -62,10 +71,14 @@ export default function EliteMission() {
   async function submitMission(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const objective = prompt.trim();
-    if (!objective || missionMutation.isPending) return;
+    if (!objective || missionMutation.isPending || restartMutation.isPending) return;
+    const signature = JSON.stringify({ objective, villaId });
+    if (pendingMissionKey.current?.signature !== signature)
+      pendingMissionKey.current = { signature, key: crypto.randomUUID() };
     setLastResult(null);
     try {
       const result = await missionMutation.mutateAsync({
+        idempotencyKey: pendingMissionKey.current.key,
         prompt: objective,
         history: [],
         specialty: "Autonomous Product Engineering",
@@ -79,6 +92,8 @@ export default function EliteMission() {
         model: result.model,
         pullRequest: result.pullRequest ?? null,
       });
+      pendingMissionKey.current = null;
+      void runsQuery.refetch();
       if (result.completed) {
         toast.success("Elite-Mission als Draft-PR vorbereitet.");
       } else {
@@ -88,7 +103,30 @@ export default function EliteMission() {
       }
     } catch {
       // Error toast is handled by the mutation.
+      void runsQuery.refetch();
     }
+  }
+
+  async function restartRun(id: number) {
+    if (missionMutation.isPending || restartMutation.isPending) return;
+    if (!window.confirm(`Mission #${id} erneut von vorn starten? Der vorherige Versuch kann bereits GitHub-Branches, Dateien oder einen Draft-PR verändert haben. Prüfe diese Änderungen zuerst. Dieser neue Versuch kann weitere Modellaufrufe und GitHub-Aktionen auslösen.`)) return;
+    try {
+      const result = await restartMutation.mutateAsync({ id, acknowledgeExternalChanges: true });
+      setLastResult({ answer: result.answer, completed: Boolean(result.completed), branch: result.branch ?? null,
+        githubActions: result.githubActions ?? 0, model: result.model, pullRequest: result.pullRequest ?? null });
+      pendingMissionKey.current = null;
+      await runsQuery.refetch();
+      toast.info(result.completed ? "Neuer Versuch als Draft-PR vorbereitet." : "Neuer Versuch beendet; Ergebnis prüfen.");
+    } catch {
+      void runsQuery.refetch();
+    }
+  }
+
+  function beginNewMission() {
+    if (!window.confirm("Neuen Auftrag mit eigenem Schlüssel beginnen? Prüfe vorher vorhandene GitHub-Änderungen des fehlgeschlagenen oder unterbrochenen Laufs.")) return;
+    pendingMissionKey.current = null;
+    missionMutation.reset();
+    toast.info("Der nächste Klick beginnt einen neuen Auftrag.");
   }
 
   if (loading) {
@@ -182,7 +220,7 @@ export default function EliteMission() {
           </div>
           <button
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            onClick={() => statusQuery.refetch()}
+            onClick={() => { void statusQuery.refetch(); void runsQuery.refetch(); }}
             disabled={statusQuery.isFetching}
           >
             <RefreshCw
@@ -239,7 +277,7 @@ export default function EliteMission() {
                 onChange={event => setPrompt(event.target.value)}
                 maxLength={12_000}
                 placeholder="Beispiel: Entwickle aus der Agenten-Villa eine autonome Software-Projektfabrik. Analysiere zuerst den vorhandenen Code, implementiere die fehlenden Teile, ergänze Tests und Dokumentation und bereite einen Draft-PR vor."
-                disabled={missionMutation.isPending}
+                disabled={missionMutation.isPending || restartMutation.isPending}
               />
               <div className="mt-3 flex items-center justify-between gap-4 text-xs text-slate-500">
                 <span>{prompt.length.toLocaleString("de-DE")} / 12.000 Zeichen</span>
@@ -251,7 +289,7 @@ export default function EliteMission() {
               <button
                 className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-violet-500 px-5 py-4 text-lg font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
                 type="submit"
-                disabled={!prompt.trim() || !ready || missionMutation.isPending || Boolean(villaId && !selectedVilla)}
+                disabled={!prompt.trim() || !ready || missionMutation.isPending || restartMutation.isPending || Boolean(villaId && !selectedVilla)}
               >
                 {missionMutation.isPending ? (
                   <>
@@ -266,6 +304,12 @@ export default function EliteMission() {
                 )}
               </button>
             </form>
+            {pendingRun && (pendingRun.status === "failed" || pendingRun.status === "interrupted") && (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                Auftrag #{pendingRun.id} ist {pendingRun.status === "failed" ? "fehlgeschlagen" : "unterbrochen"}. Prüfe vor einem neuen Auftrag mögliche GitHub-Änderungen.
+                <button type="button" onClick={beginNewMission} className="mt-3 block rounded-lg border border-amber-400/50 px-3 py-2 font-semibold">Nach Prüfung neuen Auftrag beginnen</button>
+              </div>
+            )}
 
             {!status?.providers.openrouter && (
               <p className="mt-4 text-sm text-rose-300">
@@ -322,6 +366,23 @@ export default function EliteMission() {
               </ol>
             </section>
           </aside>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6" aria-labelledby="recent-missions-title">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="recent-missions-title" className="text-lg font-semibold">Letzte Missionen</h2>
+            <button type="button" onClick={() => runsQuery.refetch()} disabled={runsQuery.isFetching} className="text-sm text-cyan-300 disabled:opacity-50">Aktualisieren</button>
+          </div>
+          {runsQuery.isPending && <p className="mt-4 text-sm text-slate-400">Missionsstatus wird geladen …</p>}
+          {runsQuery.error && <p role="alert" className="mt-4 text-sm text-rose-300">Missionsstatus ist nicht verfügbar.</p>}
+          {runsQuery.data?.length === 0 && <p className="mt-4 text-sm text-slate-400">Noch keine gespeicherte Mission.</p>}
+          <ul className="mt-4 space-y-2">
+            {runsQuery.data?.map(run => <li key={run.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-sm">
+              <span>Mission #{run.id} · {run.status} · Versuch {run.attempt}</span>
+              {run.status === "interrupted" && <button type="button" disabled={!ready || missionMutation.isPending || restartMutation.isPending} onClick={() => restartRun(run.id)} className="rounded-lg border border-amber-400/50 px-3 py-2 text-amber-200 disabled:opacity-50">Nach Prüfung erneut starten</button>}
+            </li>)}
+          </ul>
+          <p className="mt-4 text-xs leading-5 text-amber-200/90">Ein Neustart beginnt den Auftrag von vorn. Vorherige GitHub-Aktionen können schon ausgeführt worden sein; kontrolliere Branches und Draft-PRs vor der Bestätigung.</p>
         </section>
 
         {lastResult && (
