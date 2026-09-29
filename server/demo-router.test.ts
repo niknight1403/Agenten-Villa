@@ -27,6 +27,9 @@ describe("demo request privacy and consent", () => {
     expect(containsDemoSubmission("agent.status,/demo.submit")).toBe(true);
     expect(containsDemoSubmission("/agent.status, /demo.submit ,x")).toBe(true);
     expect(containsDemoSubmission("agent.status,/demo.submitx")).toBe(false);
+    // Query-Strings duerfen die Prozedur nicht verstecken (PR-Agent, Runde 2).
+    expect(containsDemoSubmission("/demo.submit?batch=1")).toBe(true);
+    expect(containsDemoSubmission("agent.status,/demo.submit?batch=1")).toBe(true);
   });
   it("never exposes the lead list or status mutation to anonymous and regular users", async () => {
     const list = vi.spyOn(store, "listDemoRequests").mockResolvedValue([]);

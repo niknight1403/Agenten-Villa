@@ -29,11 +29,17 @@ export async function interruptExpiredRuns(): Promise<void> {
   const now = Date.now();
   if (now - lastInterruptCheck < INTERRUPT_THROTTLE_MS) return;
   lastInterruptCheck = now;
-  const db = await requiredDb();
-  const nowDate = new Date(now);
-  await db.update(eliteMissionRuns).set({ status: "interrupted", updatedAt: nowDate })
-    .where(and(eq(eliteMissionRuns.status, "running"), lt(eliteMissionRuns.leaseUntil, nowDate),
-      activeRuns.size ? notInArray(eliteMissionRuns.id, Array.from(activeRuns)) : undefined));
+  try {
+    const db = await requiredDb();
+    const nowDate = new Date(now);
+    await db.update(eliteMissionRuns).set({ status: "interrupted", updatedAt: nowDate })
+      .where(and(eq(eliteMissionRuns.status, "running"), lt(eliteMissionRuns.leaseUntil, nowDate),
+        activeRuns.size ? notInArray(eliteMissionRuns.id, Array.from(activeRuns)) : undefined));
+  } catch (error) {
+    // A failed sweep must not block the window for 30 seconds.
+    lastInterruptCheck = 0;
+    throw error;
+  }
 }
 
 /** Test-only: resets the throttle window of the sweep. */

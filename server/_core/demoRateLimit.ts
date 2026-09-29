@@ -8,7 +8,9 @@ export function containsDemoSubmission(rawPath: string): boolean {
   try {
     // Normalize each batched procedure individually: a leading slash on any
     // position (e.g. "agent.status,/demo.submit") must not bypass the limiter.
-    return decodeURIComponent(rawPath)
+    // Query strings (e.g. "/demo.submit?batch=1") must not hide the procedure.
+    const decodedPath = decodeURIComponent(rawPath).split("?")[0];
+    return decodedPath
       .split(",")
       .some(part => part.trim().replace(/^\/+|\/+$/g, "") === "demo.submit");
   } catch {

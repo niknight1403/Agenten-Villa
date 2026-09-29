@@ -73,4 +73,16 @@ describe("interrupt sweep throttling (PR-Agent)", () => {
     vi.useRealTimers();
     missionStore.resetInterruptSweepForTests();
   });
+
+  it("retries the sweep immediately after a failure instead of waiting 30 s", async () => {
+    missionStore.resetInterruptSweepForTests();
+    const attempts: number[] = [];
+    const failingChain = { set: () => failingChain, where: () => { attempts.push(Date.now()); return Promise.reject(new Error("DB weg")); } };
+    vi.spyOn(missionDb, "getDb").mockResolvedValue({ update: () => failingChain } as never);
+    await expect(missionStore.interruptExpiredRuns()).rejects.toThrow("DB weg");
+    // Nach dem Fehlschlag darf das Zeitfenster nicht blockiert sein:
+    await expect(missionStore.interruptExpiredRuns()).rejects.toThrow("DB weg");
+    expect(attempts.length).toBe(2);
+    missionStore.resetInterruptSweepForTests();
+  });
 });
