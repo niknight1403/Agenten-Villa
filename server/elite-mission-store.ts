@@ -14,6 +14,11 @@ export type SavedMissionInput = {
 const activeRuns = new Set<number>();
 const LEASE_MS = 90_000;
 
+// interruptExpiredRuns() runs before almost every read query. A write per read
+// causes lock contention under load, so the sweep is throttled.
+const INTERRUPT_THROTTLE_MS = 30_000;
+let lastInterruptCheck = 0;
+
 async function requiredDb() {
   const db = await getDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
@@ -21,11 +26,25 @@ async function requiredDb() {
 }
 
 export async function interruptExpiredRuns(): Promise<void> {
-  const db = await requiredDb();
-  const now = new Date();
-  await db.update(eliteMissionRuns).set({ status: "interrupted", updatedAt: now })
-    .where(and(eq(eliteMissionRuns.status, "running"), lt(eliteMissionRuns.leaseUntil, now),
-      activeRuns.size ? notInArray(eliteMissionRuns.id, Array.from(activeRuns)) : undefined));
+  const now = Date.now();
+  if (now - lastInterruptCheck < INTERRUPT_THROTTLE_MS) return;
+  lastInterruptCheck = now;
+  try {
+    const db = await requiredDb();
+    const nowDate = new Date(now);
+    await db.update(eliteMissionRuns).set({ status: "interrupted", updatedAt: nowDate })
+      .where(and(eq(eliteMissionRuns.status, "running"), lt(eliteMissionRuns.leaseUntil, nowDate),
+        activeRuns.size ? notInArray(eliteMissionRuns.id, Array.from(activeRuns)) : undefined));
+  } catch (error) {
+    // A failed sweep must not block the window for 30 seconds.
+    lastInterruptCheck = 0;
+    throw error;
+  }
+}
+
+/** Test-only: resets the throttle window of the sweep. */
+export function resetInterruptSweepForTests(): void {
+  lastInterruptCheck = 0;
 }
 
 export async function reserveMission(input: {

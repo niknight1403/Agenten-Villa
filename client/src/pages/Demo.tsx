@@ -15,9 +15,11 @@ export default function Demo() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submit.isPending) return;
+    if (submit.isPending || !contactConsent) return;
     try {
-      await submit.mutateAsync({ name, company, email, projectIdea, contactConsent: true, website });
+      // Actual consent state — never hardcode, otherwise Enter/programmatic
+      // submits could record consent that was never given.
+      await submit.mutateAsync({ name, company, email, projectIdea, contactConsent, website });
       setSent(true);
     } catch {
       // A visible, non-sensitive error is shown under the form.
