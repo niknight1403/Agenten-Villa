@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { trpc } from "@/lib/trpc";
 import {
+  Archive,
   ArrowLeft,
   Bot,
   Building2,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Mic,
   Plus,
+  RotateCcw,
   Search,
   Send,
   ShieldCheck,
@@ -46,6 +48,9 @@ type Villa = {
   specialty: string;
   icon: "villa" | "bot";
   projectBrief: string | null;
+  description?: string | null;
+  capacity?: number;
+  archivedAt?: string | null;
 };
 const homeIdeas = [
   "Erstelle einen Aktionsplan",
@@ -58,9 +63,13 @@ const workshopIdeas = [
 ];
 
 export default function Home() {
-  // The useAuth hook provides authentication state. Login is a plain
-  // navigation to /login (Google OAuth sign-in screen).
-  const { isAuthenticated, loading, logout } = useAuth();
+  // The useAuth hook provides authentication state. Unauthenticated
+  // visitors are shown the login screen at app start — no need to find
+  // the small sign-in button on the Home screen first.
+  const { isAuthenticated, loading, logout } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/login",
+  });
   const statusQuery = trpc.agent.status.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
@@ -74,6 +83,9 @@ export default function Home() {
     refetchOnWindowFocus: false,
   });
   const createVillaMutation = trpc.villa.create.useMutation({
+    onSuccess: () => villaListQuery.refetch(),
+  });
+  const archiveVillaMutation = trpc.villa.archive.useMutation({
     onSuccess: () => villaListQuery.refetch(),
   });
   const deleteVillaMutation = trpc.villa.remove.useMutation({
@@ -105,6 +117,8 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [villaName, setVillaName] = useState("");
+  const [villaDescription, setVillaDescription] = useState("");
+  const [villaCapacity, setVillaCapacity] = useState(8);
   const [villaIdea, setVillaIdea] = useState("");
   const [activeVillaId, setActiveVillaId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -295,13 +309,18 @@ export default function Home() {
     const cleanName = villaName.trim();
     if (!cleanName || createVillaMutation.isPending) return;
     try {
+      const cleanDescription = villaDescription.trim();
       const villa = await createVillaMutation.mutateAsync({
         name: cleanName,
         specialty: villaIdea.trim() ? "Autonome Projektentwicklung" : "Neuer Agent",
         icon: "villa",
+        capacity: villaCapacity,
         ...(villaIdea.trim() ? { projectBrief: villaIdea.trim() } : {}),
+        ...(cleanDescription ? { description: cleanDescription } : {}),
       });
       setVillaName("");
+      setVillaDescription("");
+      setVillaCapacity(8);
       setVillaIdea("");
       setNewVillaOpen(false);
       setScreen("home");
@@ -561,11 +580,28 @@ export default function Home() {
                   </span>
                   <span className="villa-row-copy">
                     <strong>{villa.name}</strong>
-                    <span>{villa.specialty}</span>
+                    <span>
+                      {villa.archivedAt ? `Archiv · ${villa.specialty}` : villa.specialty}
+                    </span>
                   </span>
                   {activeVilla?.id === villa.id && (
                     <Check className="selected-check" size={18} />
                   )}
+                </button>
+                <button
+                  className="villa-row-archive"
+                  aria-label={
+                    villa.archivedAt
+                      ? `Villa ${villa.name} wiederherstellen`
+                      : `Villa ${villa.name} archivieren`
+                  }
+                  title={villa.archivedAt ? "Villa wiederherstellen" : "Villa archivieren"}
+                  disabled={archiveVillaMutation.isPending}
+                  onClick={() =>
+                    archiveVillaMutation.mutate({ id: villa.id, archived: !villa.archivedAt })
+                  }
+                >
+                  {villa.archivedAt ? <RotateCcw size={16} /> : <Archive size={16} />}
                 </button>
                 <button
                   className="villa-row-delete"
@@ -770,7 +806,10 @@ export default function Home() {
                 rows={1}
                 aria-label="Nachricht an den Superagenten"
                 disabled={
-                  !isAuthenticated || !agentRunning || chatMutation.isPending
+                  !isAuthenticated ||
+                  !agentRunning ||
+                  chatMutation.isPending ||
+                  Boolean(activeVilla?.archivedAt)
                 }
                 onKeyDown={event => {
                   if (event.key === "Enter" && !event.shiftKey) {
@@ -898,7 +937,9 @@ export default function Home() {
                   </span>
                   <span className="villa-row-copy">
                     <strong>{villa.name}</strong>
-                    <span>{villa.specialty}</span>
+                    <span>
+                      {villa.archivedAt ? `Archiv · ${villa.specialty}` : villa.specialty}
+                    </span>
                   </span>
                 </button>
               ))}
@@ -1000,6 +1041,30 @@ export default function Home() {
               maxLength={4000}
               placeholder="z. B. Entwickle einen Android-Dateimanager mit Speicheranalyse und bestätigten Dateiaktionen"
             />
+            <label className="modal-label" htmlFor="villa-description">
+              Beschreibung (optional, max. 1000 Zeichen)
+            </label>
+            <textarea
+              id="villa-description"
+              className="modal-input villa-idea-input"
+              value={villaDescription}
+              onChange={event => setVillaDescription(event.target.value)}
+              maxLength={1000}
+              placeholder="z. B. Analysiert Repositorys und schlägt Verbesserungen vor"
+            />
+            <label className="modal-label" htmlFor="villa-capacity">
+              Kapazität (Eingabegrenze in Tausend Zeichen)
+            </label>
+            <select
+              id="villa-capacity"
+              className="modal-input"
+              value={villaCapacity}
+              onChange={event => setVillaCapacity(Number(event.target.value))}
+            >
+              {Array.from({ length: 25 }, (_, index) => index + 1).map(value => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
             <button className="modal-submit" type="submit">
               <Plus size={17} /> Villa mit Superagent erstellen
             </button>

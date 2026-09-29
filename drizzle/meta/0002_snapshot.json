@@ -1,139 +1,9 @@
 {
-  "id": "7b8ae479-624d-4431-8ad2-257b4fde9a35",
-  "prevId": "bcd75a18-0eb0-4b73-bed2-7c89b015ea99",
+  "id": "b325957f-b52f-48b1-a02e-b752090c72de",
+  "prevId": "c95c958f-d14a-44f2-8d1b-123a0d871dcb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.demo_contact_opt_outs": {
-      "name": "demo_contact_opt_outs",
-      "schema": "",
-      "columns": {
-        "email": {
-          "name": "email",
-          "type": "varchar(320)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "optedOutAt": {
-          "name": "optedOutAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.demo_requests": {
-      "name": "demo_requests",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "company": {
-          "name": "company",
-          "type": "varchar(120)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(320)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "projectIdea": {
-          "name": "projectIdea",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consentedAt": {
-          "name": "consentedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consentVersion": {
-          "name": "consentVersion",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consentText": {
-          "name": "consentText",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'new'"
-        },
-        "optedOutAt": {
-          "name": "optedOutAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "demo_requests_createdAt_idx": {
-          "name": "demo_requests_createdAt_idx",
-          "columns": [
-            {
-              "expression": "createdAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.users": {
       "name": "users",
       "schema": "",
@@ -323,6 +193,25 @@
         "projectBrief": {
           "name": "projectBrief",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capacity": {
+          "name": "capacity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "archivedAt": {
+          "name": "archivedAt",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
