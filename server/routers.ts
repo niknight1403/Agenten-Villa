@@ -3,6 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { agentRouter } from "./agent-router";
+import { profileRouter } from "./profile-router";
+import { projectRouter } from "./project-router";
 import { villaRouter } from "./villa-router";
 import { demoRouter } from "./demo-router";
 
@@ -10,6 +12,8 @@ export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   agent: agentRouter,
+  profile: profileRouter,
+  project: projectRouter,
   villa: villaRouter,
   demo: demoRouter,
   auth: router({

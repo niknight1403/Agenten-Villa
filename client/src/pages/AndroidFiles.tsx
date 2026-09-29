@@ -7,7 +7,10 @@ import { androidStorage } from "@/lib/android-storage";
 import { FilePlan, StorageEntry, formatBytes, planFromPrompt, storageSuggestions } from "@/lib/storage-plan";
 
 export default function AndroidFiles() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/login",
+  });
   const [folder, setFolder] = useState("");
   const [entries, setEntries] = useState<StorageEntry[]>([]);
   const [truncated, setTruncated] = useState(false);

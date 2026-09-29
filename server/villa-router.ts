@@ -6,14 +6,26 @@ import {
   appendMessages,
   createVilla,
   deleteVilla,
+  exportVilla,
+  importVilla,
   listMessages,
+  getLimitConfig,
+  getVilla,
+  listVillaEvents,
+  villaActivity,
   listVillas,
   rateMessage,
+  setLimitConfig,
+  setVillaArchived,
   updateVilla,
+  VillaLimitError,
 } from "./villa-store";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
+/** Sprint 012 — Kapazitätsgrenze 1–25, Standard 8. */
+const capacitySchema = z.number().int().min(1).max(25).default(8);
+const descriptionSchema = z.string().trim().max(1000).optional();
 
 function storeError(error: unknown): never {
   if (error instanceof TRPCError) throw error;
@@ -25,6 +37,37 @@ function storeError(error: unknown): never {
 }
 
 export const villaRouter = router({
+  /** Sprint 017 — eigene Kapazitaetsgrenzen lesen (Nutzer-Sicht). */
+  limits: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await getLimitConfig(ctx.user.id);
+    } catch (error) {
+      storeError(error);
+    }
+  }),
+
+  /** Sprint 017 — Limit-Konfiguration aendern (nur Admin). */
+  setLimits: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        maxVillas: z.number().int().min(1).max(50),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Nur Administratoren dürfen Limits ändern.",
+        });
+      }
+      try {
+        return await setLimitConfig(input.userId, input.maxVillas);
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     try {
       return await listVillas(ctx.user.id);
@@ -40,6 +83,8 @@ export const villaRouter = router({
         specialty: specialtySchema.default("Neuer Agent"),
         icon: z.enum(["villa", "bot"]).default("bot"),
         projectBrief: z.string().trim().min(3).max(4000).optional(),
+        description: descriptionSchema,
+        capacity: capacitySchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -50,8 +95,16 @@ export const villaRouter = router({
           specialty: input.specialty,
           icon: input.icon,
           projectBrief: input.projectBrief,
+          description: input.description,
+          capacity: input.capacity,
         });
       } catch (error) {
+        if (error instanceof VillaLimitError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+          });
+        }
         storeError(error);
       }
     }),
@@ -62,6 +115,8 @@ export const villaRouter = router({
         id: z.number().int().positive(),
         name: villaNameSchema.optional(),
         specialty: specialtySchema.optional(),
+        description: z.string().trim().max(1000).nullable().optional(),
+        capacity: z.number().int().min(1).max(25).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -69,12 +124,29 @@ export const villaRouter = router({
         const villa = await updateVilla(input.id, ctx.user.id, {
           name: input.name,
           specialty: input.specialty,
+          description: input.description,
+          capacity: input.capacity,
         });
         if (!villa) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Villa nicht gefunden oder keine Änderung übergeben.",
           });
+        }
+        return villa;
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 014 — Villa archivieren oder wiederherstellen. */
+  archive: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), archived: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const villa = await setVillaArchived(input.id, ctx.user.id, input.archived);
+        if (!villa) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Villa nicht gefunden." });
         }
         return villa;
       } catch (error) {
@@ -110,6 +182,88 @@ export const villaRouter = router({
       }
     }),
 
+  /** Sprint 019 — Aktivitätsübersicht: Zähler je Villa, ohne Inhalte. */
+  activity: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await villaActivity(ctx.user.id);
+    } catch (error) {
+      storeError(error);
+    }
+  }),
+
+  /** Sprint 018 — Villa als JSON exportieren (nur eigene Villen). */
+  export: protectedProcedure
+    .input(z.object({ villaId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const data = await exportVilla(input.villaId, ctx.user.id);
+        if (!data) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Villa nicht gefunden.",
+          });
+        }
+        return data;
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 018 — Villa aus Export anlegen (Kapazität wird erzwungen). */
+  import: protectedProcedure
+    .input(
+      z.object({
+        name: villaNameSchema,
+        specialty: specialtySchema.default("Importierte Villa"),
+        icon: z.enum(["villa", "bot"]).default("bot"),
+        projectBrief: z.string().trim().min(3).max(4000).nullable().optional(),
+        description: descriptionSchema,
+        capacity: capacitySchema,
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(25000),
+            })
+          )
+          .max(200)
+          .default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const villa = await importVilla(ctx.user.id, {
+          name: input.name,
+          specialty: input.specialty,
+          icon: input.icon,
+          projectBrief: input.projectBrief,
+          description: input.description,
+          capacity: input.capacity,
+          messages: input.messages,
+        });
+        return villa;
+      } catch (error) {
+        if (error instanceof VillaLimitError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+          });
+        }
+        storeError(error);
+      }
+    }),
+
+  /** Sprint 013 — Audit-Spur der Villa (letzte 50 Einträge). */
+  events: protectedProcedure
+    .input(z.object({ villaId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listVillaEvents(input.villaId, ctx.user.id);
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
   appendMessages: protectedProcedure
     .input(
       z.object({
@@ -129,13 +283,30 @@ export const villaRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const rows = await appendMessages(input.villaId, ctx.user.id, input.messages);
-        if (rows.length === 0) {
+        const villa = await getVilla(input.villaId, ctx.user.id);
+        if (!villa) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Villa nicht gefunden.",
           });
         }
+        if (villa.archivedAt) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Diese Villa ist archiviert und nimmt keine neuen Nachrichten an.",
+          });
+        }
+        // Sprint 017 — Kapazität der Villa erzwingen (Tausend Zeichen je Nachricht).
+        const capacityChars = (villa.capacity ?? 8) * 1000;
+        for (const message of input.messages) {
+          if (message.content.length > capacityChars) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Nachricht überschreitet die Kapazität der Villa (max. ${capacityChars} Zeichen je Nachricht).`,
+            });
+          }
+        }
+        const rows = await appendMessages(input.villaId, ctx.user.id, input.messages);
         return rows;
       } catch (error) {
         storeError(error);

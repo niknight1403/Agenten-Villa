@@ -1,6 +1,6 @@
 {
-  "id": "b325957f-b52f-48b1-a02e-b752090c72de",
-  "prevId": "c95c958f-d14a-44f2-8d1b-123a0d871dcb",
+  "id": "773af27c-baa0-4ef0-8880-1b80b5cc96ed",
+  "prevId": "b325957f-b52f-48b1-a02e-b752090c72de",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -79,6 +79,73 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.villa_events": {
+      "name": "villa_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "villaId": {
+          "name": "villaId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "villa_events_villaId_idx": {
+          "name": "villa_events_villaId_idx",
+          "columns": [
+            {
+              "expression": "villaId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -37,6 +37,16 @@ export const villas = pgTable("villas", {
   name: varchar("name", { length: 80 }).notNull(),
   specialty: varchar("specialty", { length: 80 }).notNull().default("Neuer Agent"),
   projectBrief: text("projectBrief"),
+  /** Sprint 012 — kurze Beschreibung der Villa (max. 1000 Zeichen). */
+  description: text("description"),
+  /** Sprint 012 — Kapazitätsgrenze (1–25), Standard 8; Basis für Sprint 017. */
+  capacity: integer("capacity").notNull().default(8),
+  /** Sprint 014 — Archivierungszeitpunkt; null = aktiv. */
+  archivedAt: timestamp("archivedAt"),
+  /** Sprint 015 — zugeordnetes Projekt; eine Villa hat höchstens ein Projekt. */
+  projectId: integer("projectId"),
+  /** Sprint 016 — Superagenten-Profil der Villa (Rolle + Aufgabenprofil). */
+  profileId: integer("profileId"),
   icon: varchar("icon", { length: 8 }).$type<"villa" | "bot">().default("bot").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
@@ -44,6 +54,71 @@ export const villas = pgTable("villas", {
 
 export type Villa = typeof villas.$inferSelect;
 export type InsertVilla = typeof villas.$inferInsert;
+
+/**
+ * Sprint 015 — Projekte: einem Projekt des Eigentümers können eine oder
+ * mehrere seiner Villen zugeordnet werden (villa.projectId).
+ */
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  createdBy: integer("createdBy").notNull(),
+  name: varchar("name", { length: 80 }).notNull(),
+  brief: text("brief"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("projects_createdBy_idx").on(table.createdBy)]);
+
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
+
+/**
+ * Sprint 016 — Superagenten-Profile: konfigurierbare Rollen und
+ * Aufgabenprofile; eine Villa kann genau einem Profil folgen.
+ */
+export const agentProfiles = pgTable("agent_profiles", {
+  id: serial("id").primaryKey(),
+  createdBy: integer("createdBy").notNull(),
+  name: varchar("name", { length: 80 }).notNull(),
+  role: varchar("role", { length: 20 }).$type<"strategie" | "entwicklung" | "review" | "support">().notNull().default("entwicklung"),
+  taskProfile: text("taskProfile"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("agent_profiles_createdBy_idx").on(table.createdBy)]);
+
+export type AgentProfile = typeof agentProfiles.$inferSelect;
+export type InsertAgentProfile = typeof agentProfiles.$inferInsert;
+
+/**
+ * Sprint 017 — Kapazitätsgrenzen pro Nutzer, konfigurierbar und erzwungen:
+ * maxVillas begrenzt die Zahl aktiver Villen, villa.capacity bleibt die
+ * Eingabegrenze je Nachricht (Tausend Zeichen).
+ */
+export const limitConfigs = pgTable("limit_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull().unique(),
+  maxVillas: integer("maxVillas").notNull().default(20),
+  updatedAt: timestamp("updatedAt").$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("limit_configs_userId_idx").on(table.userId)]);
+
+export type LimitConfig = typeof limitConfigs.$inferSelect;
+
+/**
+ * Sprint 013 — Audit-Spur pro Villa: jede ändernde Aktion (create, update,
+ * archive, delete, import) wird mit Zeit, Akteur und serialisiertem Detail
+ * festgehalten. Detail enthält ausschließlich nicht-geheime Feldnamen und
+ * Werte der Villa selbst.
+ */
+export const villaEvents = pgTable("villa_events", {
+  id: serial("id").primaryKey(),
+  villaId: integer("villaId").notNull(),
+  actorId: integer("actorId").notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  detail: text("detail").notNull().default("{}"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("villa_events_villaId_idx").on(table.villaId)]);
+
+export type VillaEvent = typeof villaEvents.$inferSelect;
+export type InsertVillaEvent = typeof villaEvents.$inferInsert;
 
 /**
  * Persisted chat history per villa. Ratings are stored per assistant

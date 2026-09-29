@@ -19,7 +19,10 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function EliteMission() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/login",
+  });
   const requestedVillaId = Number(new URLSearchParams(window.location.search).get("villaId"));
   const villaId = Number.isSafeInteger(requestedVillaId) && requestedVillaId > 0 ? requestedVillaId : null;
   const villasQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated });

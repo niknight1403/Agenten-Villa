@@ -321,6 +321,11 @@ export const agentRouter = router({
         const villa = input.villaId ? await getVilla(input.villaId, ctx.user.id) : null;
         if (input.villaId && !villa)
           throw new TRPCError({ code: "NOT_FOUND", message: "Projekt-Villa nicht gefunden." });
+        if (villa?.archivedAt)
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Diese Villa ist archiviert und startet keine neuen Läufe.",
+          });
         const projectContext = villa
           ? `Projekt-Villa: ${villa.name}\nProjektziel: ${villa.projectBrief ?? "Noch nicht beschrieben"}\n\n`
           : "";
