@@ -93,6 +93,16 @@ Der native Login läuft über `@codetrix-studio/capacitor-google-auth`. Zwei Fal
   (Sprints 001–020 grün, 021–100 geplant).
 - Sicherheitsgrenzen gelten hart: kein autonomes Merge, kein Schreiben auf `main`,
   keine Änderungen an `.github/workflows`, keine Secrets-/Berechtigungsverwaltung.
+- Release-Ablauf: APK per `workflow_dispatch` mit vollem Commit-SHA als `ref`-Input aus
+  genau dem Commit bauen, der getaggt wird — nicht aus einem älteren Artefakt. Danach
+  annotiertes Tag pushen und Release anlegen. Prüfen, dass der Baum des Merge-Commits
+  mit dem Release-Commit identisch ist (`git diff --quiet <release> <merge>`).
+- Die beiden APK-Hashes unterscheiden sich bei jedem Build (Zip-Zeitstempel, Padding in
+  der Signatur). Zum Vergleich den Web-Payload (`assets/public/**`) und
+  `assets/capacitor.config.json` hashen, nicht die ganze Datei.
+- `GITHUB_TOKEN` im Container reicht zum Lesen und für viele Schreibwege, aber Merge und
+  Release-Bearbeitung liefern damit 403 ("Resource not accessible by integration").
+  Dafür den Repo-Token mit `repo`-Scope verwenden.
 - Git-Flow: Änderungen auf `agent/*`-Branch, dann Draft-PR gegen `main`.
 
 ## Wichtige Pfade
