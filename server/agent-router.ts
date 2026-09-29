@@ -34,7 +34,9 @@ import {
 } from "./elite-mission-store";
 import type { EliteMissionRun } from "../drizzle/schema";
 
-let controlState: "RUNNING" | "STOPPED" = "STOPPED";
+// The assistant is ready out of the box so a signed-in user can chat
+// immediately. Administrators can still stop/start it via the controller.
+let controlState: "RUNNING" | "STOPPED" = "RUNNING";
 let adminSystemPrompt: string | null = null;
 const usage = new Map<number, { start: number; count: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
@@ -537,7 +539,7 @@ export const githubControlLimits = {
   maxTurnsPerWindow: MAX_GITHUB_TURNS_PER_WINDOW,
 } as const;
 export function resetAgentRouterForTests() {
-  controlState = "STOPPED";
+  controlState = "RUNNING";
   adminSystemPrompt = null;
   usage.clear();
   credentialChecks.clear();

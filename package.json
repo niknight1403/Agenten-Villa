@@ -15,7 +15,8 @@
     "validate": "pnpm check && pnpm test && pnpm build && git diff --check",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "seed:villa": "tsx scripts/seed-villa.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

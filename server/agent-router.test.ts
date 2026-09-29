@@ -251,6 +251,15 @@ describe("admin system prompt configuration", () => {
 });
 
 describe("Mastervillage controller", () => {
+  it("starts the assistant by default so chat works after sign-in", async () => {
+    const caller = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await expect(caller.agent.status()).resolves.toMatchObject({
+      state: "RUNNING",
+    });
+  });
+
   it("allows the administrator to start and stop the global controller", async () => {
     const caller = appRouter.createCaller(
       createContext("admin", "admin@example.com")

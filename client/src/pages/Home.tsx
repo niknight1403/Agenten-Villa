@@ -1,8 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useDashboardTheme } from "@/contexts/DashboardThemeContext";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { trpc } from "@/lib/trpc";
 import {
   Archive,
@@ -70,6 +72,7 @@ export default function Home() {
     redirectOnUnauthenticated: true,
     redirectPath: "/login",
   });
+  const { theme, themes, setTheme } = useDashboardTheme();
   const statusQuery = trpc.agent.status.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
@@ -82,6 +85,21 @@ export default function Home() {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
   });
+  // The chat needs a villa. If a signed-in user has none, create the default
+  // project villa once so they can start immediately instead of hitting a
+  // dead end. A ref guards against React StrictMode double-invocation.
+  const starterVillaRequested = useRef(false);
+  const ensureStarterMutation = trpc.villa.ensureStarter.useMutation({
+    onSuccess: () => villaListQuery.refetch(),
+    onError: error => toast.error(error.message),
+  });
+  useEffect(() => {
+    if (!isAuthenticated || villaListQuery.isLoading) return;
+    if (!villaListQuery.data || villaListQuery.data.length > 0) return;
+    if (starterVillaRequested.current) return;
+    starterVillaRequested.current = true;
+    ensureStarterMutation.mutate();
+  }, [isAuthenticated, villaListQuery.isLoading, villaListQuery.data, ensureStarterMutation]);
   const createVillaMutation = trpc.villa.create.useMutation({
     onSuccess: () => villaListQuery.refetch(),
   });
@@ -387,7 +405,7 @@ export default function Home() {
   const agentRunning = statusQuery.data?.state === "RUNNING";
 
   return (
-    <main className="villa-app">
+    <main className={`villa-app theme-${theme}`} data-theme={theme}>
       <header className="app-header">
         <button
           className="icon-button nav-menu"
@@ -426,6 +444,7 @@ export default function Home() {
         </button>
         {!isWorkshop && (
           <nav className="header-tools" aria-label="Werkzeuge">
+            <ThemeSwitcher />
             <button
               className="icon-button"
               aria-label="Projekt-Werkstatt"
@@ -807,7 +826,6 @@ export default function Home() {
                 aria-label="Nachricht an den Superagenten"
                 disabled={
                   !isAuthenticated ||
-                  !agentRunning ||
                   chatMutation.isPending ||
                   Boolean(activeVilla?.archivedAt)
                 }
@@ -867,6 +885,14 @@ export default function Home() {
                 </button>
               )}
             </form>
+            {!agentRunning && statusQuery.data && (
+              <p className="composer-stopped" role="status">
+                Der Superagent ist gestoppt.{" "}
+                {statusQuery.data.isAdmin
+                  ? "Starte ihn über den Schalter oben."
+                  : "Bitte den Administrator, ihn zu starten."}
+              </p>
+            )}
             {isAuthenticated && (
               <label className="fallback-consent">
                 <input
@@ -954,6 +980,31 @@ export default function Home() {
               <Plus size={18} /> Neue Villa
             </button>
             <div className="drawer-spacer" />
+            <div className="drawer-theme" aria-label="Dashboard-Design">
+              <span className="theme-menu-title">Design wählen</span>
+              {themes.map(option => (
+                <button
+                  key={option.id}
+                  role="menuitemradio"
+                  aria-checked={option.id === theme}
+                  className={`theme-option${option.id === theme ? " selected" : ""}`}
+                  onClick={() => setTheme(option.id)}
+                >
+                  <span className="theme-swatch" aria-hidden="true">
+                    {option.swatch.map((color, index) => (
+                      <i key={index} style={{ background: color }} />
+                    ))}
+                  </span>
+                  <span className="theme-option-copy">
+                    <strong>{option.name}</strong>
+                    <small>{option.tagline}</small>
+                  </span>
+                  {option.id === theme && (
+                    <Check className="theme-option-check" size={16} />
+                  )}
+                </button>
+              ))}
+            </div>
             <button
               className="drawer-link"
               onClick={() => {

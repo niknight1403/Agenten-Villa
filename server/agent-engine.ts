@@ -80,8 +80,18 @@ export const ELITE_LIMITS = {
   completionNudges: 2,
 } as const;
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const HUGGINGFACE_URL = "https://router.huggingface.co/v1/chat/completions";
+
+/**
+ * OpenRouter endpoint. Defaults to the public API; OPENROUTER_BASE_URL may
+ * point at a self-hosted gateway or a local test double (no trailing path).
+ */
+function openRouterUrl(): string {
+  const base = process.env.OPENROUTER_BASE_URL?.trim();
+  return base
+    ? `${base.replace(/\/+$/, "")}/chat/completions`
+    : "https://openrouter.ai/api/v1/chat/completions";
+}
 const HF_MODEL = "google/gemma-2-2b-it";
 const SYSTEM =
   "Du bist der Agenten-Villa-Assistent. Erledige genau einen begrenzten Zyklus: planen, transformieren, prüfen und einmal verbessern. Behaupte nicht, Dateien geändert, Tests ausgeführt, Repositories gelesen oder externe Werkzeuge verwendet zu haben. Hier gibt es keinen GitHub- oder Shell-Zugriff, außer GitHub-Werkzeuge werden in dieser Anfrage ausdrücklich aktiviert. Liefere Vorschläge statt behaupteter Aktionen. Keine Endlosschleifen.";
@@ -264,7 +274,7 @@ async function callWithFreeModelChain(
     try {
       const completion = await callProvider(
         fetcher,
-        OPENROUTER_URL,
+        openRouterUrl(),
         key,
         models[attempt],
         messages,

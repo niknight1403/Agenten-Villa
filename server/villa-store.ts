@@ -113,6 +113,25 @@ export async function createVilla(input: {
 }
 
 /**
+ * Default workspace for a user who has none yet, so the chat is usable
+ * immediately after sign-in. It is a normal villa (same limits and audit
+ * trail) preconfigured for project development with the superagent.
+ */
+export const STARTER_VILLA = {
+  name: "Projekt-Villa",
+  specialty: "Projektentwicklung",
+  icon: "villa" as const,
+  capacity: 8,
+  description: "Start-Villa für die Projektentwicklung mit dem Superagenten.",
+  projectBrief:
+    "Entwickle ein neues Softwareprojekt Schritt für Schritt: analysiere die Anforderungen, entwirf eine Architektur, implementiere die Kernfunktionen und liefere Tests sowie Dokumentation.",
+} as const;
+
+export async function ensureStarterVilla(userId: number): Promise<Villa> {
+  return createVilla({ createdBy: userId, ...STARTER_VILLA });
+}
+
+/**
  * Sprint 013 — Audit-Eintrag innerhalb derselben Transaktion wie die Änderung.
  */
 async function recordVillaEvent(

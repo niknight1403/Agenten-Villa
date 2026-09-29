@@ -424,3 +424,29 @@ describe("villa router validation and ownership", () => {
     });
   });
 });
+
+describe("starter villa for an empty account", () => {
+  it("creates the default project villa for the calling user", async () => {
+    const spy = vi
+      .spyOn(store, "ensureStarterVilla")
+      .mockResolvedValue({ ...villa, id: 8, name: "Projekt-Villa", specialty: "Projektentwicklung" });
+    const result = await caller.villa.ensureStarter();
+    expect(result.name).toBe("Projekt-Villa");
+    expect(spy).toHaveBeenCalledWith(17);
+  });
+
+  it("exposes a starter villa configured for project development", () => {
+    expect(store.STARTER_VILLA.specialty).toBe("Projektentwicklung");
+    expect(store.STARTER_VILLA.icon).toBe("villa");
+    expect(store.STARTER_VILLA.projectBrief).toContain("Softwareprojekt");
+  });
+
+  it("maps the villa limit to a clear FORBIDDEN error", async () => {
+    vi.spyOn(store, "ensureStarterVilla").mockRejectedValue(
+      new store.VillaLimitError(20)
+    );
+    await expect(caller.villa.ensureStarter()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
