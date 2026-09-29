@@ -23,11 +23,13 @@ permissions:
   contents: write
 
 concurrency:
-  # Serialisiert Runs pro PR, bricht aber NIE laufende Reviews ab:
-  # Bot-Kommentare (z. B. CodeRabbit) feuern issue_comment-Events in
-  # dieselbe Gruppe und haben mit cancel-in-progress den laufenden
-  # Review immer abgebrochen, bevor er fertig wurde.
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  # Serialisiert Runs pro PR, bricht aber NIE laufende Reviews ab.
+  # Bot-Events (z. B. CodeRabbit-Kommentare) bekommen eine EIGENE Gruppe
+  # mit Suffix: GitHub ersetzt bei cancel-in-progress: false zwar laufende
+  # Runs nicht, verdraengt aber den pendierenden Run der Gruppe — Bot-
+  # issue_comment-Events haben so den synchronize-Review von PR #21
+  # gecancelt, bevor er startete. Ohne Suffix wuerde das weiter passieren.
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}${{ github.event.sender.type == 'Bot' && '-bots' || '' }}
   cancel-in-progress: false
 
 jobs:
