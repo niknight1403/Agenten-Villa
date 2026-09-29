@@ -50,6 +50,13 @@
       "when": 1790625964669,
       "tag": "0006_broken_wolf_cub",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790641546173,
+      "tag": "0007_demo_consent_crm",
+      "breakpoints": true
     }
   ]
 }

@@ -137,3 +137,27 @@ export const villaMessages = pgTable("villa_messages", {
 
 export type VillaMessage = typeof villaMessages.$inferSelect;
 export type InsertVillaMessage = typeof villaMessages.$inferInsert;
+
+/** Inbound demo requests are private CRM data; only administrators may read them. */
+export const demoRequests = pgTable("demo_requests", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  company: varchar("company", { length: 120 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  projectIdea: text("projectIdea").notNull(),
+  consentedAt: timestamp("consentedAt").notNull(),
+  consentVersion: varchar("consentVersion", { length: 32 }).notNull(),
+  consentText: text("consentText").notNull(),
+  status: varchar("status", { length: 16 }).$type<"new" | "contacted" | "closed" | "opted_out">().default("new").notNull(),
+  optedOutAt: timestamp("optedOutAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => [index("demo_requests_createdAt_idx").on(table.createdAt)]);
+
+export type DemoRequest = typeof demoRequests.$inferSelect;
+
+/** Separate suppression list: prevents new inquiries from reactivating contact. */
+export const demoContactOptOuts = pgTable("demo_contact_opt_outs", {
+  email: varchar("email", { length: 320 }).primaryKey(),
+  optedOutAt: timestamp("optedOutAt").defaultNow().notNull(),
+});

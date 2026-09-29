@@ -18,7 +18,8 @@ for attempt in {1..9}; do
     # Dismiss only that launcher dialog, then inspect the actual foreground UI.
     if grep -q 'Quickstep.*responding' villa-ui.xml; then
       adb shell input tap 350 1330
-      continue
+      # UIAutomator can keep the dismissed dialog in its last XML dump even
+      # after the app becomes visible. Check a fresh screenshot below.
     fi
     if grep -Eq 'Willkommen zurück|Mit Google anmelden|Agenten Villa|Agenten-Villa|Erste Villa erstellen' villa-ui.xml; then
       ready=1
