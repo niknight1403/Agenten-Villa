@@ -384,7 +384,9 @@ export const agentRouter = router({
     .input(z.object({ apiKey: z.string().trim().min(8).max(512) }))
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user);
-      consumeCredentialCheck(ctx.user.id);
+      // Administrators have no local application limit; the endpoint stays
+      // admin-only and each call still hits the provider's own policy.
+      if (!isAdmin(ctx.user)) consumeCredentialCheck(ctx.user.id);
       const status = await verifyOpenRouterKey(input.apiKey);
       return {
         status,
