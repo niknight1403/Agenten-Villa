@@ -6,6 +6,7 @@ name: PR Agent (Gemini)
 # Ersetzt eine CodeRabbit-Anmeldung: kein externes Konto, keine GitHub App.
 # - Bei neuen PRs und bei jedem neuen Commit auf einem offenen PR laeuft
 #   automatisch /describe, /review und /improve (synchronize-Trigger).
+# - Bot-Pushs (z. B. Dependabot) bleiben weiterhin ausgespart.
 # - In jedem PR sind interaktive Kommentare moeglich: /review, /improve,
 #   /ask "...", /describe, /update_changelog.
 # - PRs von Bots (z. B. Dependabot) werden vom Sender-Guard uebersprungen
