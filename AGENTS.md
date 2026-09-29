@@ -21,7 +21,7 @@ Warnung ("Unsupported engine"), Typecheck/Tests/Build laufen trotzdem sauber.
 
 ```bash
 pnpm check   # tsc --noEmit
-pnpm test    # vitest — erwartet 149 passed / 4 skipped
+pnpm test    # vitest — erwartet 169 passed / 4 skipped
 pnpm build   # vite + esbuild
 pnpm validate # check + test + build + git diff --check
 ```
@@ -70,6 +70,21 @@ Vier wählbare Dashboard-Designs liegen in `client/src/styles/themes.css` und we
 `DashboardThemeProvider` (`client/src/contexts/DashboardThemeContext.tsx`) gesteuert. Die
 Theme-Klasse `theme-<id>` sitzt auf `.villa-app`; ohne Klasse gilt weiter das bisherige
 Design. Die Wahl wird in `localStorage["villa-dashboard-theme"]` gespeichert.
+
+## Nativer Google-Sign-In (Android)
+
+Der native Login läuft über `@codetrix-studio/capacitor-google-auth`. Zwei Fallstricke:
+
+- **Scopes müssen ein String sein**, kein Array. `GoogleAuth.java` liest sie mit
+  `getConfig().getString("scopes")`; ein Array erzeugt eine `JSONException`, der Default
+  `""` greift, und `new Scope("")` wirft `IllegalArgumentException` — Capacitor reicht das
+  als `RuntimeException` weiter und der App-Prozess stirbt (Absturz beim Antippen von
+  „Anmelden"). Der TS-Typ `InitOptions.scopes` ist irreführend als `string[]` deklariert.
+  `server/native-google-auth-config.test.ts` sichert das ab.
+- **Android-OAuth-Client nötig**: im Google-Cloud-Projekt muss ein Android-Client für
+  `de.niknight1403.agentenvilla` mit dem SHA-1 des installierten APKs liegen. Fehlt er,
+  meldet Google Code 10 (`DEVELOPER_ERROR`). Fingerprints beider Keystores und die
+  Einrichtung stehen in `docs/APK.md`.
 
 ## Konventionen
 
