@@ -16,6 +16,10 @@ const config: CapacitorConfig = {
       // requestIdToken im nativen Google-Sign-In. Die Android-Client-ID mit
       // SHA-1-Fingerprint muss im selben Google-Cloud-Projekt existieren.
       clientId: "656137332727-2i47bqt2fk359nj48tc0kdfl3mhjmoo1.apps.googleusercontent.com",
+      // Muss ein String sein, kein Array: GoogleAuth.java liest diesen Wert mit
+      // getString("scopes"). Ein Array liefert dort den Default "", woraus
+      // scopeArray = [""] und new Scope("") folgt — das beendet den Prozess.
+      scopes: "profile,email",
     },
   },
   android: {
