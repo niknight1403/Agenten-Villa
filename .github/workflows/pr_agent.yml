@@ -4,7 +4,8 @@ name: PR Agent (Gemini)
 # Repo-Secret GEMINI_API_KEY (Google AI Studio, Kontingent kostenlos).
 # Portiert aus dem CyberSarah-Control-Center (dort seit Sprint 92 bewaehrt).
 # Ersetzt eine CodeRabbit-Anmeldung: kein externes Konto, keine GitHub App.
-# - Bei neuen PRs laeuft automatisch /describe, /review und /improve.
+# - Bei neuen PRs und bei jedem neuen Commit auf einem offenen PR laeuft
+#   automatisch /describe, /review und /improve (synchronize-Trigger).
 # - In jedem PR sind interaktive Kommentare moeglich: /review, /improve,
 #   /ask "...", /describe, /update_changelog.
 # - PRs von Bots (z. B. Dependabot) werden vom Sender-Guard uebersprungen
@@ -12,7 +13,7 @@ name: PR Agent (Gemini)
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
 
 permissions:
@@ -48,7 +49,7 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]'
           # Projektkonventionen (Deutsch, Repo-Stil):
           pr_reviewer.extra_instructions: "Das Projekt nutzt deutsche, konventionelle Commit- und PR-Titel ('fix(build-apk): ...', 'docs: ...'). Antworte auf Deutsch. Achte auf: keine Secrets im Code, Node 22 + pnpm (nicht npm/yarn), Neon-Postgres via drizzle-orm als Datenbank (drizzle/schema.ts ist Quelle der Wahrheit), Deploy als Render-Web-Service (kein Docker), android/ ist Quelle der Wahrheit fuer Natives."
           pr_description.extra_instructions: "Beschreibe den PR auf Deutsch, klar und sachlich, passend zum Stil der Doku in docs/."
