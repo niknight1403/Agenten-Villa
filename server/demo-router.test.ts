@@ -22,6 +22,11 @@ describe("demo request privacy and consent", () => {
     expect(containsDemoSubmission("/agent.status,demo.submit")).toBe(true);
     expect(containsDemoSubmission("/demo.submit%2Cagent.status")).toBe(true);
     expect(containsDemoSubmission("/demo.list")).toBe(false);
+    // Regression (PR-Agent): ein fuehrender Slash in spaeteren Batch-Positionen
+    // darf den Limiter nicht umgehen.
+    expect(containsDemoSubmission("agent.status,/demo.submit")).toBe(true);
+    expect(containsDemoSubmission("/agent.status, /demo.submit ,x")).toBe(true);
+    expect(containsDemoSubmission("agent.status,/demo.submitx")).toBe(false);
   });
   it("never exposes the lead list or status mutation to anonymous and regular users", async () => {
     const list = vi.spyOn(store, "listDemoRequests").mockResolvedValue([]);

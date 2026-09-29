@@ -4,6 +4,7 @@ import { appRouter } from "./routers";
 import { resetAgentRouterForTests } from "./agent-router";
 import type { TrpcContext } from "./_core/context";
 import * as missionStore from "./elite-mission-store";
+import * as missionDb from "./db";
 import * as agentEngine from "./agent-engine";
 
 const prompt = "Erstelle eine konkrete Projektänderung";
@@ -52,5 +53,24 @@ describe("durable elite mission boundary", () => {
     expect(provider).toHaveBeenCalledTimes(1);
     await expect(appRouter.createCaller(context("user")).agent.eliteMissionRuns())
       .rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("interrupt sweep throttling (PR-Agent)", () => {
+  it("fires the expiry sweep at most once per 30 seconds", async () => {
+    missionStore.resetInterruptSweepForTests();
+    const sweeps: number[] = [];
+    const chain = { set: () => chain, where: () => { sweeps.push(Date.now()); return Promise.resolve(); } };
+    vi.spyOn(missionDb, "getDb").mockResolvedValue({ update: () => chain } as never);
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    await missionStore.interruptExpiredRuns();
+    await missionStore.interruptExpiredRuns();
+    expect(sweeps.length).toBe(1);
+    vi.setSystemTime(1_000_000 + 30_001);
+    await missionStore.interruptExpiredRuns();
+    expect(sweeps.length).toBe(2);
+    vi.useRealTimers();
+    missionStore.resetInterruptSweepForTests();
   });
 });
