@@ -99,3 +99,47 @@ docker compose down
 Beide Instanzen koennen kurz parallel laufen (gleiche Neon-DB). Nach dem
 Live-Check der Server-Instanz den Render-Service als Fallback behalten oder
 loeschen; die alte Render-URL kann danach abgeschaltet werden.
+
+## Übergang: Server mit bestehendem OpenHands (Hetzner, cybersarah-ki.com)
+
+Auf dem Hetzner-Server laeuft bereits ein OpenHands-Stack mit eigenem Caddy auf
+Port 443. Die Villa uebernimmt die Domain, OpenHands wird gestoppt und bleibt als
+Container erhalten.
+
+### 1. Bestehende Stacks ansehen und OpenHands stoppen
+
+```bash
+# Welche Compose-Stacks laufen wo?
+docker compose ls
+
+# OpenHands-Stack stoppen (im Verzeichnis des Stacks, Namen aus obiger Liste):
+cd <openhands-stack-verzeichnis>
+docker compose stop          # Container bleiben erhalten
+
+# Falls der Caddy dahinter ein eigener systemd-Dienst ist:
+systemctl stop caddy 2>/dev/null || systemctl stop docker-openhands-caddy 2>/dev/null
+```
+
+### 2. Villa ausrollen (siehe Schritt 3 oben)
+
+```bash
+cd ~
+git clone -b agent/server-deploy-cybersarah https://github.com/niknight1403/Agenten-Villa.git
+cd Agenten-Villa/deploy
+cp .env.example .env && nano .env
+docker compose up -d --build
+```
+
+Der Caddy dieses Stacks belegt jetzt 80/443 und besorgt das Zertifikat fuer
+cybersarah-ki.com.
+
+### 3. OpenHands spaeter wieder hochfahren (optional, eigene Subdomain)
+
+```bash
+cd <openhands-stack-verzeichnis>
+docker compose start
+```
+
+Damit die Domain-Kollision vermieden wird, vorher in dessen Caddyfile eine eigene
+Subdomain (z.B. hands.cybersarah-ki.com) eintragen und den DNS-A-Record dafuer
+im Hetzner-DNS-Panel setzen.
