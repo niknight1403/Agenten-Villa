@@ -191,9 +191,13 @@ export function createGitHubClient(deps: GitHubDependencies = {}) {
     }
     if (name === "github_check_runs") {
       const ref = args.ref ?? defaultBranch;
-      const data = await request<any>("GET", `/commits/${encodeURIComponent(ref)}/check-runs?per_page=50`);
+      // Pin the observation to an immutable commit, not a moving branch name.
+      const commit = await request<any>("GET", `/commits/${encodeURIComponent(ref)}`);
+      const sha = typeof commit.sha === "string" && /^[a-f0-9]{40}$/i.test(commit.sha) ? commit.sha : null;
+      if (!sha) throw new GitHubToolError("INVALID", "GitHub lieferte keinen gültigen Commit für die CI-Prüfung.");
+      const data = await request<any>("GET", `/commits/${sha}/check-runs?per_page=100&filter=latest`);
       const rows = Array.isArray(data.check_runs) ? data.check_runs : [];
-      return { tool: name, result: { ref, total: data.total_count ?? rows.length, checks: rows.map((row: any) => ({ name: row.name, status: row.status, conclusion: row.conclusion ?? null, startedAt: row.started_at ?? null, completedAt: row.completed_at ?? null, url: row.html_url ?? row.details_url ?? null })) } };
+      return { tool: name, result: { ref, sha, total: data.total_count ?? rows.length, complete: (data.total_count ?? rows.length) === rows.length, checks: rows.map((row: any) => ({ name: row.name, sha: row.head_sha ?? null, status: row.status, conclusion: row.conclusion ?? null, startedAt: row.started_at ?? null, completedAt: row.completed_at ?? null, url: row.html_url ?? row.details_url ?? null })) } };
     }
     if (name === "github_create_issue") {
       const row = await request<any>("POST", "/issues", { title: args.title, body: args.body });

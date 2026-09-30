@@ -1,3 +1,4 @@
+import { assessForgeChecks, buildForgePlan, forgeContext, type ForgeOptions, type ForgePlan, type ForgeVerification } from "../shared/forge";
 import { githubTools } from "./github-tools";
 import { DEFAULT_VILLA_ID, getVillaSystemContext } from "./agent-villa";
 import {
@@ -33,6 +34,8 @@ export type AgentInput = {
   specialty: string;
   /** Administrator-defined replacement for the default persona prompt. */
   systemOverride?: string | null;
+  /** Explicit mission-local, persisted structured context. */
+  forge?: ForgeOptions;
 };
 export type AgentResult = {
   answer: string;
@@ -342,6 +345,7 @@ function makeMessages(
       role: m.role,
       content: m.content.slice(0, historyChars),
     })),
+    ...(elite && input.forge ? [{ role: "user" as const, content: forgeContext(input.forge) }] : []),
     { role: "user", content: input.prompt.trim().slice(0, promptLimit) },
   ];
 }
@@ -713,8 +717,8 @@ export async function runAutonomousProjectWithGitHub(
   input: AgentInput,
   executeTool: AgentToolExecutor,
   deps: Dependencies = {}
-) {
-  return runGitHubToolLoop(input, executeTool, deps, {
+): Promise<Awaited<ReturnType<typeof runGitHubToolLoop>> & { forgePlan?: ForgePlan; verification?: ForgeVerification }> {
+  const result = await runGitHubToolLoop(input, executeTool, deps, {
     elite: true,
     maxActions: ELITE_LIMITS.githubActionsPerMission,
     maxRounds: ELITE_LIMITS.githubToolRounds,
@@ -722,6 +726,20 @@ export async function runAutonomousProjectWithGitHub(
     timeoutMs: ELITE_LIMITS.timeoutMs,
     completionNudges: ELITE_LIMITS.completionNudges,
   });
+  if (!input.forge) return result;
+  let verification = assessForgeChecks(null, result.branch ?? "");
+  let actions = result.githubActions;
+  // A final read fits INSIDE the same 24-action budget. No polling, restarts,
+  // workflow changes, provider calls or fabricated execution evidence.
+  if (result.pullRequestOpened && result.branch && actions < ELITE_LIMITS.githubActionsPerMission) {
+    if (!deps.beforeFallback || await deps.beforeFallback()) {
+      actions += 1;
+      try {
+        verification = assessForgeChecks(await executeTool("github_check_runs", { ref: result.branch }), result.branch);
+      } catch { /* preserve honest not_checked, never hide an unverified result */ }
+    }
+  }
+  return { ...result, githubActions: actions, forgePlan: buildForgePlan(input.forge), verification };
 }
 
 export function safeAgentError(error: unknown) {
