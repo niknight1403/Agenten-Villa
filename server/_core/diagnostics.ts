@@ -27,6 +27,14 @@ export function integrationStatus(
       configured: Boolean(env.OPENROUTER_API_KEY?.trim()),
     },
     {
+      name: "Groq-Failover (GROQ_API_KEY, optional)",
+      configured: Boolean(env.GROQ_API_KEY?.trim()),
+    },
+    {
+      name: "Gemini-Failover (GEMINI_API_KEY, optional)",
+      configured: Boolean(env.GEMINI_API_KEY?.trim()),
+    },
+    {
       name: "Hugging-Face-Fallback (HF_TOKEN, optional)",
       configured: Boolean(env.HF_TOKEN?.trim()),
     },

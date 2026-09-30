@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentError, LIMITS, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
+import { AgentError, LIMITS, resetProviderChainForTests, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
 import { resetProviderGuardianForTests } from "./provider-guardian";
 
 const input = { prompt: "Erstelle einen kurzen Plan", history: [], mode: "home" as const, specialty: "Generalist" };
@@ -7,7 +7,7 @@ const workshopInput = { ...input, prompt: "Zeige den Repo-Überblick", mode: "wo
 const reply = (status: number, model = "free-test") => new Response(JSON.stringify({ model, choices: [{ message: { content: "1. Ziel festlegen. 2. Ergebnis prüfen." } }] }), { status, headers: { "Content-Type": "application/json" } });
 const toolReply = (id: string, name: string, args: unknown) => new Response(JSON.stringify({ model: "free-tool-model", choices: [{ message: { content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); });
 
 describe("bounded provider router", () => {
   it("calls OpenRouter Free once and returns provider metadata", async () => {
@@ -18,11 +18,11 @@ describe("bounded provider router", () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
   });
 
-  it("never falls back on exhausted provider quota", async () => {
+  it("keeps Hugging Face consent-gated: no HF fallback without explicit opt-in", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     vi.stubEnv("HF_TOKEN", "hf-test-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(429));
-    await expect(runAgentTurn(input, true, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -104,7 +104,7 @@ describe("free-tier optimization (cache, dedupe, model chain)", () => {
     vi.stubEnv("OPENROUTER_MODELS", "model-a:free,model-b:free");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(402));
     await expect(runAgentTurn(input, true, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -210,5 +210,56 @@ describe("admin system prompt override", () => {
     const body = JSON.parse((fetcher.mock.calls[0]?.[1] as RequestInit).body as string) as { messages: Array<{ content: string }> };
     expect(body.messages[0]?.content).toContain("Override-Modus");
     expect(body.messages[0]?.content).toContain("GitHub-Werkzeuge sind für diese Anfrage aktiviert");
+  });
+});
+
+describe("multi-provider failover chain", () => {
+  it("fails over from OpenRouter to Groq when the free quota is exhausted", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(reply(429))
+      .mockResolvedValueOnce(reply(200, "groq-model-live"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "groq",
+      model: "groq-model-live",
+      attempts: 2,
+    });
+    expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("skips a provider with an invalid key and answers via the next one", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-invalid");
+    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(reply(429))
+      .mockResolvedValueOnce(reply(401))
+      .mockResolvedValueOnce(reply(200, "gemini-model-live"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "gemini",
+      attempts: 3,
+    });
+    expect(fetcher.mock.calls[2]?.[0]).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+  });
+
+  it("treats a content rejection as terminal and does not shop around providers", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(reply(400));
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({ code: "REJECTED" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a GitHub tool loop through Groq when the OpenRouter quota is gone", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(reply(429))
+      .mockResolvedValueOnce(reply(200, "groq-tool-model"));
+    const executeTool = vi.fn(async () => ({ ok: true }));
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    expect(result).toMatchObject({ provider: "groq", model: "groq-tool-model" });
+    expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 });

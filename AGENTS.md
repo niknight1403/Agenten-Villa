@@ -64,6 +64,30 @@ Harte Grenze: Der Wächter erzeugt keine Token, rotiert keine Schlüssel und umg
 Anbieterkontingente. „Elite/Unlimited" heißt ausschließlich: kein lokales Villa-Kontingent.
 Es gibt bewusst kein `limit-bypass`-Pack — `agent-villa.test.ts` prüft das.
 
+## Multi-Provider-Failover
+
+`server/agent-engine.ts` (Funktion `callWithProviderChain`) ruft die Anbieter in
+festgelegter Reihenfolge auf: **OpenRouter -> Groq -> Gemini**; Hugging Face bleibt
+ein willentlicher, einwilligungsgebundener Chat-Fallback (`allowHuggingFaceFallback`).
+
+- Ziel: Erschöpft EIN freies Tageskontingent, wechselt die Kette automatisch zum
+  nächsten Anbieter und nutzt ausschließlich **dessen eigenes** Kontingent. Kein
+  Anbieter wird umgangen, nichts wird als unbegrenzt vorgetäuscht.
+- Fehlerklassen: `LIMIT` (429/402) und `UNAVAILABLE`/`INVALID_RESPONSE` führen zum
+  nächsten Modell bzw. Anbieter; `AUTH` spart den ganzen Anbieter aus (30 Min
+  prozesslokaler Cooldown, danach fail-closed neu probiert); `REJECTED` ist
+  terminal — Ablehnungen werden nicht durch Anbietertausch umgangen.
+- Vor jedem Anbieterwechsel fragt die Kette `beforeFallback` (Elite-Lease/Stopp-Schutz).
+- Env: `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `HF_TOKEN` (alle
+  außer OpenRouter optional); Modellketten via `OPENROUTER_MODELS`, `GROQ_MODELS`,
+  `GEMINI_MODELS`, `HF_MODEL` überschreibbar (`server/provider-endpoints.ts`).
+- Der GitHub-Werkzeug-Loop (inkl. Elite-Missionen) nutzt dieselbe Kette, aber ohne
+  Hugging Face (die Einwilligung ist ein Chat-Attribut und existiert dort nicht).
+- tRPC-Status: `agent.status` zeigt `providers` mit konfigurierten Anbietern;
+  `providerRouting` (agent-villa) wählt die aktive Route entsprechend.
+- Tests: `server/agent-engine.test.ts` (`multi-provider failover chain`) — bei
+  Änderungen `resetProviderChainForTests()` in `afterEach` aufrufen.
+
 ## Design-Themes
 
 Vier wählbare Dashboard-Designs liegen in `client/src/styles/themes.css` und werden über
