@@ -26,6 +26,14 @@ export type CapabilityPack = {
 
 export const CAPABILITY_PACKS: readonly CapabilityPack[] = [
   {
+    id: "villaforge-mission-planner",
+    name: "VillaForge Missionsplanung",
+    kind: "feature",
+    description: "Offline-Arbeitsplan mit Rollen, OPTIMIZE/REBUILD, optionalem BUSINESS/GROWTH-Review, missionslokalem strukturiertem Gedächtnis und commitgebundenem CI-Befund. Keine zusätzlichen Worker oder Shell-Rechte.",
+    enabledByDefault: true,
+    administratorOnly: true,
+  },
+  {
     id: "agent-orchestration",
     name: "Agenten-Orchestrierung",
     kind: "feature",

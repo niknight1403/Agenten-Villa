@@ -1,3 +1,4 @@
+import type { ForgeOptions } from "../shared/forge";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, lt, notInArray, sql } from "drizzle-orm";
 import { eliteMissionRuns, type EliteMissionRun } from "../drizzle/schema";
@@ -9,6 +10,7 @@ export type SavedMissionInput = {
   mode: "workshop";
   specialty: string;
   systemOverride?: string | null;
+  forge?: ForgeOptions;
 };
 
 const activeRuns = new Set<number>();

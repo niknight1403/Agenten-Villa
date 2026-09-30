@@ -1,3 +1,4 @@
+import { buildForgePlan, forgeOptionsSchema } from "../shared/forge";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
@@ -168,6 +169,7 @@ const inputSchema = z
   });
 
 const eliteMissionSchema = z.object({
+  forge: forgeOptionsSchema.optional(),
   idempotencyKey: z.uuid().optional(),
   villaId: z.number().int().positive().optional(),
   prompt: z
@@ -195,6 +197,7 @@ function missionHash(input: z.infer<typeof eliteMissionSchema>) {
   return createHash("sha256").update(JSON.stringify({
     villaId: input.villaId ?? null, prompt: input.prompt,
     history: input.history, specialty: input.specialty,
+    ...(input.forge ? { forge: input.forge } : {}),
   })).digest("hex");
 }
 
@@ -401,6 +404,12 @@ export const agentRouter = router({
               : "OpenRouter ist gerade nicht erreichbar oder begrenzt Prüfungen. Es wurde nichts gespeichert.",
       } as const;
     }),
+  forgePlan: protectedProcedure
+    .input(forgeOptionsSchema)
+    .query(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      return buildForgePlan(input);
+    }),
   eliteMission: protectedProcedure
     .input(eliteMissionSchema)
     .mutation(async ({ ctx, input }) => {
@@ -455,6 +464,7 @@ export const agentRouter = router({
           history: input.history,
           mode: "workshop" as const,
           specialty: input.specialty,
+          ...(input.forge ? { forge: input.forge } : {}),
           ...(adminSystemPrompt
             ? { systemOverride: adminSystemPrompt }
             : {}),

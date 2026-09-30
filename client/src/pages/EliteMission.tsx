@@ -1,3 +1,5 @@
+import { ForgeMissionPanel } from "@/components/ForgeMissionPanel";
+import type { ForgeOptions, ForgeVerification } from "@shared/forge";
 import { FormEvent, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -28,6 +30,7 @@ export default function EliteMission() {
   const villasQuery = trpc.villa.list.useQuery(undefined, { enabled: isAuthenticated });
   const selectedVilla = villasQuery.data?.find(villa => villa.id === villaId);
   const [prompt, setPrompt] = useState("");
+  const [forge, setForge] = useState<ForgeOptions>({ strategy: "OPTIMIZE", productReview: false, memory: [] });
   const pendingMissionKey = useRef<{ signature: string; key: string } | null>(null);
   const [lastResult, setLastResult] = useState<{
     answer: string;
@@ -35,6 +38,7 @@ export default function EliteMission() {
     branch: string | null;
     githubActions: number;
     model: string;
+    verification?: ForgeVerification;
     pullRequest:
       | { number?: number; url?: string; branch?: string }
       | null;
@@ -65,14 +69,14 @@ export default function EliteMission() {
   const running = status?.state === "RUNNING";
   const ready =
     running &&
-    Boolean(status?.providers.openrouter) &&
+    Boolean(status?.providers.openrouter || status?.providers.groq || status?.providers.gemini) &&
     Boolean(status?.github?.configured);
 
   async function submitMission(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const objective = prompt.trim();
     if (!objective || missionMutation.isPending || restartMutation.isPending) return;
-    const signature = JSON.stringify({ objective, villaId });
+    const signature = JSON.stringify({ objective, villaId, forge });
     if (pendingMissionKey.current?.signature !== signature)
       pendingMissionKey.current = { signature, key: crypto.randomUUID() };
     setLastResult(null);
@@ -82,6 +86,7 @@ export default function EliteMission() {
         prompt: objective,
         history: [],
         specialty: "Autonomous Product Engineering",
+        forge,
         ...(villaId ? { villaId } : {}),
       });
       setLastResult({
@@ -90,6 +95,7 @@ export default function EliteMission() {
         branch: result.branch ?? null,
         githubActions: result.githubActions ?? 0,
         model: result.model,
+        verification: result.verification,
         pullRequest: result.pullRequest ?? null,
       });
       pendingMissionKey.current = null;
@@ -113,7 +119,7 @@ export default function EliteMission() {
     try {
       const result = await restartMutation.mutateAsync({ id, acknowledgeExternalChanges: true });
       setLastResult({ answer: result.answer, completed: Boolean(result.completed), branch: result.branch ?? null,
-        githubActions: result.githubActions ?? 0, model: result.model, pullRequest: result.pullRequest ?? null });
+        githubActions: result.githubActions ?? 0, model: result.model, verification: result.verification, pullRequest: result.pullRequest ?? null });
       pendingMissionKey.current = null;
       await runsQuery.refetch();
       toast.info(result.completed ? "Neuer Versuch als Draft-PR vorbereitet." : "Neuer Versuch beendet; Ergebnis prüfen.");
@@ -279,6 +285,7 @@ export default function EliteMission() {
                 placeholder="Beispiel: Entwickle aus der Agenten-Villa eine autonome Software-Projektfabrik. Analysiere zuerst den vorhandenen Code, implementiere die fehlenden Teile, ergänze Tests und Dokumentation und bereite einen Draft-PR vor."
                 disabled={missionMutation.isPending || restartMutation.isPending}
               />
+              <ForgeMissionPanel value={forge} onChange={setForge} disabled={missionMutation.isPending || restartMutation.isPending} />
               <div className="mt-3 flex items-center justify-between gap-4 text-xs text-slate-500">
                 <span>{prompt.length.toLocaleString("de-DE")} / 12.000 Zeichen</span>
                 <span>
@@ -355,18 +362,25 @@ export default function EliteMission() {
                 <h2 className="font-semibold">Mission-Pipeline</h2>
               </div>
               <ol className="mt-4 space-y-2 text-sm text-slate-400">
-                <li>1. Repository analysieren</li>
-                <li>2. Architektur & Akzeptanzkriterien</li>
-                <li>3. agent/*-Branch erstellen</li>
-                <li>4. Implementieren & refaktorieren</li>
-                <li>5. Tests & Dokumentation ergänzen</li>
-                <li>6. Änderungen selbst prüfen</li>
-                <li>7. CI-Checks beobachten</li>
+                <li>1. VillaForge-Scope & Gedächtnis</li>
+                <li>2. Repository wirklich analysieren</li>
+                <li>3. OPTIMIZE/REBUILD-Architektur</li>
+                <li>4. BUSINESS/GROWTH optional</li>
+                <li>5. agent/*-Branch implementieren</li>
+                <li>6. Tests & Dokumentation ergänzen</li>
+                <li>7. Commitgebundene CI-Checks lesen</li>
                 <li>8. Draft-PR übergeben</li>
               </ol>
             </section>
           </aside>
         </section>
+
+        {lastResult?.verification && <section className="mt-6 rounded-2xl border border-slate-700 bg-slate-900 p-5" aria-label="VillaForge CI-Befund">
+          <h2 className="font-semibold">CI-Befund: {lastResult.verification.state}</h2>
+          <p className="mt-2 text-sm text-slate-300">{lastResult.verification.detail}</p>
+          {lastResult.verification.sha && <p className="mt-1 break-all text-xs text-slate-500">Commit {lastResult.verification.sha}, {lastResult.verification.checks} Checks</p>}
+          <p className="mt-2 text-xs text-slate-500">Draft-PR vorbereitet bedeutet nicht: Anwendung vollständig live geprüft.</p>
+        </section>}
 
         <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6" aria-labelledby="recent-missions-title">
           <div className="flex items-center justify-between gap-3">

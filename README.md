@@ -10,6 +10,10 @@ Der Provider-Router wählt ausschließlich konfigurierte und erlaubte Anbieter. 
 
 **Stack:** React 19 + Vite (Client, tRPC über `@tanstack/react-query`), Express + tRPC (Server), Drizzle ORM mit PostgreSQL (`postgres-js`, Neon), pnpm als Paketmanager.
 
+## VillaForge-Missionsplanung
+
+Elite Mission Control integriert native Fähigkeiten aus `niknight1403/AgentForge` (VillaForge): Offline-Rollenplan mit OPTIMIZE/REBUILD, optionales BUSINESS/GROWTH-Review, strukturiertes missionslokales Gedächtnis und einen commitgebundenen CI-Befund. Die vorhandenen Sicherheits- und Provider-Grenzen bleiben erhalten. Ein Draft-PR ist keine grüne Live-Freigabe. Details und bewusst nicht übernommene Funktionen: [docs/VILLAFORGE.md](docs/VILLAFORGE.md).
+
 ## Umgebungsvariablen
 
 | Variable | Zweck |
