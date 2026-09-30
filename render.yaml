@@ -31,3 +31,8 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      # Oeffentliche Basis-URL der App. Pinnt die Google-Redirect-URI, damit sie
+      # unabhaengig von Proxy-Headern exakt der in der Google Cloud Console
+      # registrierten entspricht. Leer = aus den Request-Headern ableiten.
+      - key: PUBLIC_BASE_URL
+        sync: false

@@ -12,7 +12,7 @@ import { rateLimit } from "./rate-limit";
 import { demoSubmitRateLimit } from "./demoRateLimit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { logStartupDiagnostics } from "./diagnostics";
-import { registerGoogleAuthRoutes } from "./googleAuth";
+import { registerGoogleAuthRoutes, resolveTrustProxy } from "./googleAuth";
 import { registerNativeGoogleAuthRoutes } from "./nativeAuth";
 import { nativeCors } from "./nativeCors";
 import { registerStorageProxy } from "./storageProxy";
@@ -72,6 +72,13 @@ function startDatabaseHealthWatch(): void {
 
 async function startServer() {
   const app = express();
+  // Render (und jeder andere Reverse-Proxy) beendet TLS vor dem Prozess.
+  // Ohne Proxy-Vertrauen liest Express die Proxy-IP als req.ip — dann teilen
+  // sich ALLE Besucher einen einzigen Rate-Limit-Bucket (der 21. Loginversuch
+  // pro Minute wird fuer jeden blockiert) — und req.protocol bleibt "http",
+  // was das Secure-Attribut des Sitzungs-Cookies verhindern kann. Ausserhalb
+  // der Produktion bleibt das Vertrauen aus (siehe resolveTrustProxy).
+  app.set("trust proxy", resolveTrustProxy());
   const server = createServer(app);
   startDatabaseHealthWatch();
   // Configure body parser with larger size limit for file uploads

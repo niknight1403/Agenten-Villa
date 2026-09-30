@@ -16,9 +16,52 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function getRedirectUri(req: Request): string {
-  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
+/**
+ * Baut die Redirect-URI fuer Start und Token-Tausch. Beide Aufrufe muessen
+ * exakt denselben Wert liefern, sonst lehnt Google den Token-Tausch mit
+ * redirect_uri_mismatch ab. Reverse-Proxies koennen X-Forwarded-Proto/Host als
+ * Komma-Liste senden ("https, http"); ungefiltert entstuende daraus eine nicht
+ * registrierte URI. Es gilt daher immer der erste (client-naechste) Eintrag.
+ */
+function firstForwardedValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const first = raw?.split(",")[0]?.trim();
+  return first || undefined;
+}
+
+/**
+ * Vertrauensregel fuer den Reverse-Proxy. Standard in Produktion ist genau ein
+ * Hop (Render terminiert TLS vor dem Prozess); ausserhalb der Produktion keiner,
+ * damit ein lokal direkt exponierter Server keine gefaelschten
+ * X-Forwarded-* Header als Client-IP uebernimmt (Rate-Limit-Bypass).
+ * Mit TRUST_PROXY explizit ueberschreibbar (Zahl, "false" oder eine
+ * IP-/CIDR-Liste fuer Express).
+ */
+export function resolveTrustProxy(env: NodeJS.ProcessEnv = process.env): boolean | number | string {
+  const raw = env.TRUST_PROXY?.trim();
+  if (raw) {
+    if (raw === "false") return false;
+    if (raw === "true") return true;
+    const hops = Number(raw);
+    return Number.isInteger(hops) && hops >= 0 ? hops : raw;
+  }
+  return env.NODE_ENV === "production" ? 1 : false;
+}
+
+export function getRedirectUri(req: Request): string {
+  const configured = process.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  if (configured) {
+    return `${configured}/api/auth/google/callback`;
+  }
+  // req.protocol beruecksichtigt bereits app.set("trust proxy", ...).
+  const proto = firstForwardedValue(req.headers["x-forwarded-proto"]) || req.protocol;
+  const host = firstForwardedValue(req.headers["x-forwarded-host"]) || req.get("host");
+  if (!host) {
+    // Ohne Host waere die URI "https://undefined/..." — eine still falsche
+    // Weiterleitung, die Google als redirect_uri_mismatch ablehnt. Lieber laut
+    // scheitern (PUBLIC_BASE_URL setzen) als eine kaputte URI verschicken.
+    throw new Error("Cannot determine host for the Google redirect URI; set PUBLIC_BASE_URL");
+  }
   return `${proto}://${host}/api/auth/google/callback`;
 }
 

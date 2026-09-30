@@ -48,6 +48,7 @@ Das Account-System basiert auf Google OAuth 2.0 (kein separates Passwort-System,
    - Der Service heißt in `render.yaml` `agenten-villa`, d.h. Render vergibt standardmäßig **`https://agenten-villa.onrender.com`** → Redirect-URI dann exakt: `https://agenten-villa.onrender.com/api/auth/google/callback`
    - Tipp: zusätzlich `http://localhost:3000/api/auth/google/callback` als zweite Redirect-URI hinterlegen (Google erlaubt mehrere), dann funktioniert die Anmeldung auch beim lokalen Test-Server (`pnpm dev`).
    - (Name vergeben? Render hängt dann `-1`, `-2` … an die URL. Falls das passiert: einfach die angezeigte Render-URL in der Google-Konsole ergänzen.)
+   - **Wichtig:** Der Server bildet die Redirect-URI aus `PUBLIC_BASE_URL`, falls gesetzt, sonst aus den Request-Headern. Setze `PUBLIC_BASE_URL=https://agenten-villa.onrender.com`, damit die URI exakt der registrierten entspricht und der Token-Tausch nicht mit `redirect_uri_mismatch` scheitert.
 3. `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` bei Render als Umgebungsvariablen hinterlegen (werden beim Blueprint-Deploy abgefragt, `sync: false`).
 4. Fertig — der Button „Mit Google anmelden" auf `/login` funktioniert direkt.
 
@@ -78,6 +79,7 @@ Die Web-App ruft das Backend über die feste Produktions-URL `https://agenten-vi
 | `GITHUB_TOKEN` | Geschützte GitHub-Projektaktionen | ja für Elite-Missionen |
 | `HF_TOKEN` | Optionaler Modell-Fallback | nein |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-Anmeldung | ja für Anmeldung |
+| `PUBLIC_BASE_URL` | Oeffentliche Basis-URL (z. B. `https://agenten-villa.onrender.com`); pinnt die Google-Redirect-URI | empfohlen |
 | `OPENROUTER_MODELS` | Freie Modellkette (Default: `openrouter/free`) | nein |
 | `FREE_TIER_CACHE` | Antwort-Cache: Produktion default an | nein |
 | `FREE_TIER_CACHE_TTL_SECONDS` | Cache-TTL (Default 600) | nein |
