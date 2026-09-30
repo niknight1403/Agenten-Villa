@@ -120,6 +120,55 @@ Der native Login läuft über `@codetrix-studio/capacitor-google-auth`. Zwei Fal
   Dafür den Repo-Token mit `repo`-Scope verwenden.
 - Git-Flow: Änderungen auf `agent/*`-Branch, dann Draft-PR gegen `main`.
 
+## Lokale Konfiguration & Zugänge
+
+- Es gibt **keinen Passwort-Login**. Anmeldung ist ausschließlich Google OAuth
+  (`server/_core/googleAuth.ts` Web, `server/_core/nativeAuth.ts` Android). Die Passwort-Felder
+  in der UI dienen dem OpenRouter-Key-Test, nicht Konten. Ein Konto-Passwort wird nirgends geprüft.
+- Administratorzugriff läuft allein über die Allowlist `AGENT_ADMIN_EMAIL`
+  (`server/agent-router.ts` `isAdmin`, `googleAuth.ts`). Beim Google-Login erhält die passende
+  E-Mail automatisch `role=admin`; Code allein kann die Rolle nicht vergeben.
+- Lokale `.env` (gitignored, Modus 600) setzt `AGENT_ADMIN_EMAIL` und ein lokales `JWT_SECRET`;
+  `GITHUB_TOKEN` wird aus der Containerumgebung übernommen. Session-Cookie `app_session_id` ist
+  ein HS256-JWT (`{openId, appId, name}`); der Benutzer wird per `openId` aus der DB aufgelöst.
+- Actions-Secrets setzen: Das Container-`GITHUB_TOKEN` ist ein **GitHub-App-Installationstoken**
+  ohne Actions-Rechte (`actions/secrets` → 403 "Resource not accessible by integration"). Nötig ist
+  ein klassischer PAT mit `repo`-Scope (`gh secret set NAME --repo …`, Wert per stdin). Live-Test:
+  `RUN_LIVE_GITHUB_SECRET=1` in `server/github-secret.live.test.ts`.
+- `getRedirectUri()` (`server/_core/googleAuth.ts`) leitet die Callback-URI aus
+  `PUBLIC_BASE_URL` bzw. `X-Forwarded-Proto`/`Host` ab. Im Vorschau-Proxy lautet sie
+  `https://work-<n>-<id>.prod-runtime.all-hands.dev/api/auth/google/callback`; diese URI muss in
+  der Google Cloud Console als autorisierte Redirect-URI stehen, sonst scheitert der Token-Tausch
+  (`/login?error=token_exchange_failed`). `PUBLIC_BASE_URL` pinnt sie fest.
+- Google-OAuth-Client-Secret heißt in Actions `GOOGLE_CLIENT_SECRET` (war dort zuvor nicht gesetzt).
+
+## Neon (Projekt `holy-dew-30703563`)
+
+- Neon-CLI (`neon` npm-Paket, global via `sudo npm i -g neon@latest`) ist installiert. Das
+  Installation-Image setzt Root-only-Rechte (700/600) auf `/usr/local/lib/node_modules/neon` —
+  danach `sudo chmod -R a+rX` nötig, sonst findet der Nutzer die CLI nicht.
+- Auth non-interaktiv über `NEON_API_KEY` (Profil `agent`, `~/.config/neon/`). `neon login`
+  hängt im Container am Browser-Callback — stattdessen `neon profile create agent --api-key -`.
+- Org: `org-mute-art-28567781` (niko.oeben@gmail.com). Projekt `holy-dew-30703563`
+  („Agenten Villa", aws-eu-central-1, PG 18), Branch `production` = `br-patient-surf-b2u2x8gj`.
+- Verlinkung steht in `.neon` (gitignored). `neon link` hat 6 Variablen nach `.env` gezogen:
+  `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_BRANCH`, `NEON_AUTH_BASE_URL`,
+  `NEON_AUTH_JWKS_URL`, `NEON_FUNCTION_API_BASE_URL`.
+- `neon.ts` (Policy, `@neon/config` + `@neon/env` als Root-Deps) und `hello.ts` (Neon Function)
+  liegen im Repo-Root. `neon deploy` (= `config apply`) deployt die Funktion; URL:
+  `https://br-patient-surf-b2u2x8gj-api.compute.c-6.eu-central-1.aws.neon.tech/`.
+  `neon config init` scheitert beim Auto-Install, weil `pnpm` nicht im PATH ist —
+  `corepack pnpm add -w @neon/config @neon/env` nachziehen.
+- `neon.ts` nutzt das GA-Schema: `functions` steht auf oberster Ebene (nicht mehr unter
+  `preview`, das ist deprecated). `neon deploy` meldet damit keine Veraltet-Warnung mehr.
+- `neon skills -y` und `neon mcp -y` erkennen OpenHands NICHT als Coding-Agent (unterstützt sind
+  vscode, cursor, claude-code, codex, …). Skills: `-a vscode` wählen, sie landen trotzdem in
+  `{project}/.agents/skills/` (von OpenHands gelesen). MCP: `neon mcp` schreibt nur in
+  Agent-eigene Configs (z. B. `~/.config/Code/User/mcp.json`); der Server
+  `https://mcp.neon.tech/mcp` muss in OpenHands manuell als `mcp_servers` hinterlegt werden.
+- `pnpm db:push` gegen die Neon-DB angewandt (10 Tabellen). Danach meldet `/api/health`
+  `database.status: "verbunden"`.
+
 ## Wichtige Pfade
 
 - `server/` — tRPC-Router, Stores, GitHub-Tools, Provider-Router, Elite-Mission
