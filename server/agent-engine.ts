@@ -731,7 +731,7 @@ export async function runAutonomousProjectWithGitHub(
   let actions = result.githubActions;
   // A final read fits INSIDE the same 24-action budget. No polling, restarts,
   // workflow changes, provider calls or fabricated execution evidence.
-  if (result.pullRequestOpened && result.branch && actions < ELITE_LIMITS.githubActionsPerMission) {
+  if (result.pullRequestOpened && result.branch && result.pullRequest?.branch === result.branch && actions < ELITE_LIMITS.githubActionsPerMission) {
     if (!deps.beforeFallback || await deps.beforeFallback()) {
       actions += 1;
       try {
