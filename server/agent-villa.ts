@@ -331,7 +331,7 @@ export function getEliteConnectorSnapshot() {
 export type ProviderRoute = {
   provider: Provider;
   model: string;
-  reason: "primary-free" | "explicit-fallback";
+  reason: "primary-free" | "provider-failover" | "explicit-fallback";
 };
 
 /**
@@ -343,6 +343,8 @@ export function routeProvider(options: {
   openRouterConfigured: boolean;
   huggingFaceConfigured: boolean;
   allowExplicitFallback: boolean;
+  groqConfigured?: boolean;
+  geminiConfigured?: boolean;
 }): ProviderRoute | null {
   if (options.openRouterConfigured)
     return {
@@ -350,10 +352,22 @@ export function routeProvider(options: {
       model: "openrouter/free",
       reason: "primary-free",
     };
+  if (options.groqConfigured)
+    return {
+      provider: "groq",
+      model: "openai/gpt-oss-120b",
+      reason: "provider-failover",
+    };
+  if (options.geminiConfigured)
+    return {
+      provider: "gemini",
+      model: "gemini-3.8-flash",
+      reason: "provider-failover",
+    };
   if (options.allowExplicitFallback && options.huggingFaceConfigured) {
     return {
       provider: "huggingface",
-      model: "google/gemma-2-2b-it",
+      model: "meta-llama/Llama-3.3-70B-Instruct",
       reason: "explicit-fallback",
     };
   }
