@@ -64,6 +64,13 @@
       "when": 1790641905278,
       "tag": "0008_elite_mission_state",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790793849612,
+      "tag": "0009_red_skullbuster",
+      "breakpoints": true
     }
   ]
 }

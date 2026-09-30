@@ -5,15 +5,17 @@ import { publicProcedure, router } from "./_core/trpc";
 import { agentRouter } from "./agent-router";
 import { profileRouter } from "./profile-router";
 import { projectRouter } from "./project-router";
+import { testRunRouter } from "./test-run-router";
 import { villaRouter } from "./villa-router";
 import { demoRouter } from "./demo-router";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   agent: agentRouter,
   profile: profileRouter,
   project: projectRouter,
+  run: testRunRouter,
   villa: villaRouter,
   demo: demoRouter,
   auth: router({
@@ -26,7 +28,6 @@ export const appRouter = router({
       } as const;
     }),
   }),
-
 });
 
 export type AppRouter = typeof appRouter;
