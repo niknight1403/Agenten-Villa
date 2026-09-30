@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Request } from "express";
-import { getRedirectUri } from "./_core/googleAuth";
+import { getRedirectUri, resolveTrustProxy } from "./_core/googleAuth";
 
 /**
  * Regressionstest fuer den Login-Fehler "token_exchange_failed".
@@ -23,8 +23,18 @@ function req(headers: Record<string, string | string[]>, protocol = "http"): Req
   } as unknown as Request;
 }
 
-afterEach(() => {
+let savedBaseUrl: string | undefined;
+
+beforeEach(() => {
+  // Isoliert vom Prozess-Environment: ein gesetztes PUBLIC_BASE_URL wuerde
+  // sonst jeden Test auf denselben Wert zwingen.
+  savedBaseUrl = process.env.PUBLIC_BASE_URL;
   delete process.env.PUBLIC_BASE_URL;
+});
+
+afterEach(() => {
+  if (savedBaseUrl === undefined) delete process.env.PUBLIC_BASE_URL;
+  else process.env.PUBLIC_BASE_URL = savedBaseUrl;
 });
 
 describe("getRedirectUri", () => {
@@ -59,9 +69,30 @@ describe("getRedirectUri", () => {
     );
   });
 
-  it("liefert nie einen leeren Host oder eine Doppel-Schema-URI", () => {
-    const uri = getRedirectUri(req({}, "https"));
+  it("scheitert laut, statt eine URI mit 'undefined' als Host zu bauen", () => {
+    expect(() => getRedirectUri(req({}, "https"))).toThrow(/PUBLIC_BASE_URL/);
+  });
+
+  it("bildet ohne Proxy-Header nie eine Doppel-Schema-URI", () => {
+    const uri = getRedirectUri(req({ host: "example.test" }, "https"));
     expect(uri).toMatch(/^https:\/\/[^/]+\/api\/auth\/google\/callback$/);
     expect(uri).not.toContain("://https");
+  });
+});
+
+describe("resolveTrustProxy", () => {
+  it("vertraut in Produktion genau einem Hop (Render terminiert TLS)", () => {
+    expect(resolveTrustProxy({ NODE_ENV: "production" })).toBe(1);
+  });
+
+  it("vertraut ausserhalb der Produktion keinem Proxy", () => {
+    expect(resolveTrustProxy({ NODE_ENV: "development" })).toBe(false);
+    expect(resolveTrustProxy({})).toBe(false);
+  });
+
+  it("respektiert eine explizite Ueberschreibung", () => {
+    expect(resolveTrustProxy({ NODE_ENV: "production", TRUST_PROXY: "2" })).toBe(2);
+    expect(resolveTrustProxy({ NODE_ENV: "production", TRUST_PROXY: "false" })).toBe(false);
+    expect(resolveTrustProxy({ NODE_ENV: "production", TRUST_PROXY: "loopback" })).toBe("loopback");
   });
 });
