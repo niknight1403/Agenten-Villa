@@ -15,7 +15,7 @@
  */
 import {
   HUGGINGFACE_CHAT_URL,
-  HUGGINGFACE_MODEL,
+  hfModel,
   openRouterChatUrl,
   openRouterModelsUrl,
 } from "./provider-endpoints";
@@ -382,7 +382,7 @@ export function stopProviderGuardian(): void {
 export function huggingFaceFallbackDescriptor() {
   return {
     provider: "huggingface" as const,
-    model: HUGGINGFACE_MODEL,
+    model: hfModel(),
     url: HUGGINGFACE_CHAT_URL,
     configured: Boolean(process.env.HF_TOKEN?.trim()),
   };
@@ -399,3 +399,4 @@ export function resetProviderGuardianForTests(): void {
   state.lastError = null;
   state.catalogReachable = null;
 }
+
