@@ -58,7 +58,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("run router (Sprint 021)", () => {
+describe("run router (Sprint 021/022)", () => {
   it("lists only the caller's runs, newest first, bounded by limit", async () => {
     const spy = vi
       .spyOn(store, "listTestRuns")
@@ -87,13 +87,10 @@ describe("run router (Sprint 021)", () => {
     expect(spy).toHaveBeenCalledWith(3, 17);
   });
 
-  it("maps an active run to CONFLICT and foreign villas to NOT_FOUND", async () => {
-    vi.spyOn(store, "startTestRun")
-      .mockRejectedValueOnce(new store.TestRunError("ACTIVE_RUN_EXISTS"))
-      .mockRejectedValueOnce(new store.TestRunError("NOT_FOUND"));
-    await expect(caller.run.start({ villaId: 3 })).rejects.toMatchObject({
-      code: "CONFLICT",
-    });
+  it("maps foreign villas to NOT_FOUND", async () => {
+    vi.spyOn(store, "startTestRun").mockRejectedValue(
+      new store.TestRunError("NOT_FOUND")
+    );
     await expect(caller.run.start({ villaId: 99 })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -138,12 +135,12 @@ describe("run router (Sprint 021)", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("maps double finishes to CONFLICT", async () => {
+  it("maps status changes on finished runs to CONFLICT", async () => {
     vi.spyOn(store, "finishTestRun").mockRejectedValue(
-      new store.TestRunError("NOT_ACTIVE")
+      new store.TestRunError("STATUS_MISMATCH")
     );
     await expect(
-      caller.run.finish({ runId: 12, status: "succeeded" })
+      caller.run.finish({ runId: 12, status: "failed" })
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 

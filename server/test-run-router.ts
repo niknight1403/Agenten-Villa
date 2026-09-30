@@ -38,8 +38,10 @@ function storeError(error: unknown): never {
 }
 
 /**
- * Sprint 021 — Begrenzte Testläufe modellieren: Status, Startzeit, Endzeit und
- * Ergebnis werden persistiert; Start/Finish sind ownership-geprüft.
+ * Sprint 021/022 — Begrenzte Testläufe: Status, Startzeit, Endzeit und
+ * Ergebnis werden persistiert; Start und Abschluss sind idempotent —
+ * wiederholte Aufrufe liefern denselben Zustand zurück, statt einen
+ * inkonsistenten zu erzeugen.
  */
 export const testRunRouter = router({
   list: protectedProcedure
