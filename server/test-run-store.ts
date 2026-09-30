@@ -3,15 +3,12 @@ import type { VillaTestRun } from "../drizzle/schema";
 import { getDb } from "./db";
 import { villaTestRuns, villas } from "../drizzle/schema";
 
-/** Sprint 021 — Lebenszyklus eines begrenzten Villa-Testlaufs. */
+/** Sprint 021/022 — Lebenszyklus eines begrenzten Villa-Testlaufs. */
 export type TestRunStatus = "running" | "succeeded" | "failed" | "cancelled";
 
 /** Technische Gründe, die ein Store-Ergebnis verhindern; der Router mappt sie auf tRPC-Codes. */
 export class TestRunError extends Error {
-  constructor(
-    readonly reason:
-      "NOT_FOUND" | "ARCHIVED" | "ACTIVE_RUN_EXISTS" | "NOT_ACTIVE"
-  ) {
+  constructor(readonly reason: "NOT_FOUND" | "ARCHIVED" | "STATUS_MISMATCH") {
     super(`TEST_RUN_${reason}`);
   }
 }
@@ -69,9 +66,10 @@ export async function getTestRun(
 }
 
 /**
- * Sprint 021 — Begrenzten Testlauf starten: maximal EIN aktiver Lauf pro Villa,
- * archivierte Villen starten keine Läufe. Status und Startzeit werden sofort
- * persistiert, damit der Lauf Neustarts überlebt.
+ * Sprint 021/022 — Begrenzten Testlauf starten, idempotent: Läuft bereits ein
+ * Lauf auf der Villa, wird genau dieser zurückgegeben und kein zweiter erzeugt
+ * (kein inkonsistenter Zustand bei wiederholtem Start). Archivierte Villen
+ * starten keine Läufe. Villa und Lauf werden transaktional gesperrt.
  */
 export async function startTestRun(
   villaId: number,
@@ -88,7 +86,7 @@ export async function startTestRun(
     if (villa.archivedAt) throw new TestRunError("ARCHIVED");
 
     const [active] = await tx
-      .select({ id: villaTestRuns.id })
+      .select()
       .from(villaTestRuns)
       .where(
         and(
@@ -96,8 +94,9 @@ export async function startTestRun(
           eq(villaTestRuns.status, "running")
         )
       )
-      .limit(1);
-    if (active) throw new TestRunError("ACTIVE_RUN_EXISTS");
+      .limit(1)
+      .for("update");
+    if (active) return active;
 
     const [created] = await tx
       .insert(villaTestRuns)
@@ -112,9 +111,11 @@ export async function startTestRun(
 }
 
 /**
- * Sprint 021 — Lauf abschließen: Status, Endzeit und Ergebnis persistieren.
- * Nur laufende Läufe können abgeschlossen werden; wiederholte Abschlüsse
- * bleiben konsistent (NOT_ACTIVE, kein Überschreiben).
+ * Sprint 021/022 — Lauf abschließen, idempotent: Ein bereits abgeschlossener
+ * Lauf mit demselben Zielstatus wird unverändert zurückgegeben (wiederholtes
+ * Stoppen ändert nichts, erstes Ergebnis gewinnt). Ein abgeschlossener Lauf
+ * mit abweichendem Zielstatus bleibt konsistent und wirft STATUS_MISMATCH —
+ * Historie wird nie umgeschrieben. Nur laufende Läufe werden beendet.
  */
 export async function finishTestRun(input: {
   runId: number;
@@ -136,7 +137,11 @@ export async function finishTestRun(input: {
       )
       .for("update");
     if (!run) throw new TestRunError("NOT_FOUND");
-    if (run.status !== "running") throw new TestRunError("NOT_ACTIVE");
+
+    if (run.status !== "running") {
+      if (run.status === input.status) return run;
+      throw new TestRunError("STATUS_MISMATCH");
+    }
 
     const rows = await tx
       .update(villaTestRuns)
