@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
 import { router, protectedProcedure } from "./_core/trpc";
 import {
+  anyModelProviderConfigured,
   configuredProviders,
   ELITE_LIMITS,
   PROVIDER_NOTICE,
@@ -310,6 +311,8 @@ export const agentRouter = router({
         ),
         huggingFaceConfigured: Boolean(process.env.HF_TOKEN?.trim()),
         allowExplicitFallback: true,
+        groqConfigured: Boolean(process.env.GROQ_API_KEY?.trim()),
+        geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
       }),
       eliteUnlimited: admin ? getEliteUnlimitedProjection() : null,
       providerGuardian: admin ? getGuardianSnapshot() : null,
@@ -426,11 +429,11 @@ export const agentRouter = router({
           message:
             "Für autonome Projektmissionen muss GITHUB_TOKEN als geschütztes Server-Secret eingerichtet sein.",
         });
-      if (!process.env.OPENROUTER_API_KEY?.trim())
+      if (!anyModelProviderConfigured())
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:
-            "Für autonome Projektmissionen muss OPENROUTER_API_KEY als geschütztes Server-Secret eingerichtet sein.",
+            "Für autonome Projektmissionen muss mindestens ein Modellanbieter-Secret eingerichtet sein (OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY oder HF_TOKEN).",
         });
 
       try {
@@ -487,7 +490,7 @@ export const agentRouter = router({
     acknowledgeExternalChanges: z.literal(true),
   })).mutation(async ({ ctx, input }) => {
     requireAdmin(ctx.user);
-    if (controlState !== "RUNNING" || !process.env.GITHUB_TOKEN?.trim() || !process.env.OPENROUTER_API_KEY?.trim())
+    if (controlState !== "RUNNING" || !process.env.GITHUB_TOKEN?.trim() || !anyModelProviderConfigured())
       throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Agent und Provider-Zugang müssen für einen ausdrücklich neu gestarteten Versuch bereit sein." });
     try {
       const run = await restartInterruptedMission(input.id, ctx.user.id);
