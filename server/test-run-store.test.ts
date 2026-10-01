@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendRunEvent,
+  buildRunReport,
   clampRunTimeLimitSeconds,
   finishTestRun,
   listRunEvents,
@@ -752,5 +753,63 @@ describe("Wiederaufnahme-Regeln (Sprint 027)", () => {
       reason: "NOT_FOUND",
     });
     expect(tx.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe("Laufbericht (Sprint 028)", () => {
+  const now = new Date("2026-10-01T20:00:00Z");
+
+  it("compiles status, duration, phase and errors for a finished run", () => {
+    const run: VillaTestRun = {
+      ...cancelledRun,
+      startedAt: new Date("2026-10-01T19:40:00Z"),
+      endedAt: new Date("2026-10-01T19:50:20Z"),
+      phase: "result",
+      status: "cancelled",
+      cancellationKind: "technical",
+      errorCode: "TIME_LIMIT_EXCEEDED",
+    };
+    const report = buildRunReport(run, [sampleEvent], now);
+    expect(report).toMatchObject({
+      runId: run.id,
+      status: "cancelled",
+      phase: "result",
+      cancellationKind: "technical",
+      errorCode: "TIME_LIMIT_EXCEEDED",
+      durationSeconds: 620,
+      timeLimitSeconds: 600,
+      expired: true,
+    });
+    expect(report.endedAt).toEqual(run.endedAt);
+    expect(report.events).toMatchObject({ inspected: 1, info: 1 });
+  });
+
+  it("computes the running duration from now and leaves endedAt null", () => {
+    const run: VillaTestRun = {
+      ...activeRun,
+      startedAt: new Date("2026-10-01T19:55:00Z"),
+    };
+    const report = buildRunReport(run, [], now);
+    expect(report.status).toBe("running");
+    expect(report.endedAt).toBeNull();
+    expect(report.durationSeconds).toBe(300);
+    expect(report.expired).toBe(false);
+    expect(report.resumedFromRunId).toBeNull();
+  });
+
+  it("counts error and warn events and keeps the five newest messages", () => {
+    const events = [
+      { ...sampleEvent, level: "error", message: "e1" },
+      { ...sampleEvent, level: "warn", message: "w1" },
+      { ...sampleEvent, level: "error", message: "e2" },
+      { ...sampleEvent, level: "info", message: "i1" },
+      { ...sampleEvent, level: "info", message: "i2" },
+      { ...sampleEvent, level: "info", message: "i3" },
+      { ...sampleEvent, level: "info", message: "i4" },
+    ] as VillaRunEvent[];
+    const report = buildRunReport(activeRun, events, now);
+    expect(report.events).toMatchObject({ error: 2, warn: 1, info: 4 });
+    // Liste ist neueste zuerst: die fuenf aktuellen Meldungen, aktuellste zuerst
+    expect(report.events.lastMessages).toEqual(["e1", "w1", "e2", "i1", "i2"]);
   });
 });
