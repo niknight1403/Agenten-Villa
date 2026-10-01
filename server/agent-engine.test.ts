@@ -35,6 +35,26 @@ describe("bounded provider router", () => {
     expect(fetcher.mock.calls[1]?.[0]).toBe("https://router.huggingface.co/v1/chat/completions");
   });
 
+  it("follows the configured fallback order deterministically (Sprint 032)", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "gemini-key");
+    vi.stubEnv("PROVIDER_FALLBACK_ORDER", "gemini,groq");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(reply(429))
+      .mockResolvedValueOnce(reply(200, "groq-model"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "groq",
+      attempts: 2,
+    });
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    );
+    expect(fetcher.mock.calls[1]?.[0]).toBe(
+      "https://api.groq.com/openai/v1/chat/completions"
+    );
+  });
+
   it("stops clearly when the primary server key is missing", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>();

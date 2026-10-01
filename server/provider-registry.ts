@@ -93,6 +93,44 @@ export function getProviderCatalogEntry(
 }
 
 /**
+ * Sprint 032 — dokumentierte Fallback-Reihenfolge: OpenRouter -> Groq ->
+ * Gemini; Hugging Face nur nach ausdruecklicher Einwilligung (der Consent-
+ * Filter bleibt im Engine verbindlich und kann durch die Reihenfolge nicht
+ * umgangen werden).
+ */
+export const DOCUMENTED_FALLBACK_ORDER: readonly ProviderName[] = [
+  "openrouter",
+  "groq",
+  "gemini",
+  "huggingface",
+];
+
+/**
+ * Sprint 032 — deterministisch konfigurierbare Fallback-Reihenfolge.
+ * PROVIDER_FALLBACK_ORDER="gemini,openrouter" setzt die genannten Anbieter
+ * in genau dieser Reihenfolge nach vorn; ungenannte folgen in dokumentierter
+ * Ordnung. Unbekannte Namen und Duplikate werden verworfen. Ohne gueltige
+ * Konfiguration gilt die dokumentierte Reihenfolge — niemals Zufall.
+ */
+export function fallbackOrder(): ProviderName[] {
+  const seen = new Set<ProviderName>();
+  const configured: ProviderName[] = [];
+  for (const raw of (process.env.PROVIDER_FALLBACK_ORDER ?? "").split(",")) {
+    const name = raw.trim().toLowerCase();
+    const known = DOCUMENTED_FALLBACK_ORDER.find(entry => entry === name);
+    if (known && !seen.has(known)) {
+      seen.add(known);
+      configured.push(known);
+    }
+  }
+  if (configured.length === 0) return [...DOCUMENTED_FALLBACK_ORDER];
+  return [
+    ...configured,
+    ...DOCUMENTED_FALLBACK_ORDER.filter(name => !configured.includes(name)),
+  ];
+}
+
+/**
  * Ein Anbieter ist waehlbar, solange sein Registerstatus "active" ist.
  * "maintenance" und "retired" werden aus der Failover-Kette genommen —
  * die Kette bleibt fail-closed: ist kein aktiver Anbieter konfiguriert,

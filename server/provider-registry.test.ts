@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import {
+  DOCUMENTED_FALLBACK_ORDER,
+  fallbackOrder,
   getProviderCatalogEntry,
   isProviderActive,
   listProviderCatalog,
@@ -31,6 +33,7 @@ afterEach(() => {
   delete process.env.PROVIDER_STATUS_OPENROUTER;
   delete process.env.PROVIDER_STATUS_GEMINI;
   delete process.env.PROVIDER_STATUS_HUGGINGFACE;
+  delete process.env.PROVIDER_FALLBACK_ORDER;
   vi.restoreAllMocks();
 });
 
@@ -80,13 +83,56 @@ describe("Providerregister (Sprint 031)", () => {
   it("exposes the registry read-only to authenticated users", async () => {
     process.env.PROVIDER_STATUS_GEMINI = "maintenance";
     const caller = appRouter.createCaller(createContext());
-    const providers = await caller.agent.providers();
-    expect(providers).toHaveLength(4);
-    expect(providers.find(p => p.name === "gemini")).toMatchObject({
+    const registry = await caller.agent.providers();
+    expect(registry.entries).toHaveLength(4);
+    expect(registry.entries.find(p => p.name === "gemini")).toMatchObject({
       status: "maintenance",
     });
-    expect(providers.find(p => p.name === "huggingface")).toMatchObject({
+    expect(registry.entries.find(p => p.name === "huggingface")).toMatchObject({
       consentRequired: true,
     });
+  });
+});
+
+describe("Fallback-Reihenfolge (Sprint 032)", () => {
+  it("uses the documented order without configuration", () => {
+    expect(fallbackOrder()).toEqual([...DOCUMENTED_FALLBACK_ORDER]);
+  });
+
+  it("honours a configured order deterministically and keeps the rest", () => {
+    process.env.PROVIDER_FALLBACK_ORDER = "gemini,openrouter";
+    expect(fallbackOrder()).toEqual([
+      "gemini",
+      "openrouter",
+      "groq",
+      "huggingface",
+    ]);
+  });
+
+  it("drops unknown names and duplicates instead of failing open", () => {
+    process.env.PROVIDER_FALLBACK_ORDER = "phantasie, gemini ,GEMINI";
+    // gemini ist gueltig (einmal, dedupliziert), die Ungueltigen fallen weg
+    expect(fallbackOrder()).toEqual([
+      "gemini",
+      "openrouter",
+      "groq",
+      "huggingface",
+    ]);
+    // nur ungueltige Namen => dokumentierte Reihenfolge bleibt verbindlich
+    process.env.PROVIDER_FALLBACK_ORDER = "phantasie,oss";
+    expect(fallbackOrder()).toEqual([...DOCUMENTED_FALLBACK_ORDER]);
+  });
+
+  it("exposes the effective order read-only via the providers query", async () => {
+    process.env.PROVIDER_FALLBACK_ORDER = "groq";
+    const caller = appRouter.createCaller(createContext());
+    const registry = await caller.agent.providers();
+    expect(registry.fallbackOrder).toEqual([
+      "groq",
+      "openrouter",
+      "gemini",
+      "huggingface",
+    ]);
+    expect(registry.entries).toHaveLength(4);
   });
 });
