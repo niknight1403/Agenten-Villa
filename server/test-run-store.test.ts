@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { finishTestRun, startTestRun, TestRunError } from "./test-run-store";
+import {
+  finishTestRun,
+  setRunPhase,
+  startTestRun,
+  TestRunError,
+} from "./test-run-store";
 import { getDb } from "./db";
 import { villaTestRuns, villas } from "../drizzle/schema";
 import type { Villa, VillaTestRun } from "../drizzle/schema";
@@ -32,6 +37,7 @@ const activeRun: VillaTestRun = {
   villaId: 3,
   actorId: 17,
   status: "running",
+  phase: "planning",
   result: null,
   errorCode: null,
   startedAt: now,
@@ -43,6 +49,7 @@ const finishedRun: VillaTestRun = {
   ...activeRun,
   id: 12,
   status: "succeeded",
+  phase: "result",
   result: { checks: 4 },
   endedAt: new Date("2026-09-30T08:04:00Z"),
 };
@@ -156,5 +163,109 @@ describe("finishTestRun idempotency (Sprint 022)", () => {
     await expect(
       finishTestRun({ runId: 12, userId: 17, status: "succeeded" })
     ).rejects.toMatchObject({ reason: "NOT_FOUND" });
+  });
+});
+
+describe("setRunPhase (Sprint 023 — Phasenmodell)", () => {
+  it("returns the run unchanged when the phase is already set (idempotent)", async () => {
+    const tx = mockTx({ runRows: [activeRun] });
+    const run = await setRunPhase({ runId: 11, userId: 17, phase: "planning" });
+    expect(run).toBe(activeRun);
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("advances exactly one step forward and persists the phase", async () => {
+    const tx = mockTx({ runRows: [{ ...activeRun, phase: "preparation" }] });
+    const updated = { ...activeRun, phase: "planning" };
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (patch: Record<string, unknown>) => {
+            expect(patch).toEqual({ phase: "planning" });
+            return {
+              where: () => ({ returning: async () => [updated] }),
+            };
+          },
+        }) as never
+    );
+    const run = await setRunPhase({
+      runId: 11,
+      userId: 17,
+      phase: "planning",
+    });
+    expect(run.phase).toBe("planning");
+    expect(tx.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects skipping a phase (preparation -> execution)", async () => {
+    const tx = mockTx({ runRows: [{ ...activeRun, phase: "preparation" }] });
+    await expect(
+      setRunPhase({ runId: 11, userId: 17, phase: "execution" })
+    ).rejects.toMatchObject({ reason: "PHASE_MISMATCH" });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects going backwards (execution -> planning)", async () => {
+    const tx = mockTx({ runRows: [{ ...activeRun, phase: "execution" }] });
+    await expect(
+      setRunPhase({ runId: 11, userId: 17, phase: "planning" })
+    ).rejects.toMatchObject({ reason: "PHASE_MISMATCH" });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects phase changes on finished runs — history is never rewritten", async () => {
+    const tx = mockTx({ runRows: [finishedRun] });
+    await expect(
+      setRunPhase({ runId: 12, userId: 17, phase: "review" })
+    ).rejects.toMatchObject({ reason: "PHASE_MISMATCH" });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects foreign runs with NOT_FOUND", async () => {
+    mockTx({ runRows: [] });
+    await expect(
+      setRunPhase({ runId: 99, userId: 17, phase: "planning" })
+    ).rejects.toMatchObject({ reason: "NOT_FOUND" });
+  });
+});
+
+describe("phase lifecycle (Sprint 023)", () => {
+  it("starts new runs in the preparation phase", async () => {
+    let erfasst: Record<string, unknown> | undefined;
+    const tx = mockTx({ runRows: [] });
+    tx.insert.mockImplementation(
+      () =>
+        ({
+          values: (werte: Record<string, unknown>) => {
+            erfasst = werte;
+            return { returning: async () => [activeRun] };
+          },
+        }) as never
+    );
+    await startTestRun(3, 17);
+    expect(erfasst).toMatchObject({
+      villaId: 3,
+      actorId: 17,
+      status: "running",
+      phase: "preparation",
+    });
+  });
+
+  it("finishes runs into the system phase result", async () => {
+    let patch: Record<string, unknown> | undefined;
+    const tx = mockTx({ runRows: [activeRun] });
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (werte: Record<string, unknown>) => {
+            patch = werte;
+            return {
+              where: () => ({ returning: async () => [finishedRun] }),
+            };
+          },
+        }) as never
+    );
+    await finishTestRun({ runId: 11, userId: 17, status: "succeeded" });
+    expect(patch).toMatchObject({ status: "succeeded", phase: "result" });
   });
 });

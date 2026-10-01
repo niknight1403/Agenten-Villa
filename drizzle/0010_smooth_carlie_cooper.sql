@@ -1,0 +1,1 @@
+ALTER TABLE "villa_test_runs" ADD COLUMN "phase" varchar(16) DEFAULT 'preparation' NOT NULL;
