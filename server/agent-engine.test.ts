@@ -295,6 +295,7 @@ describe("Fail-closed bei fehlender Berechtigung (Sprint 037)", () => {
     });
     const outcome = await runAgentTurnWithGitHub(workshopInput, executeTool, {
       fetcher,
+      authorization: { administrator: true },
     }).catch(error => error);
     expect(outcome).toBeInstanceOf(AgentError);
     expect(outcome).toMatchObject({ code: "MISSING_KEY" });
@@ -312,7 +313,7 @@ describe("Fail-closed bei fehlender Berechtigung (Sprint 037)", () => {
       throw new GitHubToolError("AUTH", "Der GitHub-Token ist ungültig.", 401);
     });
     await expect(
-      runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher })
+      runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } })
     ).rejects.toMatchObject({ code: "MISSING_KEY" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -331,6 +332,7 @@ describe("Fail-closed bei fehlender Berechtigung (Sprint 037)", () => {
       .mockResolvedValueOnce({ ok: true, content: "leer" });
     const result = await runAgentTurnWithGitHub(workshopInput, executeTool, {
       fetcher,
+      authorization: { administrator: true },
     });
     expect(result.githubActions).toBe(1);
     const secondPayload = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
@@ -413,7 +415,7 @@ describe("bounded GitHub tool loop", () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(toolReply("call-1", "github_repo_overview", {})).mockResolvedValueOnce(reply(200, "free-tool-model"));
     const executeTool = vi.fn(async () => ({ repository: "niknight1403/Agenten-Villa", defaultBranch: "main" }));
-    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } });
     expect(result).toMatchObject({ provider: "openrouter", model: "free-tool-model", githubActions: 1, answer: expect.stringContaining("Ziel") });
     expect(executeTool).toHaveBeenCalledTimes(1);
     expect(executeTool).toHaveBeenCalledWith("github_repo_overview", {});
@@ -430,7 +432,7 @@ describe("bounded GitHub tool loop", () => {
     const repeated = () => toolReply("call-loop", "github_repo_overview", {});
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => repeated());
     const executeTool = vi.fn(async () => ({ ok: true }));
-    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } });
     expect(executeTool).toHaveBeenCalledTimes(LIMITS.githubActionsPerTurn);
     expect(fetcher).toHaveBeenCalledTimes(LIMITS.githubToolRounds + 1);
     expect(result.githubActions).toBe(LIMITS.githubActionsPerTurn);
@@ -444,7 +446,7 @@ describe("bounded GitHub tool loop", () => {
       .mockResolvedValueOnce(toolReply("call-write", "github_write_file", { path: "docs/note.md", branch, content: "note", message: "docs: add note" }))
       .mockResolvedValueOnce(reply(200, "free-tool-model"));
     const executeTool = vi.fn(async (name: string) => name === "github_create_branch" ? { result: { branch } } : { result: { path: "docs/note.md", branch } });
-    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } });
     expect(result.githubActions).toBe(2);
     expect(executeTool).toHaveBeenCalledTimes(2);
     expect(executeTool).toHaveBeenNthCalledWith(1, "github_create_branch", { purpose: "docs update" });
@@ -455,7 +457,7 @@ describe("bounded GitHub tool loop", () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(toolReply("call-write", "github_write_file", { path: "README.md", branch: "agent/old-work", content: "x", message: "update" })).mockResolvedValueOnce(reply(200, "free-tool-model"));
     const executeTool = vi.fn(async () => ({ ok: true }));
-    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } });
     expect(result.githubActions).toBe(0);
     expect(executeTool).not.toHaveBeenCalled();
     const finalPayload = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
@@ -506,7 +508,7 @@ describe("admin system prompt override", () => {
   it("keeps the GitHub tool-safety block even with an override active", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
-    await runAgentTurnWithGitHub({ ...workshopInput, systemOverride: "Override-Modus" }, async () => ({ ok: true, summary: "noop", created: [] }), { fetcher });
+    await runAgentTurnWithGitHub({ ...workshopInput, systemOverride: "Override-Modus" }, async () => ({ ok: true, summary: "noop", created: [] }), { fetcher, authorization: { administrator: true } });
     const body = JSON.parse((fetcher.mock.calls[0]?.[1] as RequestInit).body as string) as { messages: Array<{ content: string }> };
     expect(body.messages[0]?.content).toContain("Override-Modus");
     expect(body.messages[0]?.content).toContain("GitHub-Werkzeuge sind für diese Anfrage aktiviert");
@@ -558,7 +560,7 @@ describe("multi-provider failover chain", () => {
       .mockResolvedValueOnce(reply(429))
       .mockResolvedValueOnce(reply(200, "groq-tool-model"));
     const executeTool = vi.fn(async () => ({ ok: true }));
-    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher, authorization: { administrator: true } });
     expect(result).toMatchObject({ provider: "groq", model: "groq-tool-model" });
     expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });

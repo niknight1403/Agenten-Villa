@@ -97,7 +97,7 @@ describe("administrator elite autonomous project mission", () => {
     const result = await runAutonomousProjectWithGitHub(
       workshopInput,
       executeTool,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
 
     expect(result).toMatchObject({
@@ -168,7 +168,7 @@ describe("administrator elite autonomous project mission", () => {
     const result = await runAutonomousProjectWithGitHub(
       workshopInput,
       executeTool,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
 
     expect(result.completed).toBe(true);

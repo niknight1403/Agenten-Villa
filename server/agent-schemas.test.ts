@@ -168,7 +168,7 @@ describe("Agentenauftragsschema (Sprint 041)", () => {
     const result = await runAgentTurnWithGitHub(
       { ...baseInput, mode: "workshop" as const, villaId: 42 },
       executeTool,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
     expect(executeTool).toHaveBeenCalledWith("github_repo_overview", {});
     expect(() => parseAgentResult(result)).not.toThrow();
