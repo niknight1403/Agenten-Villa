@@ -38,6 +38,7 @@ import {
 import { getVilla } from "./villa-store";
 import {
   findMissionByKey, finishMission, getMissionRun, listMissionRuns,
+  MAX_MISSION_ATTEMPTS, missionRetryExhausted,
   missionLeaseIntervalMs, releaseActiveMission, renewMissionLease,
   reserveMission, restartInterruptedMission, type SavedMissionInput,
 } from "./elite-mission-store";
@@ -642,7 +643,15 @@ export const agentRouter = router({
       throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Agent und Provider-Zugang müssen für einen ausdrücklich neu gestarteten Versuch bereit sein." });
     try {
       const run = await restartInterruptedMission(input.id, ctx.user.id);
-      if (!run) throw new TRPCError({ code: "CONFLICT", message: "Die Mission ist nicht unterbrochen, die Lease läuft noch, oder der Auftrag gehört einem anderen Konto." });
+      if (!run) {
+        // Sprint 045 — Retry-Regeln: ist das Wiederholungslimit erreicht,
+        // bleibt die Mission endgültig unterbrochen (kein weiterer Lauf,
+        // keine weiteren GitHub-Nebenwirkungen).
+        const existing = await getMissionRun(input.id, ctx.user.id);
+        if (existing && missionRetryExhausted(existing))
+          throw new TRPCError({ code: "CONFLICT", message: "Die Mission hat ihr Wiederholungslimit von " + String(MAX_MISSION_ATTEMPTS) + " Versuchen erreicht und bleibt endgültig unterbrochen. Bitte eine neue Mission starten." });
+        throw new TRPCError({ code: "CONFLICT", message: "Die Mission ist nicht unterbrochen, die Lease läuft noch, oder der Auftrag gehört einem anderen Konto." });
+      }
       return await executePersistedMission(run, run.input as SavedMissionInput);
     } catch (error) { mapAgentError(error); }
   }),
