@@ -306,6 +306,13 @@ export const villaTestRuns = pgTable(
      */
     cancellationKind: varchar("cancellationKind", { length: 16 })
       .$type<"manual" | "technical">(),
+    /**
+     * Sprint 027 — Wiederaufnahme: Zeitpunkt der expliziten Freigabe. Nur
+     * freigegebene (d. h. geprüfte, sichere) Läufe dürfen fortgesetzt werden.
+     */
+    releasedForResumeAt: timestamp("releasedForResumeAt"),
+    /** Sprint 027 — Referenz auf den freigegebenen Lauf, aus dem fortgesetzt wird. */
+    resumedFromRunId: integer("resumedFromRunId"),
     result: jsonb("result"),
     errorCode: varchar("errorCode", { length: 40 }),
     startedAt: timestamp("startedAt").defaultNow().notNull(),
