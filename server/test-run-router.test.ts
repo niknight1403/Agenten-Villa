@@ -33,6 +33,7 @@ const runningRun: VillaTestRun = {
   villaId: 3,
   actorId: 17,
   status: "running",
+  phase: "planning",
   result: null,
   errorCode: null,
   startedAt: new Date("2026-09-30T08:00:00Z"),
@@ -44,6 +45,7 @@ const succeededRun: VillaTestRun = {
   ...runningRun,
   id: 12,
   status: "succeeded",
+  phase: "result",
   result: { checks: 4, failed: 0 },
   endedAt: new Date("2026-09-30T08:04:00Z"),
 };
@@ -162,5 +164,49 @@ describe("run router (Sprint 021/022)", () => {
     await expect(caller.run.list()).rejects.toMatchObject({
       code: "SERVICE_UNAVAILABLE",
     });
+  });
+});
+
+describe("run.setPhase (Sprint 023 — Phasenmodell)", () => {
+  it("advances the phase of a running run for its owner", async () => {
+    const spy = vi
+      .spyOn(store, "setRunPhase")
+      .mockResolvedValue({ ...runningRun, phase: "execution" });
+    const result = await caller.run.setPhase({
+      runId: 11,
+      phase: "execution",
+    });
+    expect(result.phase).toBe("execution");
+    expect(spy).toHaveBeenCalledWith({
+      runId: 11,
+      userId: 17,
+      phase: "execution",
+    });
+  });
+
+  it("maps PHASE_MISMATCH to a CONFLICT conflict, history stays intact", async () => {
+    vi.spyOn(store, "setRunPhase").mockRejectedValue(
+      new store.TestRunError("PHASE_MISMATCH")
+    );
+    await expect(
+      caller.run.setPhase({ runId: 12, phase: "review" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("maps NOT_FOUND for foreign runs", async () => {
+    vi.spyOn(store, "setRunPhase").mockRejectedValue(
+      new store.TestRunError("NOT_FOUND")
+    );
+    await expect(
+      caller.run.setPhase({ runId: 99, phase: "planning" })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("rejects the system phase result as user input", async () => {
+    const spy = vi.spyOn(store, "setRunPhase");
+    await expect(
+      caller.run.setPhase({ runId: 11, phase: "result" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

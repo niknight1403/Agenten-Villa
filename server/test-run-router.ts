@@ -5,13 +5,18 @@ import {
   finishTestRun,
   getTestRun,
   listTestRuns,
+  setRunPhase,
   startTestRun,
   TestRunError,
 } from "./test-run-store";
+import type { RunPhase } from "../drizzle/schema";
 
 const idSchema = z.number().int().positive();
 /** Sprint 021 — Abschlussstatus; „running" kann nur vom System gesetzt werden. */
 const finishStatusSchema = z.enum(["succeeded", "failed", "cancelled"]);
+
+/** Sprint 023 — anwenderseitige Phasen; „result" setzt nur der Abschluss. */
+const phaseSchema = z.enum(["preparation", "planning", "execution", "review"]);
 
 /** Maximale Ergebnisgröße, damit ein Laufbericht die Datenbank nicht aufbläht. */
 const MAX_RESULT_BYTES = 20_000;
@@ -23,7 +28,7 @@ function storeError(error: unknown): never {
         ? "NOT_FOUND"
         : error.reason === "ARCHIVED"
           ? "FORBIDDEN"
-          : "CONFLICT";
+          : "CONFLICT"; // STATUS_MISMATCH und PHASE_MISMATCH sind Konflikte
     throw new TRPCError({
       code,
       message: `Testlauf nicht möglich: ${error.reason}`,
@@ -109,6 +114,26 @@ export const testRunRouter = router({
           status: input.status,
           result: input.result,
           errorCode: input.errorCode,
+        });
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /**
+   * Sprint 023 — Phase eines laufenden Testlaufs vorwaerts schalten
+   * (preparation -> planning -> execution -> review). „result" setzt nur
+   * finish. Wiederholtes Setzen der aktuellen Phase ist idempotent;
+   * abgeschlossene oder rückwärtige Sprünge sind Konflikte.
+   */
+  setPhase: protectedProcedure
+    .input(z.object({ runId: idSchema, phase: phaseSchema }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await setRunPhase({
+          runId: input.runId,
+          userId: ctx.user.id,
+          phase: input.phase as Exclude<RunPhase, "result">,
         });
       } catch (error) {
         storeError(error);

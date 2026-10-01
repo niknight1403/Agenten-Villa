@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import type { VillaTestRun } from "../drizzle/schema";
+import type { RunPhase, VillaTestRun } from "../drizzle/schema";
 import { getDb } from "./db";
 import { villaTestRuns, villas } from "../drizzle/schema";
 
@@ -8,10 +8,23 @@ export type TestRunStatus = "running" | "succeeded" | "failed" | "cancelled";
 
 /** Technische Gründe, die ein Store-Ergebnis verhindern; der Router mappt sie auf tRPC-Codes. */
 export class TestRunError extends Error {
-  constructor(readonly reason: "NOT_FOUND" | "ARCHIVED" | "STATUS_MISMATCH") {
+  constructor(
+    readonly reason: "NOT_FOUND" | "ARCHIVED" | "STATUS_MISMATCH" | "PHASE_MISMATCH"
+  ) {
     super(`TEST_RUN_${reason}`);
   }
 }
+
+/**
+ * Sprint 023 — Phasenmodell: sichtbare Reihenfolge eines Laufs. „result" wird
+ * nur vom Abschluss (finishTestRun) gesetzt; Anwender schalten nur vorwärts.
+ */
+export const RUN_PHASE_ORDER: readonly Exclude<RunPhase, "result">[] = [
+  "preparation",
+  "planning",
+  "execution",
+  "review",
+];
 
 async function requireDb() {
   const db = await getDb();
@@ -104,6 +117,7 @@ export async function startTestRun(
         villaId,
         actorId: userId,
         status: "running",
+        phase: "preparation",
       })
       .returning();
     return created;
@@ -147,10 +161,59 @@ export async function finishTestRun(input: {
       .update(villaTestRuns)
       .set({
         status: input.status,
+        phase: "result",
         endedAt: new Date(),
         result: input.result === undefined ? null : input.result,
         errorCode: input.errorCode ?? null,
       })
+      .where(eq(villaTestRuns.id, run.id))
+      .returning();
+    return rows[0];
+  });
+}
+
+/**
+ * Sprint 023 — Phase eines laufenden Testlaufs sichtbar weiterschalten. Nur
+ * vorwärts entlang RUN_PHASE_ORDER, nie auf „result" (setzt nur finishTestRun)
+ * und nie zurück. Aktuelle Phase erneut setzen ist idempotent. Abgeschlossene
+ * Läufe sind historisch gesperrt (PHASE_MISMATCH), Historie wird nie umgeschrieben.
+ */
+export async function setRunPhase(input: {
+  runId: number;
+  userId: number;
+  phase: Exclude<RunPhase, "result">;
+}): Promise<VillaTestRun> {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const [run] = await tx
+      .select()
+      .from(villaTestRuns)
+      .where(
+        and(
+          eq(villaTestRuns.id, input.runId),
+          eq(villaTestRuns.actorId, input.userId)
+        )
+      )
+      .for("update");
+    if (!run) throw new TestRunError("NOT_FOUND");
+
+    if (run.status !== "running") throw new TestRunError("PHASE_MISMATCH");
+
+    const current = run.phase as RunPhase;
+    if (current === "result") throw new TestRunError("PHASE_MISMATCH");
+    if (current === input.phase) return run;
+
+    const vonIndex = RUN_PHASE_ORDER.indexOf(
+      current as Exclude<RunPhase, "result">
+    );
+    const nachIndex = RUN_PHASE_ORDER.indexOf(input.phase);
+    if (vonIndex < 0 || nachIndex < 0 || nachIndex !== vonIndex + 1) {
+      throw new TestRunError("PHASE_MISMATCH");
+    }
+
+    const rows = await tx
+      .update(villaTestRuns)
+      .set({ phase: input.phase })
       .where(eq(villaTestRuns.id, run.id))
       .returning();
     return rows[0];

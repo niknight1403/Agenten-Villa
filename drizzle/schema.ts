@@ -266,6 +266,18 @@ export type EliteMissionRun = typeof eliteMissionRuns.$inferSelect;
  * Sprint 021 — Persisted, bounded test runs per villa. Status, start time,
  * end time and result survive restarts; one active run per villa.
  */
+/**
+ * Sprint 023 — Phasenmodell eines Testlaufs. „result" ist eine Systemphase und
+ * wird ausschließlich beim Abschluss gesetzt (vorbereitung -> planung ->
+ * ausfuehrung -> pruefung -> ergebnis, sichtbar in run.get/run.list).
+ */
+export type RunPhase =
+  | "preparation"
+  | "planning"
+  | "execution"
+  | "review"
+  | "result";
+
 export const villaTestRuns = pgTable(
   "villa_test_runs",
   {
@@ -275,6 +287,11 @@ export const villaTestRuns = pgTable(
     status: varchar("status", { length: 16 })
       .$type<"running" | "succeeded" | "failed" | "cancelled">()
       .notNull(),
+    /** Sprint 023 — sichtbare Phase des Laufs (preparation..result). */
+    phase: varchar("phase", { length: 16 })
+      .$type<RunPhase>()
+      .notNull()
+      .default("preparation"),
     result: jsonb("result"),
     errorCode: varchar("errorCode", { length: 40 }),
     startedAt: timestamp("startedAt").defaultNow().notNull(),

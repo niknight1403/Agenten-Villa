@@ -71,6 +71,13 @@
       "when": 1790793849612,
       "tag": "0009_red_skullbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790884239312,
+      "tag": "0010_smooth_carlie_cooper",
+      "breakpoints": true
     }
   ]
 }
