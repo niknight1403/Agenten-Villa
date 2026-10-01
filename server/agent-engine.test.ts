@@ -149,6 +149,78 @@ describe("Rate-Limit-Erkennung (Sprint 033)", () => {
   });
 });
 
+describe("Cooldown-Mechanismus (Sprint 034)", () => {
+  it("überspringt einen Anbieter mit erschöpftem Kontingent zeitlich begrenzt", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const limitReply = () =>
+      new Response(JSON.stringify({ error: "rate limit" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "300" },
+      });
+    // Erster Aufruf: OpenRouter ist erschöpft, Groq antwortet
+    const first = vi
+      .fn<typeof fetch>()
+      .mockImplementation((url) =>
+        Promise.resolve(
+          String(url).includes("groq") ? reply(200, "groq-model") : limitReply()
+        )
+      );
+    const outcome = await runAgentTurn(input, false, { fetcher: first });
+    expect(outcome.provider).toBe("groq");
+    expect(first.mock.calls.some(([, init]) => String(init?.body).includes("groq") === false && String(init?.body).includes("openrouter"))).toBe(true);
+
+    // Zweiter Aufruf: OpenRouter steht im Limit-Cooldown und wird übersprungen
+    const second = vi.fn<typeof fetch>().mockResolvedValue(reply(200, "groq-model"));
+    await runAgentTurn(input, false, { fetcher: second });
+    const urls = second.mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain(
+      "https://openrouter.ai/api/v1/chat/completions"
+    );
+    expect(urls[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("bleibt fail-closed: ohne Alternative wird der gesperrte Anbieter ehrlich versucht", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const limitReply = () =>
+      new Response(JSON.stringify({ error: "rate limit" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "300" },
+      });
+    const first = vi.fn<typeof fetch>().mockResolvedValue(limitReply());
+    await expect(runAgentTurn(input, false, { fetcher: first })).rejects.toMatchObject({
+      code: "LIMIT",
+    });
+    // Kein anderer Anbieter konfiguriert: trotz Cooldown wird erneut versucht
+    const second = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(runAgentTurn(input, false, { fetcher: second })).resolves.toMatchObject({
+      provider: "openrouter",
+    });
+  });
+
+  it("sperrt bei ungültigem Schlüssel den ganzen Anbieter (Auth-Cooldown bleibt)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const first = vi
+      .fn<typeof fetch>()
+      .mockImplementation((url) =>
+        Promise.resolve(
+          String(url).includes("groq") ? reply(200, "groq-model") : reply(401)
+        )
+      );
+    await expect(runAgentTurn(input, false, { fetcher: first })).resolves.toMatchObject({
+      provider: "groq",
+    });
+    // Nachfolgende Aufrufe überspringen OpenRouter (Auth-Cooldown 30 min)
+    const second = vi.fn<typeof fetch>().mockResolvedValue(reply(200, "groq-model"));
+    await runAgentTurn(input, false, { fetcher: second });
+    const urls = second.mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain(
+      "https://openrouter.ai/api/v1/chat/completions"
+    );
+  });
+});
+
 describe("free-tier optimization (cache, dedupe, model chain)", () => {
   it("serves identical requests from the cache without a second provider call", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
