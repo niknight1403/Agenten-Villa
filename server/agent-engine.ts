@@ -23,6 +23,7 @@ import {
   hfModel,
   openRouterChatUrl,
 } from "./provider-endpoints";
+import { isProviderActive } from "./provider-registry";
 import type { AgentErrorCode } from "./error-codes";
 
 export type Provider = "openrouter" | "groq" | "gemini" | "huggingface";
@@ -218,11 +219,19 @@ function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
         models: [hfModel()],
       });
   }
+  // Sprint 031 — das Providerregister ist verbindlich: Anbieter im Status
+  // "maintenance" oder "retired" werden aus der Kette genommen. Das ist eine
+  // bewusste Betriebsentscheidung und wird NICHT fail-open aufgeweicht —
+  // im Gegensatz zum Auth-Cooldown, der fail-closed nur verausgabt, solange
+  // ein anderer Anbieter nutzbar ist.
+  const activeRoutes = routes.filter(route => isProviderActive(route.name));
   // Ein Anbieter im Auth-Cooldown wird uebersprungen, solange mindestens ein
   // anderer nutzbar ist; andernfalls bleibt die Kette fail-closed und der
   // echte Fehler wird nicht stillschweigend verschluckt.
-  const usable = routes.filter(route => !providerInAuthCooldown(route.name));
-  return usable.length > 0 ? usable : routes;
+  const usable = activeRoutes.filter(
+    route => !providerInAuthCooldown(route.name)
+  );
+  return usable.length > 0 ? usable : activeRoutes;
 }
 
 /**
