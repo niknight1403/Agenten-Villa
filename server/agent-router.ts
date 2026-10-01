@@ -36,6 +36,8 @@ import {
   setGuardianIntervalMs,
 } from "./provider-guardian";
 import { getVilla } from "./villa-store";
+import { advisorStatsSchema } from "@shared/storage-advisor";
+import { runStorageAdvisor } from "./storage-advisor";
 import {
   findMissionByKey, finishMission, getMissionRun, listMissionRuns,
   MAX_MISSION_ATTEMPTS, missionRetryExhausted,
@@ -739,6 +741,39 @@ export const agentRouter = router({
       return await executePersistedMission(run, run.input as SavedMissionInput, "elite-restart");
     } catch (error) { mapAgentError(error); }
   }),
+  /**
+   * Sprint 053 — Speicher-Berater: schmaler Agent-Pfad mit dem gleichen
+   * Schutz wie chat (STOPPED-Zustand, Stundenkontingent), aber ohne
+   * GitHub-Werkzeuge und mit strikter JSON-Validierung. Der Client sendet
+   * NUR anonymisierte Statistiken — Dateinamen erreichen den Server nie.
+   */
+  storageAdvisor: protectedProcedure
+    .input(
+      z.object({
+        prompt: z.string().trim().min(1).max(500),
+        stats: advisorStatsSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (controlState !== "RUNNING")
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Der Agent steht auf STOPPED. Der Administrator muss ihn ausdrücklich starten.",
+        });
+      if (!isAdmin(ctx.user)) consumeTurn(ctx.user.id);
+      try {
+        return await runStorageAdvisor(input);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("ADVISOR_"))
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Der Speicher-Berater konnte keine gueltigen Vorschlaege erzeugen. Bitte den Auftrag konkreter formulieren.",
+          });
+        mapAgentError(error);
+      }
+    }),
   chat: protectedProcedure
     .input(inputSchema)
     .mutation(async ({ ctx, input }) => {

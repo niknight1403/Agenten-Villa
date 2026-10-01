@@ -3,8 +3,9 @@ import { Capacitor } from "@capacitor/core";
 import { ArrowLeft, CheckCircle2, FolderOpen, HardDrive, Loader2, ScanSearch, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 import { androidStorage } from "@/lib/android-storage";
-import { FilePlan, StorageEntry, formatBytes, planFromPrompt, storageSuggestions } from "@/lib/storage-plan";
+import { FilePlan, StorageEntry, formatBytes, planFromPrompt, planFromRules, storageStats, storageSuggestions } from "@/lib/storage-plan";
 
 export default function AndroidFiles() {
   const { isAuthenticated, loading } = useAuth({
@@ -18,6 +19,7 @@ export default function AndroidFiles() {
   const [plan, setPlan] = useState<FilePlan | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const native = Capacitor.getPlatform() === "android";
 
@@ -83,6 +85,23 @@ export default function AndroidFiles() {
     }
   }
 
+  async function submitAdvisorPrompt() {
+    if (!prompt.trim() || aiBusy) return;
+    setAiBusy(true);
+    setFeedback("");
+    try {
+      const result = await advisorMutation.mutateAsync({ prompt, stats: storageStats(entries, entries.filter(entry => entry.directory).length) });
+      const next = planFromRules(result.rules, entries);
+      if (next) showPlan(next);
+      else setFeedback("Der Berater fand keine passenden Dateien. Bitte den Auftrag konkreter formulieren.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Die KI-Analyse ist fehlgeschlagen.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  const advisorMutation = trpc.agent.storageAdvisor.useMutation();
   const suggestions = storageSuggestions(entries);
   const selectedActions = plan?.actions.filter(action => selected.has(action.id)) ?? [];
   const selectedBytes = selectedActions.filter(action => action.operation === "delete").reduce((sum, action) => sum + action.size, 0);
@@ -105,7 +124,7 @@ export default function AndroidFiles() {
         </section>
         {folder && !truncated && <>
           <section className="rounded-2xl border border-slate-700 bg-slate-900/80 p-5"><h2 className="flex items-center gap-2 font-semibold"><Sparkles size={18} className="text-violet-300" /> Speicherplatz-Vorschläge</h2><div className="mt-3 grid gap-3 sm:grid-cols-2">{suggestions.map(suggestion => <button key={suggestion.title} onClick={() => showPlan(suggestion)} className="min-h-28 rounded-xl border border-slate-600 bg-[#121f3c] p-4 text-left hover:border-cyan-400"><strong>{suggestion.title}</strong><p className="mt-2 text-xs text-slate-400">{suggestion.explanation}</p><span className="mt-2 block text-xs text-cyan-300">{suggestion.actions.length} Dateien{suggestion.potentialBytes ? ` · bis zu ${formatBytes(suggestion.potentialBytes)}` : ""}</span></button>)}</div>{suggestions.length === 0 && <p className="mt-3 text-sm text-slate-400">Keine passenden Dateien im gewählten Ordner.</p>}</section>
-          <section className="rounded-2xl border border-slate-700 bg-slate-900/80 p-5"><label htmlFor="file-prompt" className="font-semibold">Auftrag per Prompt</label><textarea id="file-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={250} placeholder="Sortiere Bilder · Lösche Dateien größer als 500 MB" className="mt-3 min-h-24 w-full rounded-xl border border-slate-600 bg-[#0b1831] p-3 text-sm outline-none focus:border-cyan-400" /><button disabled={!prompt.trim() || busy} onClick={submitPrompt} className="mt-3 min-h-11 rounded-xl bg-violet-600 px-5 font-semibold disabled:opacity-50">Vorschau erstellen</button></section>
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/80 p-5"><label htmlFor="file-prompt" className="font-semibold">Auftrag per Prompt</label><textarea id="file-prompt" value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={250} placeholder="Sortiere Bilder · Lösche Dateien größer als 500 MB" className="mt-3 min-h-24 w-full rounded-xl border border-slate-600 bg-[#0b1831] p-3 text-sm outline-none focus:border-cyan-400" /><div className="mt-3 flex flex-wrap gap-3"><button disabled={!prompt.trim() || busy} onClick={submitPrompt} className="min-h-11 rounded-xl bg-violet-600 px-5 font-semibold disabled:opacity-50">Vorschau (lokal)</button><button disabled={!prompt.trim() || aiBusy} onClick={submitAdvisorPrompt} className="min-h-11 inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-5 font-semibold disabled:opacity-50">{aiBusy ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} className="text-cyan-100" />} KI-Analyse</button></div><p className="mt-3 text-xs leading-5 text-slate-500">Die KI-Analyse sendet ausschließlich anonymisierte Statistiken (Kategorien, Größen, Alter) — Dateinamen verlassen dein Gerät nie. Der Berater schlägt Regeln vor; jede Aktion wird lokal geprüft und erst nach deiner Bestätigung ausgeführt.</p></section>
           {plan && <section className="rounded-2xl border border-cyan-500/30 bg-slate-900 p-5" aria-label="Aktionsvorschau"><h2 className="text-lg font-semibold">{plan.title}</h2><p className="mt-1 text-sm text-slate-400">{plan.explanation}</p><p className="mt-3 text-sm text-cyan-300">{selectedActions.length} ausgewählt · möglicher freier Platz: {formatBytes(selectedBytes)}</p><div className="mt-3 max-h-72 space-y-2 overflow-auto">{plan.actions.map(action => <label key={action.id} className="flex items-center gap-3 rounded-xl bg-[#172440] p-3 text-sm"><input type="checkbox" checked={selected.has(action.id)} onChange={() => setSelected(previous => { const next = new Set(previous); if (next.has(action.id)) next.delete(action.id); else next.add(action.id); return next; })} /><span className="min-w-0 flex-1 break-all">{action.name}</span><span className="shrink-0 text-slate-400">{action.operation === "move" ? `→ ${action.category}` : <Trash2 size={16} />}</span><span className="shrink-0 text-slate-400">{formatBytes(action.size)}</span></label>)}</div>{plan.actions.length === 0 && <p className="mt-3 text-sm text-slate-400">Keine passenden Dateien gefunden.</p>}<button disabled={busy || !selectedActions.length} onClick={executePlan} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 font-semibold disabled:opacity-50">{busy ? <Loader2 className="animate-spin" size={17} /> : <ShieldCheck size={17} />} Auswahl bestätigen und ausführen</button></section>}
         </>}
       </>}

@@ -660,4 +660,42 @@ describe("provider guardian access and elite unlimited status", () => {
     expect(status.eliteUnlimited?.tokenCreation).toBe("provider-defined");
     expect(status.eliteUnlimited?.note).toMatch(/keine Token/);
   });
+
+  it("gates the storage advisor on RUNNING state and returns sanitized rules", async () => {
+    vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model: "advisor-test",
+          choices: [{ message: { content: '{"summary":"Grosse Videos pruefen.","rules":[{"operation":"delete","category":"Videos","minSizeMB":500},{"operation":"delete"}]}' } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const caller = appRouter.createCaller(
+      createContext("user", "member@example.com")
+    );
+    await admin.agent.setState({ state: "STOPPED", acknowledgeStop: true });
+    const stats = {
+      totalFiles: 5,
+      totalBytes: 1024,
+      directories: 1,
+      categories: [{ category: "Videos" as const, count: 5, bytes: 1024, oldRatio: 0, over100MB: 0, over1GB: 0 }],
+    };
+    await expect(
+      caller.agent.storageAdvisor({ prompt: "Mach Platz", stats })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(fetcher).not.toHaveBeenCalled();
+
+    await admin.agent.setState({ state: "RUNNING" });
+    const result = await caller.agent.storageAdvisor({ prompt: "Mach Platz", stats });
+    expect(result.summary).toContain("Videos");
+    expect(result.rules).toHaveLength(1);
+    expect(result.rules[0]?.category).toBe("Videos");
+  });
 });
