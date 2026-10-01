@@ -50,6 +50,12 @@ funktioniert, müssen im **selben Google-Cloud-Projekt** zwei OAuth-Clients exis
 1. **Web-Client** – dessen ID steht in `capacitor.config.ts` unter
    `plugins.GoogleAuth.clientId` und in der Server-Umgebung als `GOOGLE_CLIENT_ID`.
    Der Server prüft das `aud`-Claim des ID-Tokens gegen diesen Wert.
+   Produktion: `656137332727-alqdkl30it263co2kr7tq5p1oclht630.apps.googleusercontent.com`
+   (identisch in `capacitor.config.ts` und `strings.xml`; ein Regressionstest
+   in `server/_core/native-client-config.test.ts` prüft die Konsistenz).
+   Fuer den Web-Redirect-Flow muss dieser Client zusaetzlich die autorisierte
+   Redirect-URI `https://agenten-villa.onrender.com/api/auth/google/callback`
+   besitzen.
 2. **Android-Client** – mit dem Paketnamen `de.niknight1403.agentenvilla` und dem
    SHA-1-Fingerprint des **signierenden** Keystores.
 
