@@ -51,6 +51,7 @@ import {
 import { routerTelemetrySummary } from "./router-telemetry";
 import { getPackCatalog } from "./pack-catalog";
 import { requireApproval } from "./approval-gates";
+import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./roles";
 import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
 
 // The assistant is ready out of the box so a signed-in user can chat
@@ -385,9 +386,13 @@ export const agentRouter = router({
   }),
   status: protectedProcedure.query(({ ctx }) => {
     const admin = isAdmin(ctx.user);
+    // Sprint 051 — Rollenmodell: Administrator, Operator, Viewer getrennt.
+    const role = resolveAgentRole(ctx.user);
     return {
       state: controlState,
       isAdmin: admin,
+      role,
+      canControl: ROLE_RANK[role] >= ROLE_RANK.operator,
       systemPrompt: activePrompt(),
       providers: configuredProviders(),
       github: {
@@ -494,7 +499,9 @@ export const agentRouter = router({
   setState: protectedProcedure
     .input(z.object({ state: z.enum(["RUNNING", "STOPPED"]), acknowledgeStop: z.literal(true).optional() }))
     .mutation(({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      // Sprint 051 — Rollenmodell: Operatoren steuern den Betrieb,
+      // Administratoren ebenso; Viewer bleiben ausgesperrt.
+      requireRole(ctx.user, "operator");
       // Sprint 047 — Freigabepunkt: Anhalten nur mit ausdrücklicher Quittung.
       requireApproval("controller-stop", input.state !== "STOPPED" || input.acknowledgeStop === true);
       controlState = input.state;
