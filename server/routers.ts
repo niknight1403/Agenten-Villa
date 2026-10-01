@@ -7,6 +7,7 @@ import { profileRouter } from "./profile-router";
 import { projectRouter } from "./project-router";
 import { testRunRouter } from "./test-run-router";
 import { villaRouter } from "./villa-router";
+import { controllerRouter } from "./controller";
 import { demoRouter } from "./demo-router";
 
 export const appRouter = router({
@@ -18,6 +19,7 @@ export const appRouter = router({
   run: testRunRouter,
   villa: villaRouter,
   demo: demoRouter,
+  controller: controllerRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

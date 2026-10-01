@@ -1,6 +1,6 @@
 // server/controller.ts
-import { z } from "zod";
-import { initTRPC } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure, router } from "./_core/trpc";
 import { EventEmitter } from "events";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -100,13 +100,34 @@ class VillaController extends EventEmitter {
 
 export const villaController = new VillaController();
 
-const t = initTRPC.create();
+/**
+ * Sprint 029 — Controller-Berechtigungen: globale Steuerungen des Villasystems
+ * (start/stop/toggle) dürfen nur Administratoren verwenden. Die Rolle kommt
+ * ausschließlich aus der verifizierten Authentifizierung, nie aus einer
+ * selbst deklarierten Angabe.
+ */
+function requireAdmin(user: { role: string }) {
+  if (user.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Nur Administratoren dürfen globale Steuerungen verwenden.",
+    });
+  }
+}
 
-export const controllerRouter = t.router({
-  getStatus: t.procedure.query(() => villaController.getState()),
-  start: t.procedure.mutation(async () => villaController.start()),
-  stop: t.procedure.mutation(async () => villaController.stop()),
-  toggle: t.procedure.mutation(async () => {
+export const controllerRouter = router({
+  /** Status ist lesbar für alle angemeldeten Nutzer — Steuerung ist Admin-only. */
+  getStatus: protectedProcedure.query(() => villaController.getState()),
+  start: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.user);
+    return villaController.start();
+  }),
+  stop: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.user);
+    return villaController.stop();
+  }),
+  toggle: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.user);
     const { status } = villaController.getState();
     if (status === "RUNNING") return villaController.stop();
     return villaController.start();
