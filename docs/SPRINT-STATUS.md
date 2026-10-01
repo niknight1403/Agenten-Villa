@@ -34,7 +34,8 @@
 | 027     | Grün    | Wiederaufnahme-Regeln: Freigabe (releasedForResumeAt, Migration 0014) nur für abgebrochene Läufe (cancelled/failed), idempotent; run.start mit resumeOfRunId fortführen nur aus explizit freigegebenen Läufen (NOT_RELEASED sonst) — die Historie bleibt unverändert, der neue Lauf referenziert resumedFromRunId (10 neue Tests grün). |
 | 028     | Grün    | Laufbericht: run.report compiliert Status, Dauer (abgeschlossen: endedAt, laufend: bis jetzt), Phase, Zeitgrenze/Ablauf, Abbruchgrund und Fehlerbild (Level-Zähler + fünf letzte Meldungen) deterministisch — ohne eigenen Speicherzustand (5 neue Tests grün). |
 | 029     | Grün    | Controller-Berechtigungen: controllerRouter in die App eingebunden; globale Steuerungen (start/stop/toggle) nur für Administratoren (FORBIDDEN sonst, Rolle ausschließlich aus verifizierter Auth), Status lesbar für alle Angemeldeten (4 neue Tests grün). |
-| 030–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
+| 030     | Grün    | Controller-Review: Zustandsautomat, Rechte-Matrix und Invarianten der Sprints 021–029 dokumentiert (docs/CONTROLLER-REVIEW.md) und als zusammenhängender Zeitstrahl in einer neuen Regressionssuite verifiziert (4 neue Tests, pnpm validate grün). |
+| 031–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
 
 ## Grüner Validierungsweg
 
