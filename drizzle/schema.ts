@@ -292,6 +292,11 @@ export const villaTestRuns = pgTable(
       .$type<RunPhase>()
       .notNull()
       .default("preparation"),
+    /**
+     * Sprint 024 — Zeitgrenze des Laufs in Sekunden. Fortschritt und Countdown
+     * werden ausschließlich aus startedAt + timeLimitSeconds berechnet.
+     */
+    timeLimitSeconds: integer("timeLimitSeconds").notNull().default(600),
     result: jsonb("result"),
     errorCode: varchar("errorCode", { length: 40 }),
     startedAt: timestamp("startedAt").defaultNow().notNull(),

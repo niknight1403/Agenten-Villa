@@ -1,0 +1,1 @@
+ALTER TABLE "villa_test_runs" ADD COLUMN "timeLimitSeconds" integer DEFAULT 600 NOT NULL;

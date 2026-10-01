@@ -28,7 +28,8 @@
 | 020     | Grün    | Abschluss-Review: 136 Tests grün (4 übersprungen), Typecheck und Build sauber; Sprints 011–019 gemerged, 6 Migrationen (0001–0006) erforderlich; Client-Typen (description, capacity, archivedAt) nachgezogen.                                                                                    |
 | 021     | Grün    | Begrenzte Testläufe sind persistiert (`villa_test_runs`, Migration 0009): Status, Start-, Endzeit und Ergebnis überleben Neustarts; ein aktiver Lauf pro Villa, Ownership über die Villa geprüft; tRPC-Router `run` (start/finish/list/get) mit Grenzen und Fehlermapping (11 Router-Tests grün). |
 | 023     | Grün    | Phasenmodell: villa_test_runs trägt eine sichtbare Phase (preparation → planning → execution → review → result, Migration 0010); run.setPhase schaltet nur vorwärts und idempotent, „result“ setzt ausschließlich der Abschluss; abgeschlossene Läufe bleiben unverändert (12 neue Tests grün). |
-| 024–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
+| 024     | Grün    | Countdown und Fortschritt: villa_test_runs trägt timeLimitSeconds (60–3600 s, Default 600, Migration 0011); run.progress projiziert Fortschritt und Countdown deterministisch aus startedAt + Grenze, abgeschlossene Läufe sind vollständig ohne Countdown (9 neue Tests grün). |
+| 025–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
 
 ## Grüner Validierungsweg
 
