@@ -36,6 +36,7 @@ import {
   parseAgentResult,
   AGENT_INPUT_LIMITS,
 } from "./agent-schemas";
+import { authorizeGitHubTool } from "./tool-permissions";
 import type { AgentErrorCode } from "./error-codes";
 import { GitHubToolError } from "./github-tools";
 
@@ -150,6 +151,8 @@ type Completion = {
   }>;
 };
 type Dependencies = {
+  /** Sprint 043 — Werkzeug-Autorisierung; ohne sie ist die Runde fail-closed. */
+  authorization?: { administrator: boolean };
   fetcher?: typeof fetch;
   beforeFallback?: () => Promise<boolean>;
 };
@@ -736,16 +739,19 @@ async function runGitHubToolLoop(
       } else {
         try {
           const args = JSON.parse(call.function.arguments || "{}");
-          if (
-            (call.function.name === "github_write_file" ||
-              call.function.name === "github_open_pull_request") &&
-            !branchesCreatedThisTurn.has(args.branch)
-          ) {
-            result = {
-              ok: false,
-              error:
-                "Schreibzugriff ist nur auf einem Branch erlaubt, der in dieser Anfrage bzw. Elite-Mission vom Agenten erstellt wurde.",
-            };
+          // Sprint 043 — Werkzeug-Permissions: jedes Werkzeug wird VOR der
+          // Ausführung autorisiert (fail-closed, auch für unbekannte Namen).
+          const authorization = authorizeGitHubTool(
+            call.function.name,
+            args,
+            {
+              mode: input.mode,
+              administrator: deps.authorization?.administrator ?? false,
+              sessionBranches: branchesCreatedThisTurn,
+            }
+          );
+          if (!authorization.allowed) {
+            result = { ok: false, error: authorization.reason };
             messages.push({
               role: "tool",
               tool_call_id: call.id,

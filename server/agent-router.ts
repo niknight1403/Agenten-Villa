@@ -258,7 +258,13 @@ async function executePersistedMission(run: EliteMissionRun, missionInput: Saved
         if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
         return executeGitHubTool(name, args);
       },
-      { beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run) }
+      {
+        beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run),
+        // Sprint 043 — Elite-Missionen sind administratoren-only; die
+        // explizite Autorisierung reicht die geprüfte Rolle an die
+        // Werkzeugrunde weiter.
+        authorization: { administrator: true },
+      }
     );
     const output: EliteOutput = {
       ...result,
@@ -665,7 +671,11 @@ export const agentRouter = router({
             adminSystemPrompt
               ? { ...input, systemOverride: adminSystemPrompt }
               : input,
-            (name, args) => executeGitHubTool(name, args)
+            (name, args) => executeGitHubTool(name, args),
+            // Sprint 043 — requireAdmin hat den Aufrufer bereits geprüft;
+            // die explizite Autorisierung macht die Werkzeugrunde nicht von
+            // außengerufenen Annahmen abhängig.
+            { authorization: { administrator: true } }
           );
           return {
             ...result,

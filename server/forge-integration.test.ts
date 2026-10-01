@@ -162,7 +162,7 @@ describe("VillaForge authenticated integration", () => {
         forge,
       },
       execute,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
     expect(result.githubActions).toBe(3);
     expect(result.verification).toMatchObject({ state: "passed", sha });
@@ -208,7 +208,7 @@ describe("VillaForge authenticated integration", () => {
         forge,
       },
       execute,
-      { fetcher, beforeFallback: async () => false }
+      { fetcher, beforeFallback: async () => false, authorization: { administrator: true } }
     );
     expect(execute).toHaveBeenCalledTimes(2);
     expect(result.verification?.state).toBe("not_checked");
@@ -262,7 +262,7 @@ describe("VillaForge authenticated integration", () => {
         forge,
       },
       execute,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
     expect(result.githubActions).toBe(24);
     expect(execute).toHaveBeenCalledTimes(24);
@@ -306,7 +306,7 @@ describe("VillaForge authenticated integration", () => {
         forge,
       },
       execute,
-      { fetcher }
+      { fetcher, authorization: { administrator: true } }
     );
     expect(result.branch).toBe(second);
     expect(result.pullRequest?.branch).toBe(first);
