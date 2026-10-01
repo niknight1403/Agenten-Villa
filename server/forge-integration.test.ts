@@ -142,7 +142,7 @@ describe("VillaForge authenticated integration", () => {
     const execute = vi.fn(async (name: string) => {
       if (name === "github_create_branch") return { result: { branch } };
       if (name === "github_open_pull_request")
-        return { result: { number: 1, head: branch } };
+        return { result: { number: 1, url: "https://github.com/example/repo/pull/1", head: branch } };
       return {
         result: {
           ref: branch,
@@ -197,7 +197,7 @@ describe("VillaForge authenticated integration", () => {
     const execute = vi.fn(async (name: string) =>
       name === "github_create_branch"
         ? { result: { branch } }
-        : { result: { number: 2, head: branch } }
+        : { result: { number: 2, url: "https://github.com/example/repo/pull/2", head: branch } }
     );
     const result = await runAutonomousProjectWithGitHub(
       {
@@ -250,7 +250,7 @@ describe("VillaForge authenticated integration", () => {
       name === "github_create_branch"
         ? { result: { branch } }
         : name === "github_open_pull_request"
-          ? { result: { number: 3, head: branch } }
+          ? { result: { number: 3, url: "https://github.com/example/repo/pull/3", head: branch } }
           : { result: {} }
     );
     const result = await runAutonomousProjectWithGitHub(
@@ -295,7 +295,7 @@ describe("VillaForge authenticated integration", () => {
     const execute = vi.fn(async (name: string) =>
       name === "github_create_branch"
         ? { result: { branch: ++branches === 1 ? first : second } }
-        : { result: { number: 4, head: first } }
+        : { result: { number: 4, url: "https://github.com/example/repo/pull/4", head: first } }
     );
     const result = await runAutonomousProjectWithGitHub(
       {
