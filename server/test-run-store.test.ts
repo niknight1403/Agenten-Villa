@@ -447,3 +447,124 @@ describe("listRunEvents (Sprint 025)", () => {
     expect(rows).toEqual([sampleEvent]);
   });
 });
+
+describe("Abbruchgrund (Sprint 026 — manuell vs. technisch)", () => {
+  it("records a manual cancellation by default when a run is cancelled", async () => {
+    let patch: Record<string, unknown> | undefined;
+    const cancelledRun = {
+      ...activeRun,
+      status: "cancelled" as const,
+      phase: "result" as const,
+      cancellationKind: "manual" as const,
+    };
+    const tx = mockTx({ runRows: [activeRun] });
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (werte: Record<string, unknown>) => {
+            patch = werte;
+            return {
+              where: () => ({ returning: async () => [cancelledRun] }),
+            };
+          },
+        }) as never
+    );
+    const run = await finishTestRun({
+      runId: 11,
+      userId: 17,
+      status: "cancelled",
+    });
+    expect(patch).toMatchObject({
+      status: "cancelled",
+      cancellationKind: "manual",
+    });
+    expect(run.cancellationKind).toBe("manual");
+  });
+
+  it("records an explicitly technical cancellation (e.g. time limit)", async () => {
+    let patch: Record<string, unknown> | undefined;
+    const tx = mockTx({ runRows: [activeRun] });
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (werte: Record<string, unknown>) => {
+            patch = werte;
+            return {
+              where: () => ({
+                returning: async () => [
+                  {
+                    ...activeRun,
+                    status: "cancelled",
+                    phase: "result",
+                    cancellationKind: "technical",
+                  },
+                ],
+              }),
+            };
+          },
+        }) as never
+    );
+    await finishTestRun({
+      runId: 11,
+      userId: 17,
+      status: "cancelled",
+      cancellationKind: "technical",
+      errorCode: "TIME_LIMIT_EXCEEDED",
+    });
+    expect(patch).toMatchObject({
+      status: "cancelled",
+      cancellationKind: "technical",
+      errorCode: "TIME_LIMIT_EXCEEDED",
+    });
+  });
+
+  it("never writes a cancellation kind for non-cancelled finishes", async () => {
+    let patch: Record<string, unknown> | undefined;
+    const tx = mockTx({ runRows: [activeRun] });
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (werte: Record<string, unknown>) => {
+            patch = werte;
+            return {
+              where: () => ({ returning: async () => [finishedRun] }),
+            };
+          },
+        }) as never
+    );
+    await finishTestRun({ runId: 11, userId: 17, status: "succeeded" });
+    expect(patch).toMatchObject({ status: "succeeded", cancellationKind: null });
+  });
+
+  it("rejects a cancellation kind for non-cancelled statuses", async () => {
+    const tx = mockTx({ runRows: [activeRun] });
+    await expect(
+      finishTestRun({
+        runId: 11,
+        userId: 17,
+        status: "succeeded",
+        cancellationKind: "manual",
+      })
+    ).rejects.toMatchObject({ reason: "CANCEL_KIND_MISMATCH" });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps the recorded kind when finishing an already finished run", async () => {
+    const finishedCancelled = {
+      ...activeRun,
+      id: 13,
+      status: "cancelled" as const,
+      phase: "result" as const,
+      cancellationKind: "technical" as const,
+      endedAt: new Date("2026-09-30T08:03:00Z"),
+    };
+    const tx = mockTx({ runRows: [finishedCancelled] });
+    const run = await finishTestRun({
+      runId: 13,
+      userId: 17,
+      status: "cancelled",
+    });
+    expect(run).toBe(finishedCancelled);
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+});

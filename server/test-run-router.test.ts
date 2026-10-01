@@ -319,3 +319,54 @@ describe("run.log / run.appendEvent (Sprint 025 — Live-Aktivitätsprotokoll)",
     expect(spy).not.toHaveBeenCalled();
   });
 });
+
+describe("run.finish mit Abbruchgrund (Sprint 026)", () => {
+  it("passes the cancellation kind through to the store", async () => {
+    const spy = vi
+      .spyOn(store, "finishTestRun")
+      .mockResolvedValue({
+        ...runningRun,
+        status: "cancelled",
+        phase: "result",
+        cancellationKind: "technical",
+        endedAt: new Date("2026-10-01T19:05:00Z"),
+      });
+    const run = await caller.run.finish({
+      runId: 11,
+      status: "cancelled",
+      cancellationKind: "technical",
+    });
+    expect(run.cancellationKind).toBe("technical");
+    expect(spy).toHaveBeenCalledWith({
+      runId: 11,
+      userId: 17,
+      status: "cancelled",
+      cancellationKind: "technical",
+    });
+  });
+
+  it("rejects invalid cancellation kinds at the schema level", async () => {
+    const spy = vi.spyOn(store, "finishTestRun");
+    await expect(
+      caller.run.finish({
+        runId: 11,
+        status: "cancelled",
+        cancellationKind: "sonstwas",
+      } as never)
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("maps CANCEL_KIND_MISMATCH to CONFLICT", async () => {
+    vi.spyOn(store, "finishTestRun").mockRejectedValue(
+      new store.TestRunError("CANCEL_KIND_MISMATCH")
+    );
+    await expect(
+      caller.run.finish({
+        runId: 11,
+        status: "succeeded",
+        cancellationKind: "manual",
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});

@@ -126,6 +126,8 @@ export const testRunRouter = router({
         status: finishStatusSchema,
         result: z.unknown().optional(),
         errorCode: z.string().trim().max(40).optional(),
+        /** Sprint 026 — Abbruchart; nur mit status „cancelled" erlaubt. */
+        cancellationKind: z.enum(["manual", "technical"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -145,6 +147,7 @@ export const testRunRouter = router({
           status: input.status,
           result: input.result,
           errorCode: input.errorCode,
+          cancellationKind: input.cancellationKind,
         });
       } catch (error) {
         storeError(error);

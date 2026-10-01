@@ -92,6 +92,13 @@
       "when": 1790884609255,
       "tag": "0012_typical_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790884715264,
+      "tag": "0013_milky_scorpion",
+      "breakpoints": true
     }
   ]
 }
