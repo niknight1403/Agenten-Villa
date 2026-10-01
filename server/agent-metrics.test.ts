@@ -24,7 +24,7 @@ describe("Agentenmetriken (Sprint 048)", () => {
       "elite",
       runResult => runResult.completed,
       async () => {
-        await new Promise(resolve => setTimeout(resolve, 5));
+        await new Promise(resolve => setTimeout(resolve, 15));
         return { completed: true };
       }
     );
@@ -32,7 +32,7 @@ describe("Agentenmetriken (Sprint 048)", () => {
     const summary = agentMetricsSummary();
     expect(summary.totals).toEqual({ completed: 1, partial: 0, failed: 0 });
     expect(summary.samples).toBe(1);
-    expect(summary.averageDurationMs).toBeGreaterThanOrEqual(5);
+    expect(summary.averageDurationMs).toBeGreaterThanOrEqual(10);
     expect(summary.errorsByCode).toEqual([]);
   });
 
