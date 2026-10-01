@@ -68,11 +68,38 @@ export class AgentError extends Error {
   constructor(
     public readonly code: AgentErrorCode,
     message: string,
-    public readonly status?: number
+    public readonly status?: number,
+    /**
+     * Sprint 033 — Rate-Limit-Erkennung: bei 429/402 mit Retry-After-
+     * Kopf dokumentiert der Anbieter, wann das Kontingent wieder nutzbar
+     * ist. Gespeichert in Sekunden, nie geraten.
+     */
+    public readonly retryAfterSeconds?: number
   ) {
     super(message);
     this.name = "AgentError";
   }
+}
+
+/**
+ * Sprint 033 — Retry-After einer Anbieterantwort. Akzeptiert Sekunden
+ * ("120") oder ein HTTP-Datum; unlesbare Werte liefern undefined statt
+ * einer geratenen Zahl.
+ */
+export function parseRetryAfterSeconds(
+  raw: string | null,
+  now: Date = new Date()
+): number | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+  }
+  const at = Date.parse(trimmed);
+  if (Number.isNaN(at)) return undefined;
+  const delta = Math.ceil((at - now.getTime()) / 1000);
+  return Math.max(0, delta);
 }
 
 export const LIMITS = {
@@ -126,6 +153,8 @@ function retryable(status: number) {
 /** Maps an engine error onto the provider-waechter outcome vocabulary. */
 function providerOutcomeOf(error: unknown): ProviderOutcome {
   if (error instanceof AgentError) {
+    // TIMEOUT zaehlt fuer den Waechter als "unavailable": der Anbieter war
+    // zu langsam, das Kontingent selbst ist nicht betroffen.
     if (error.code === "LIMIT") return "limit";
     if (error.code === "AUTH") return "auth";
     if (error.code === "REJECTED") return "rejected";
@@ -312,7 +341,8 @@ async function callWithProviderChain(
           markProviderAuthFailure(route.name);
           break;
         }
-        // LIMIT, UNAVAILABLE, INVALID_RESPONSE: naechstes Modell probieren.
+        // Sprint 033 — LIMIT (429/402), UNAVAILABLE, TIMEOUT und
+        // INVALID_RESPONSE: naechstes Modell probieren.
       }
     }
   }
@@ -396,18 +426,34 @@ async function callProvider(
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch {
+  } catch (error) {
+    // Sprint 033 — Timeouts (AbortSignal.timeout) werden korrekt als
+    // TIMEOUT klassifiziert, nicht als allgemeine Unerreichbarkeit.
+    const name = error instanceof Error ? error.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new AgentError(
+        "TIMEOUT",
+        "Der Modellanbieter hat das Zeitlimit der Anfrage überschritten."
+      );
+    }
     throw new AgentError(
       "UNAVAILABLE",
       "Der Modellanbieter ist momentan nicht erreichbar."
     );
   }
-  if (response.status === 402 || response.status === 429)
+  if (response.status === 402 || response.status === 429) {
+    const retryAfter = parseRetryAfterSeconds(
+      response.headers.get("retry-after")
+    );
     throw new AgentError(
       "LIMIT",
-      "Das Kontingent oder Anfragelimit des Anbieters ist erreicht.",
-      response.status
+      retryAfter === undefined
+        ? "Das Kontingent oder Anfragelimit des Anbieters ist erreicht."
+        : `Das Kontingent oder Anfragelimit des Anbieters ist erreicht. Frühester nächster Versuch in ${retryAfter} Sekunden.`,
+      response.status,
+      retryAfter
     );
+  }
   if (response.status === 401 || response.status === 403)
     throw new AgentError(
       "AUTH",

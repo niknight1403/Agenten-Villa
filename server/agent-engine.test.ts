@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentError, LIMITS, resetProviderChainForTests, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
+import { AgentError, LIMITS, parseRetryAfterSeconds, resetProviderChainForTests, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
 import { resetProviderGuardianForTests } from "./provider-guardian";
 
 const input = { prompt: "Erstelle einen kurzen Plan", history: [], mode: "home" as const, specialty: "Generalist" };
@@ -60,6 +60,92 @@ describe("bounded provider router", () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(runAgentTurn(input, false, { fetcher })).rejects.toBeInstanceOf(AgentError);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("Rate-Limit-Erkennung (Sprint 033)", () => {
+  it("klassifiziert 429 als LIMIT und liest Retry-After in Sekunden", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: "rate limit" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "42" },
+      })
+    );
+    const outcome = await runAgentTurn(input, false, { fetcher }).catch(
+      error => error
+    );
+    expect(outcome).toBeInstanceOf(AgentError);
+    expect(outcome).toMatchObject({
+      code: "LIMIT",
+      status: 429,
+      retryAfterSeconds: 42,
+    });
+    expect(outcome.message).toContain("42 Sekunden");
+  });
+
+  it("klassifiziert 402 als LIMIT ohne geratenen Retry-After", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(402));
+    const outcome = await runAgentTurn(input, false, { fetcher }).catch(
+      error => error
+    );
+    expect(outcome).toMatchObject({
+      code: "LIMIT",
+      status: 402,
+      retryAfterSeconds: undefined,
+    });
+    expect(outcome.message).not.toContain("Sekunden");
+  });
+
+  it("klassifiziert Timeouts als TIMEOUT, nicht als Unerreichbarkeit", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new DOMException("Timed out", "TimeoutError"));
+    const outcome = await runAgentTurn(input, false, { fetcher }).catch(
+      error => error
+    );
+    expect(outcome).toMatchObject({ code: "TIMEOUT" });
+    expect(outcome.message).toContain("Zeitlimit");
+  });
+
+  it("lässt Netzwerkfehler als UNAVAILABLE unverändert", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new TypeError("fetch failed"));
+    const outcome = await runAgentTurn(input, false, { fetcher }).catch(
+      error => error
+    );
+    expect(outcome).toMatchObject({ code: "UNAVAILABLE" });
+  });
+
+  it("fällt bei TIMEOUT auf den nächsten Anbieter durch", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"))
+      .mockResolvedValueOnce(reply(200, "groq-model"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "groq",
+      attempts: 2,
+    });
+  });
+
+  it("parst Retry-After als Sekunden oder HTTP-Datum, sonst undefined", () => {
+    const now = new Date("2026-10-01T20:00:00Z");
+    expect(parseRetryAfterSeconds("42", now)).toBe(42);
+    expect(parseRetryAfterSeconds(" 42 ", now)).toBe(42);
+    expect(
+      parseRetryAfterSeconds("Thu, 01 Oct 2026 20:01:00 GMT", now)
+    ).toBe(60);
+    expect(parseRetryAfterSeconds("Thu, 01 Oct 2026 19:59:00 GMT", now)).toBe(0);
+    expect(parseRetryAfterSeconds("nonsens", now)).toBeUndefined();
+    expect(parseRetryAfterSeconds(null, now)).toBeUndefined();
+    //"-5" wird von JS als vergangenes Datum (Jahr -5) gelesen: 0 statt geraten
+    expect(parseRetryAfterSeconds("-5", now)).toBe(0);
   });
 });
 

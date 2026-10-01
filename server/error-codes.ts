@@ -6,6 +6,7 @@ export const AGENT_ERROR_CODES = [
   "REJECTED",
   "STOPPED",
   "INVALID_RESPONSE",
+  "TIMEOUT",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
@@ -25,6 +26,7 @@ export const ERROR_CATEGORIES: Record<AgentErrorCode, ErrorCategory> = {
   REJECTED: "provider",
   STOPPED: "control",
   INVALID_RESPONSE: "validation",
+  TIMEOUT: "provider",
 };
 
 export const PUBLIC_ERROR_MESSAGES: Record<ErrorCategory, string> = {
