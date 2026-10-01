@@ -253,3 +253,69 @@ describe("run.progress (Sprint 024 — Countdown und Fortschritt)", () => {
     expect(spy).toHaveBeenCalledWith(3, 17, 900);
   });
 });
+
+describe("run.log / run.appendEvent (Sprint 025 — Live-Aktivitätsprotokoll)", () => {
+  it("lists the last local events for an owned run", async () => {
+    const spy = vi
+      .spyOn(store, "listRunEvents")
+      .mockResolvedValue([
+        {
+          id: 71,
+          runId: 11,
+          level: "info",
+          message: "Planung abgeschlossen",
+          createdAt: new Date("2026-10-01T19:01:00Z"),
+        },
+      ]);
+    const events = await caller.run.log({ runId: 11, limit: 10 });
+    expect(events).toHaveLength(1);
+    expect(events[0].message).toBe("Planung abgeschlossen");
+    expect(spy).toHaveBeenCalledWith(11, 17, 10);
+  });
+
+  it("appends an event and returns it", async () => {
+    const spy = vi.spyOn(store, "appendRunEvent").mockResolvedValue({
+      id: 72,
+      runId: 11,
+      level: "warn",
+      message: "Rate-Limit beobachtet",
+      createdAt: new Date("2026-10-01T19:02:00Z"),
+    });
+    const event = await caller.run.appendEvent({
+      runId: 11,
+      level: "warn",
+      message: "Rate-Limit beobachtet",
+    });
+    expect(event.level).toBe("warn");
+    expect(spy).toHaveBeenCalledWith({
+      runId: 11,
+      userId: 17,
+      level: "warn",
+      message: "Rate-Limit beobachtet",
+    });
+  });
+
+  it("maps STATUS_MISMATCH on finished runs to CONFLICT", async () => {
+    vi.spyOn(store, "appendRunEvent").mockRejectedValue(
+      new store.TestRunError("STATUS_MISMATCH")
+    );
+    await expect(
+      caller.run.appendEvent({ runId: 12, level: "info", message: "zu spät" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("rejects empty and oversized messages", async () => {
+    const spy = vi.spyOn(store, "appendRunEvent");
+    await expect(
+      caller.run.appendEvent({ runId: 11, level: "info", message: "" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.run.appendEvent({
+        runId: 11,
+        level: "info",
+        message: "x".repeat(401),
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

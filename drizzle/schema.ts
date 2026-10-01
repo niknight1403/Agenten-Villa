@@ -309,5 +309,27 @@ export const villaTestRuns = pgTable(
   ]
 );
 
+/**
+ * Sprint 025 — Live-Aktivitätsprotokoll: begrenzte, lokale Ereignisliste je
+ * Testlauf. Nur laufende Läufe nehmen Ereignisse auf; die Historie eines
+ * abgeschlossenen Laufs bleibt unverändert.
+ */
+export const villaRunEvents = pgTable(
+  "villa_run_events",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("runId").notNull(),
+    level: varchar("level", { length: 16 })
+      .$type<"info" | "warn" | "error">()
+      .notNull()
+      .default("info"),
+    message: varchar("message", { length: 400 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("villa_run_events_runId_idx").on(table.runId)]
+);
+
+export type VillaRunEvent = typeof villaRunEvents.$inferSelect;
+export type InsertVillaRunEvent = typeof villaRunEvents.$inferInsert;
 export type VillaTestRun = typeof villaTestRuns.$inferSelect;
 export type InsertVillaTestRun = typeof villaTestRuns.$inferInsert;

@@ -2,10 +2,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import {
+  appendRunEvent,
   finishTestRun,
   getTestRun,
+  listRunEvents,
   listTestRuns,
   projectRunProgress,
+  RUN_EVENT_MESSAGE_MAX,
   setRunPhase,
   startTestRun,
   TestRunError,
@@ -154,6 +157,52 @@ export const testRunRouter = router({
    * finish. Wiederholtes Setzen der aktuellen Phase ist idempotent;
    * abgeschlossene oder rückwärtige Sprünge sind Konflikte.
    */
+  /**
+   * Sprint 025 — Live-Aktivitätsprotokoll: die letzten lokalen Ereignisse
+   * eines Laufs, neueste zuerst, begrenzt auf 50. Abgeschlossene Läufe
+   * bleiben lesbar; Ownership läuft über die Villa.
+   */
+  log: protectedProcedure
+    .input(
+      z.object({
+        runId: idSchema,
+        limit: z.number().int().min(1).max(50).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listRunEvents(input.runId, ctx.user.id, input.limit);
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /**
+   * Sprint 025 — Ereignis an das Live-Protokoll eines laufenden Laufs
+   * anhängen (Level info/warn/error, max. 400 Zeichen). Abgeschlossene
+   * Läufe nehmen keine Ereignisse mehr auf — die Historie bleibt fix.
+   */
+  appendEvent: protectedProcedure
+    .input(
+      z.object({
+        runId: idSchema,
+        level: z.enum(["info", "warn", "error"]),
+        message: z.string().trim().min(1).max(RUN_EVENT_MESSAGE_MAX),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await appendRunEvent({
+          runId: input.runId,
+          userId: ctx.user.id,
+          level: input.level,
+          message: input.message,
+        });
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
   setPhase: protectedProcedure
     .input(z.object({ runId: idSchema, phase: phaseSchema }))
     .mutation(async ({ ctx, input }) => {
