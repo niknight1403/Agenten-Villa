@@ -39,6 +39,16 @@ DATABASE_URL="postgres://...deine-uri..." pnpm db:push
    - `JWT_SECRET` wird automatisch generiert.
 4. Nach dem Deploy ist die App unter `https://agenten-villa.onrender.com` erreichbar.
 
+### Health-Check und Free-Tier-Aufwachzeit
+
+Der Endpunkt `https://agenten-villa.onrender.com/api/health` liefert bei einem betriebsbereiten Server HTTP 200 und JSON mit `ok: true`. Bei einem Render-Free-Service kann der erste Aufruf nach einer Schlafphase einige Zeit dauern; warte den Aufruf ab und probiere ihn anschließend erneut. Ein Timeout oder Gateway-Fehler beim ersten Versuch allein beweist noch keinen dauerhaften Ausfall.
+
+```bash
+curl -i --max-time 90 https://agenten-villa.onrender.com/api/health
+```
+
+Im JSON zeigt `database.status` den Datenbank-Verbindungsstatus. Bei wiederholtem Fehler nach dem Aufwachen zuerst Render-Logs und die gesetzte `DATABASE_URL` prüfen.
+
 ## 4. Google-Anmeldung einrichten (Account-System)
 
 Das Account-System basiert auf Google OAuth 2.0 (kein separates Passwort-System, "Mit Google anmelden" ist die einzige Anmeldeart):
