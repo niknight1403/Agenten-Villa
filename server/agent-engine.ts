@@ -29,6 +29,7 @@ import {
   markProviderFailure,
   providerInCooldown,
 } from "./provider-cooldown";
+import { recordRouterTelemetry } from "./router-telemetry";
 import type { AgentErrorCode } from "./error-codes";
 import { GitHubToolError } from "./github-tools";
 
@@ -295,6 +296,10 @@ async function callWithProviderChain(
     );
   let lastError: unknown = null;
   let attempts = 0;
+  // Sprint 038 — Router-Telemetrie: Latenz, Erfolg und Fallback-Grund.
+  const telemetryStart = Date.now();
+  let telemetryFallbackFrom: Provider | undefined;
+  let telemetryFallbackReason: string | undefined;
   for (let r = 0; r < registry.length; r += 1) {
     if (r > 0 && options.beforeFallback && !(await options.beforeFallback()))
       throw new AgentError(
@@ -321,6 +326,19 @@ async function callWithProviderChain(
           route.name === "openrouter" ? model : `${route.name}:${model}`,
           "ok"
         );
+        recordRouterTelemetry({
+          success: true,
+          provider: route.name,
+          model: completion.model ?? model,
+          attempts,
+          latencyMs: Date.now() - telemetryStart,
+          ...(telemetryFallbackFrom === undefined
+            ? {}
+            : {
+                fallbackFrom: telemetryFallbackFrom,
+                fallbackReason: telemetryFallbackReason,
+              }),
+        });
         return {
           completion,
           provider: route.name,
@@ -356,13 +374,36 @@ async function callWithProviderChain(
       // den Anbieter zeitlich begrenzt sperren (Retry-After, sonst Default).
       if (routeSawLimit)
         markProviderFailure(route.name, "limit", routeLimitRetryAfter);
+      // Sprint 038 — der Wechsel zu einem anderen Anbieter wird mit dem
+      // Fehlercode des gescheiterten Anbieters begruendet.
+      if (r + 1 < registry.length && lastError instanceof AgentError) {
+        telemetryFallbackFrom = route.name;
+        telemetryFallbackReason = lastError.code;
+      }
     }
   }
-  throw lastError ??
+  const terminalError =
+    lastError ??
     new AgentError(
       "UNAVAILABLE",
       "Kein Modellanbieter konnte die Anfrage beantworten."
     );
+  recordRouterTelemetry({
+    success: false,
+    provider: registry[registry.length - 1]!.name,
+    model: registry[registry.length - 1]!.models[0] ?? "",
+    attempts,
+    latencyMs: Date.now() - telemetryStart,
+    ...(telemetryFallbackFrom === undefined
+      ? {}
+      : {
+          fallbackFrom: telemetryFallbackFrom,
+          fallbackReason: telemetryFallbackReason,
+        }),
+    errorCode:
+      terminalError instanceof AgentError ? terminalError.code : "UNKNOWN",
+  });
+  throw terminalError;
 }
 
 function resolveSystemPrompt(input: AgentInput): string {

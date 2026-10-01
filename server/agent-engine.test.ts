@@ -8,7 +8,9 @@ const workshopInput = { ...input, prompt: "Zeige den Repo-Überblick", mode: "wo
 const reply = (status: number, model = "free-test") => new Response(JSON.stringify({ model, choices: [{ message: { content: "1. Ziel festlegen. 2. Ergebnis prüfen." } }] }), { status, headers: { "Content-Type": "application/json" } });
 const toolReply = (id: string, name: string, args: unknown) => new Response(JSON.stringify({ model: "free-tool-model", choices: [{ message: { content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); });
+import { resetRouterTelemetryForTests, routerTelemetrySummary } from "./router-telemetry";
+
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); resetRouterTelemetryForTests(); });
 
 describe("bounded provider router", () => {
   it("calls OpenRouter Free once and returns provider metadata", async () => {
@@ -219,6 +221,63 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
     expect(urls).not.toContain(
       "https://openrouter.ai/api/v1/chat/completions"
     );
+  });
+});
+
+describe("Router-Telemetrie (Sprint 038)", () => {
+  it("erfasst Latenz, Erfolg und Versuche eines Direkterfolgs", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await runAgentTurn(input, false, { fetcher });
+    const summary = routerTelemetrySummary();
+    expect(summary.turns).toBe(1);
+    expect(summary.successes).toBe(1);
+    expect(summary.fallbacks).toBe(0);
+    expect(summary.byProvider[0]).toMatchObject({
+      provider: "openrouter",
+      turns: 1,
+      successes: 1,
+    });
+    expect(summary.averageLatencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("erfasst Fallback-Grund und -Herkunft beim Anbieterwechsel", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation((url) =>
+        Promise.resolve(
+          String(url).includes("groq")
+            ? reply(200, "groq-model")
+            : new Response(JSON.stringify({ error: "limit" }), {
+                status: 429,
+                headers: { "Content-Type": "application/json", "Retry-After": "300" },
+              })
+        )
+      );
+    const outcome = await runAgentTurn(input, false, { fetcher });
+    expect(outcome.provider).toBe("groq");
+    const summary = routerTelemetrySummary();
+    expect(summary.turns).toBe(1);
+    expect(summary.fallbacks).toBe(1);
+    expect(summary.fallbackReasons).toEqual([{ reason: "LIMIT", count: 1 }]);
+    expect(summary.byProvider.find(p => p.provider === "groq")).toMatchObject({
+      turns: 1,
+      successes: 1,
+    });
+  });
+
+  it("erfasst den terminalen Fehlercode eines gescheiterten Turns", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(429));
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({
+      code: "LIMIT",
+    });
+    const summary = routerTelemetrySummary();
+    expect(summary.turns).toBe(1);
+    expect(summary.failures).toBe(1);
+    expect(summary.successRate).toBe(0);
   });
 });
 

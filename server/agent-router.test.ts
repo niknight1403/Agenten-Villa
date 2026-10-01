@@ -19,6 +19,7 @@ import {
 } from "./agent-router";
 import { resetProviderGuardianForTests } from "./provider-guardian";
 import { resetProviderHealthForTests } from "./provider-health";
+import { resetRouterTelemetryForTests } from "./router-telemetry";
 
 function createContext(role: "user" | "admin", email: string): TrpcContext {
   const now = new Date();
@@ -42,6 +43,7 @@ function createContext(role: "user" | "admin", email: string): TrpcContext {
 afterEach(() => {
   resetAgentRouterForTests();
   resetProviderGuardianForTests();
+  resetRouterTelemetryForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -283,6 +285,25 @@ describe("rate limit window reset", () => {
       consumeTurnForTests(100);
     expect(() => consumeTurnForTests(100)).toThrow(TRPCError);
     expect(() => consumeTurnForTests(101)).not.toThrow();
+  });
+});
+
+describe("Router-Telemetrie-Abfrage (Sprint 038)", () => {
+  it("liefert Administratoren die aggregierte Telemetrie", async () => {
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const summary = await admin.agent.routerTelemetry();
+    expect(summary).toMatchObject({ turns: 0, byProvider: [], fallbackReasons: [] });
+  });
+
+  it("bleibt administratoren-only", async () => {
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    await expect(user.agent.routerTelemetry()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 });
 
