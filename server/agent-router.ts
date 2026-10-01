@@ -103,6 +103,37 @@ export function remainingInWindow(
   return Math.max(0, limit - current.count);
 }
 
+/**
+ * Sprint 035 — Kontingentanzeige: Snapshot eines lokalen Fensters mit
+ * genutzten und verbleibenden Aufrufen. Reines Nachschauen ohne Verbrauch.
+ */
+export interface WindowSnapshot {
+  used: number;
+  remaining: number;
+  limit: number;
+  active: boolean;
+  resetsAt: Date | null;
+}
+
+export function windowSnapshot(
+  store: Map<number, { start: number; count: number }>,
+  userId: number,
+  limit: number,
+  windowMs: number,
+  now = Date.now()
+): WindowSnapshot {
+  const current = store.get(userId);
+  if (!current || now - current.start >= windowMs)
+    return { used: 0, remaining: limit, limit, active: false, resetsAt: null };
+  return {
+    used: current.count,
+    remaining: Math.max(0, limit - current.count),
+    limit,
+    active: true,
+    resetsAt: new Date(current.start + windowMs),
+  };
+}
+
 function windowResetAt(
   store: Map<number, { start: number; count: number }>,
   userId: number,
@@ -280,6 +311,32 @@ export const agentRouter = router({
         ? null
         : windowResetAt(usage, ctx.user.id, WINDOW_MS),
       unlimited: admin,
+      /**
+       * Sprint 035 — Kontingentanzeige: genutzte und verbleibende lokale
+       * Fenster. Administratoren sind unbegrenzt und sehen null.
+       */
+      windows: admin
+        ? null
+        : {
+            turns: windowSnapshot(
+              usage,
+              ctx.user.id,
+              MAX_TURNS_PER_WINDOW,
+              WINDOW_MS
+            ),
+            github: windowSnapshot(
+              githubUsage,
+              ctx.user.id,
+              MAX_GITHUB_TURNS_PER_WINDOW,
+              GITHUB_WINDOW_MS
+            ),
+            credentialChecks: windowSnapshot(
+              credentialChecks,
+              ctx.user.id,
+              MAX_CREDENTIAL_CHECKS,
+              CREDENTIAL_CHECK_WINDOW_MS
+            ),
+          },
     };
   }),
   status: protectedProcedure.query(({ ctx }) => {
