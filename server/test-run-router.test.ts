@@ -409,3 +409,42 @@ describe("run.releaseForResume / Wiederaufnahme (Sprint 027)", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 });
+
+describe("run.report (Sprint 028 — Laufbericht)", () => {
+  it("compiles the report for an owned run", async () => {
+    const spy = vi.spyOn(store, "getTestRun").mockResolvedValue({
+      ...runningRun,
+      startedAt: new Date("2026-10-01T19:55:00Z"),
+    });
+    vi.spyOn(store, "listRunEvents").mockResolvedValue([]);
+    const spyBuild = vi
+      .spyOn(store, "buildRunReport")
+      .mockReturnValue({
+        runId: 11,
+        villaId: 3,
+        status: "running",
+        phase: "planning",
+        cancellationKind: null,
+        errorCode: null,
+        resumedFromRunId: null,
+        startedAt: new Date("2026-10-01T19:55:00Z"),
+        endedAt: null,
+        durationSeconds: 300,
+        timeLimitSeconds: 600,
+        expired: false,
+        events: { inspected: 0, info: 0, warn: 0, error: 0, lastMessages: [] },
+      });
+    const report = await caller.run.report({ runId: 11 });
+    expect(report.durationSeconds).toBe(300);
+    expect(report.events.inspected).toBe(0);
+    expect(spy).toHaveBeenCalledWith(11, 17);
+    expect(spyBuild).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects reports for foreign runs with NOT_FOUND", async () => {
+    vi.spyOn(store, "getTestRun").mockResolvedValue(undefined);
+    await expect(caller.run.report({ runId: 99 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+});

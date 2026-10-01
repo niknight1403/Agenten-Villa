@@ -32,7 +32,8 @@
 | 025     | Grün    | Live-Aktivitätsprotokoll: neue Tabelle villa_run_events (Migration 0012) mit Level info/warn/error und max. 400 Zeichen; run.log liest die letzten Ereignisse (neueste zuerst, max. 50), run.appendEvent schreibt nur in laufende Läufe — abgeschlossene bleiben fix (9 neue Tests grün). |
 | 026     | Grün    | Abbruchgrund: villa_test_runs erfasst cancellationKind „manual“ (Default) oder „technical“ (z. B. Zeitgrenze), Migration 0013; nur mit status „cancelled“ erlaubt, Art wird bei wiederholtem Finish nie umgeschrieben (8 neue Tests grün). |
 | 027     | Grün    | Wiederaufnahme-Regeln: Freigabe (releasedForResumeAt, Migration 0014) nur für abgebrochene Läufe (cancelled/failed), idempotent; run.start mit resumeOfRunId fortführen nur aus explizit freigegebenen Läufen (NOT_RELEASED sonst) — die Historie bleibt unverändert, der neue Lauf referenziert resumedFromRunId (10 neue Tests grün). |
-| 028–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
+| 028     | Grün    | Laufbericht: run.report compiliert Status, Dauer (abgeschlossen: endedAt, laufend: bis jetzt), Phase, Zeitgrenze/Ablauf, Abbruchgrund und Fehlerbild (Level-Zähler + fünf letzte Meldungen) deterministisch — ohne eigenen Speicherzustand (5 neue Tests grün). |
+| 029–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
 
 ## Grüner Validierungsweg
 

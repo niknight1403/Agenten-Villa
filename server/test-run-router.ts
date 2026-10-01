@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import {
   appendRunEvent,
+  buildRunReport,
   finishTestRun,
   releaseRunForResume,
   getTestRun,
@@ -177,6 +178,24 @@ export const testRunRouter = router({
           errorCode: input.errorCode,
           cancellationKind: input.cancellationKind,
         });
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /**
+   * Sprint 028 — Laufbericht: deterministischer Abschlussbericht eines
+   * Laufs mit Status, Dauer, Phase, Zeitgrenze und Fehlerbild (letzte
+   * Ereignisse). Auch für laufende Läufe abrufbar.
+   */
+  report: protectedProcedure
+    .input(z.object({ runId: idSchema }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const run = await getTestRun(input.runId, ctx.user.id);
+        if (!run) throw new TestRunError("NOT_FOUND");
+        const events = await listRunEvents(input.runId, ctx.user.id);
+        return buildRunReport(run, events);
       } catch (error) {
         storeError(error);
       }

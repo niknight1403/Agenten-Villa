@@ -2,12 +2,11 @@ import { and, desc, eq } from "drizzle-orm";
 import type {
   CancellationKind,
   RunPhase,
+  VillaRunEvent,
   VillaTestRun,
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { villaRunEvents, villaTestRuns, villas } from "../drizzle/schema";
-import type { VillaRunEvent } from "../drizzle/schema";
-
 /** Sprint 021/022 — Lebenszyklus eines begrenzten Villa-Testlaufs. */
 export type TestRunStatus = "running" | "succeeded" | "failed" | "cancelled";
 
@@ -444,4 +443,71 @@ export async function releaseRunForResume(input: {
       .returning();
     return updated;
   });
+}
+
+/** Sprint 028 — Laufbericht: compilierter Abschlussstand eines Laufs. */
+export type RunReport = {
+  runId: number;
+  villaId: number;
+  status: TestRunStatus;
+  phase: RunPhase;
+  cancellationKind: "manual" | "technical" | null;
+  errorCode: string | null;
+  resumedFromRunId: number | null;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSeconds: number;
+  timeLimitSeconds: number;
+  expired: boolean;
+  events: {
+    inspected: number;
+    info: number;
+    warn: number;
+    error: number;
+    lastMessages: string[];
+  };
+};
+
+/**
+ * Sprint 028 — Laufbericht deterministisch aus einem Lauf und seinen letzten
+ * Ereignissen compilieren: Status, Dauer (abgeschlossen: endedAt, sonst jetzt),
+ * Zeitgrenze, Abbruchgrund und Fehlerbild. Kein eigener Speicherzustand —
+ * der Bericht lügt nie über die Historie.
+ */
+export function buildRunReport(
+  run: VillaTestRun,
+  events: VillaRunEvent[],
+  now: Date = new Date()
+): RunReport {
+  const limit = clampRunTimeLimitSeconds(run.timeLimitSeconds ?? undefined);
+  const endTime = run.status === "running" ? now : (run.endedAt ?? now);
+  const durationSeconds = Math.max(
+    0,
+    Math.floor((endTime.getTime() - run.startedAt.getTime()) / 1000)
+  );
+  const levels = { info: 0, warn: 0, error: 0 };
+  for (const event of events) levels[event.level]++;
+  return {
+    runId: run.id,
+    villaId: run.villaId,
+    status: run.status,
+    phase: run.phase as RunPhase,
+    cancellationKind: run.cancellationKind ?? null,
+    errorCode: run.errorCode ?? null,
+    resumedFromRunId: run.resumedFromRunId ?? null,
+    startedAt: run.startedAt,
+    endedAt: run.status === "running" ? null : run.endedAt,
+    durationSeconds,
+    timeLimitSeconds: limit,
+    expired: durationSeconds > limit,
+    events: {
+      inspected: events.length,
+      info: levels.info,
+      warn: levels.warn,
+      error: levels.error,
+      // Ereignisse kommen neueste zuerst — die fünf letzten Meldungen
+      // bleiben in dieser Reihenfolge (aktuellste zuerst).
+      lastMessages: events.slice(0, 5).map(event => event.message),
+    },
+  };
 }
