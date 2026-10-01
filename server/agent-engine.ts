@@ -30,6 +30,12 @@ import {
   providerInCooldown,
 } from "./provider-cooldown";
 import { recordRouterTelemetry } from "./router-telemetry";
+import {
+  AgentSchemaError,
+  parseAgentInput,
+  parseAgentResult,
+  AGENT_INPUT_LIMITS,
+} from "./agent-schemas";
 import type { AgentErrorCode } from "./error-codes";
 import { GitHubToolError } from "./github-tools";
 
@@ -110,9 +116,9 @@ export function parseRetryAfterSeconds(
 }
 
 export const LIMITS = {
-  promptChars: 4_000,
-  historyMessages: 8,
-  historyChars: 1_000,
+  promptChars: AGENT_INPUT_LIMITS.promptChars,
+  historyMessages: AGENT_INPUT_LIMITS.historyMessages,
+  historyChars: AGENT_INPUT_LIMITS.historyChars,
   outputTokens: 384,
   timeoutMs: 15_000,
   maxCalls: 2,
@@ -552,26 +558,42 @@ async function callProvider(
   };
 }
 
+
+/** Sprint 041 — Schemafehler an der Engine-Grenze als AgentError melden. */
+function parseAgentInputOrThrow(input: AgentInput): AgentInput {
+  try {
+    return parseAgentInput(input);
+  } catch (error) {
+    if (error instanceof AgentSchemaError)
+      throw new AgentError("INVALID_INPUT", error.message);
+    throw error;
+  }
+}
+
 export async function runAgentTurn(
   input: AgentInput,
   allowFallback: boolean,
   deps: Dependencies = {}
 ): Promise<AgentResult> {
+  // Sprint 041 — Auftragsschema: Eingabe und Kontext werden vor der
+  // Verarbeitung gegen das validierte Schema geprueft (unbekannte
+  // Schlüssel werden abgestreift).
+  const validatedInput: AgentInput = parseAgentInputOrThrow(input);
   const fetcher = deps.fetcher ?? fetch;
-  const messages = makeMessages(input);
+  const messages = makeMessages(validatedInput);
   const key = cacheKey(messages);
 
   // Free-Tier-Optimierung 1: identische Anfrage im Cache -> 0 Token.
   if (cacheEnabled()) {
     const hit = readCache(key);
     if (hit)
-      return {
+      return parseAgentResult({
         answer: hit.answer,
         provider: hit.provider as Provider,
         model: hit.model,
         attempts: 0,
         cached: true,
-      };
+      });
   }
 
   // Free-Tier-Optimierung 2 + 3: Dedupe identischer Parallelanfragen und
@@ -586,12 +608,12 @@ export async function runAgentTurn(
         beforeFallback: deps.beforeFallback,
       }
     );
-    return {
+    return parseAgentResult({
       answer: completion.answer,
       provider,
       model: completion.model,
       attempts,
-    };
+    });
   });
 
   const result = await run;
@@ -625,8 +647,11 @@ async function runGitHubToolLoop(
       "GitHub-Werkzeuge sind ausschließlich in der Projekt-Werkstatt verfügbar."
     );
 
+  // Sprint 041 — Auftragsschema: auch die Werkzeugrunde laeuft nur mit
+  // schema-validierter Eingabe.
+  const validatedInput: AgentInput = parseAgentInputOrThrow(input);
   const fetcher = deps.fetcher ?? fetch;
-  const messages = makeMessages(input, {
+  const messages = makeMessages(validatedInput, {
     withGitHub: true,
     elite: profile.elite,
   });
