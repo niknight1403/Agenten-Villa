@@ -252,8 +252,10 @@ async function executePersistedMission(run: EliteMissionRun, missionInput: Saved
   }, missionLeaseIntervalMs());
   heartbeat.unref?.();
   try {
+    // Sprint 044 — Missionskontexte sind gegeneinander isoliert: die
+    // Missions-Identität reist mit dem Auftrag und namespaced Cache/Dedupe.
     const result = await runAutonomousProjectWithGitHub(
-      missionInput,
+      { ...missionInput, missionId: String(run.id) },
       async (name, args) => {
         if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
         return executeGitHubTool(name, args);
