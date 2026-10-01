@@ -56,7 +56,9 @@ import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./ag
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
 let controlState: "RUNNING" | "STOPPED" = "RUNNING";
-let adminSystemPrompt: string | null = null;
+import { activePrompt, commitPromptVersion, listPromptVersions, rollbackPromptVersion } from "./prompt-versions";
+import { resetPromptVersionsForTests } from "./prompt-versions";
+import type { PromptVersion } from "./prompt-versions";
 const usage = new Map<number, { start: number; count: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_TURNS_PER_WINDOW = 12;
@@ -386,7 +388,7 @@ export const agentRouter = router({
     return {
       state: controlState,
       isAdmin: admin,
-      systemPrompt: adminSystemPrompt,
+      systemPrompt: activePrompt(),
       providers: configuredProviders(),
       github: {
         configured: Boolean(process.env.GITHUB_TOKEN?.trim()),
@@ -503,8 +505,25 @@ export const agentRouter = router({
     .mutation(({ ctx, input }) => {
       requireAdmin(ctx.user);
       const trimmed = input.prompt?.trim() ?? "";
-      adminSystemPrompt = trimmed ? trimmed : null;
-      return { systemPrompt: adminSystemPrompt };
+      // Sprint 049 — jede Änderung wird als versionierter Eintrag
+      // aufgezeichnet und ist über den Verlauf nachvollziehbar.
+      const version = commitPromptVersion(
+        trimmed ? trimmed : null,
+        ctx.user.email ?? "unbekannt"
+      );
+      return { systemPrompt: version.prompt, version: version.version };
+    }),
+  // Sprint 049 — Prompt- und Kontextversionierung: Verlauf und Rollback.
+  promptVersions: protectedProcedure.query(({ ctx }) => {
+    requireAdmin(ctx.user);
+    return listPromptVersions();
+  }),
+  rollbackPromptVersion: protectedProcedure
+    .input(z.object({ version: z.number().int().positive() }))
+    .mutation(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      const version = rollbackPromptVersion(input.version, ctx.user.email ?? "unbekannt");
+      return { systemPrompt: version.prompt, version: version.version };
     }),
   /**
    * Sprint 036 — Provider-Gesundheitscheck: ungefährliche, begrenzte
@@ -622,8 +641,8 @@ export const agentRouter = router({
           mode: "workshop" as const,
           specialty: input.specialty,
           ...(input.forge ? { forge: input.forge } : {}),
-          ...(adminSystemPrompt
-            ? { systemOverride: adminSystemPrompt }
+          ...(activePrompt()
+            ? { systemOverride: activePrompt() }
             : {}),
         };
         const reservation = await reserveMission({ userId: ctx.user.id, idempotencyKey: key, requestHash, missionInput });
@@ -705,8 +724,8 @@ export const agentRouter = router({
             });
           if (!isAdmin(ctx.user)) consumeGitHubTurn(ctx.user.id);
           const result = await runAgentTurnWithGitHub(
-            adminSystemPrompt
-              ? { ...input, systemOverride: adminSystemPrompt }
+            activePrompt()
+              ? { ...input, systemOverride: activePrompt() }
               : input,
             (name, args) => executeGitHubTool(name, args),
             // Sprint 043 — requireAdmin hat den Aufrufer bereits geprüft;
@@ -736,8 +755,8 @@ export const agentRouter = router({
               "Hugging Face wurde ausdrücklich als Fallback angefragt, aber HF_TOKEN ist nicht als Server-Secret eingerichtet. Es erfolgt keine stille Umleitung auf andere Anbieter.",
           });
         const result = await runAgentTurn(
-          adminSystemPrompt
-            ? { ...input, systemOverride: adminSystemPrompt }
+          activePrompt()
+            ? { ...input, systemOverride: activePrompt() }
             : input,
           input.allowHuggingFaceFallback,
           { beforeFallback: async () => controlState === "RUNNING" }
@@ -771,15 +790,16 @@ export const githubControlLimits = {
   maxTurnsPerWindow: MAX_GITHUB_TURNS_PER_WINDOW,
 } as const;
 export function resetAgentRouterForTests() {
+  resetPromptVersionsForTests();
   controlState = "RUNNING";
-  adminSystemPrompt = null;
+  resetPromptVersionsForTests();
   usage.clear();
   credentialChecks.clear();
   githubUsage.clear();
 }
 
 export function getAdminSystemPromptForTests() {
-  return adminSystemPrompt;
+  return activePrompt();
 }
 export function getAgentRouterStateForTests() {
   return controlState;
