@@ -56,6 +56,67 @@ describe("durable elite mission boundary", () => {
   });
 });
 
+describe("Retry-Regeln (Sprint 045)", () => {
+  it("begrenzt Missionswiederholungen auf MAX_MISSION_ATTEMPTS", async () => {
+    const { MAX_MISSION_ATTEMPTS, missionRetryExhausted } = await import("./elite-mission-store");
+    expect(MAX_MISSION_ATTEMPTS).toBe(3);
+    expect(missionRetryExhausted({ attempt: 2 })).toBe(false);
+    expect(missionRetryExhausted({ attempt: 3 })).toBe(true);
+    expect(missionRetryExhausted({ attempt: 4 })).toBe(true);
+  });
+
+  it("lehnt einen Restart nach erschöpftem Wiederholungslimit endgültig ab", async () => {
+    vi.stubEnv("GITHUB_TOKEN", "test-token");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model");
+    const caller = appRouter.createCaller(context());
+    await caller.agent.setState({ state: "RUNNING" });
+    const restart = vi.spyOn(missionStore, "restartInterruptedMission").mockResolvedValue(undefined);
+    vi.spyOn(missionStore, "getMissionRun").mockResolvedValue({
+      id: 7, ownerId: "x", status: "interrupted", attempt: 3,
+      input: { prompt, history: [], specialty, mode: "workshop" },
+    } as never);
+    const provider = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub");
+    const error = await caller.agent.restartInterruptedMission({ id: 7, acknowledgeExternalChanges: true })
+      .catch(e => e);
+    expect(error.code).toBe("CONFLICT");
+    expect(error.message).toContain("Wiederholungslimit");
+    expect(restart).toHaveBeenCalledTimes(1);
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("meldet weiterhin den allgemeinen Konflikt, wenn kein Limit erreicht ist", async () => {
+    vi.stubEnv("GITHUB_TOKEN", "test-token");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model");
+    const caller = appRouter.createCaller(context());
+    await caller.agent.setState({ state: "RUNNING" });
+    vi.spyOn(missionStore, "restartInterruptedMission").mockResolvedValue(undefined);
+    vi.spyOn(missionStore, "getMissionRun").mockResolvedValue(undefined);
+    const provider = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub");
+    const error = await caller.agent.restartInterruptedMission({ id: 8, acknowledgeExternalChanges: true })
+      .catch(e => e);
+    expect(error.code).toBe("CONFLICT");
+    expect(error.message).toContain("nicht unterbrochen");
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("laeuft ein Restart mit Restversuchen normal", async () => {
+    vi.stubEnv("GITHUB_TOKEN", "test-token");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model");
+    const caller = appRouter.createCaller(context());
+    await caller.agent.setState({ state: "RUNNING" });
+    vi.spyOn(missionStore, "restartInterruptedMission").mockResolvedValue({
+      id: 9, ownerId: "new-attempt", status: "running", attempt: 2,
+      input: { prompt, history: [], specialty, mode: "workshop" },
+    } as never);
+    vi.spyOn(missionStore, "renewMissionLease").mockResolvedValue(true);
+    vi.spyOn(missionStore, "finishMission").mockResolvedValue();
+    vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub")
+      .mockResolvedValue({ answer: "Entwurf", provider: "openrouter", model: "free", attempts: 1, completed: false } as never);
+    await expect(caller.agent.restartInterruptedMission({ id: 9, acknowledgeExternalChanges: true }))
+      .resolves.toMatchObject({ missionId: 9 });
+  });
+});
+
 describe("interrupt sweep throttling (PR-Agent)", () => {
   it("fires the expiry sweep at most once per 30 seconds", async () => {
     missionStore.resetInterruptSweepForTests();

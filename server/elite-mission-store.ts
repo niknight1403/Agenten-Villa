@@ -16,6 +16,14 @@ export type SavedMissionInput = {
 const activeRuns = new Set<number>();
 const LEASE_MS = 90_000;
 
+/** Sprint 045 — Retry-Regeln: Wiederholungen sind begrenzt. */
+export const MAX_MISSION_ATTEMPTS = 3 as const;
+
+/** True, wenn eine Mission ihr Wiederholungslimit erreicht hat. */
+export function missionRetryExhausted(run: Pick<EliteMissionRun, "attempt">): boolean {
+  return run.attempt >= MAX_MISSION_ATTEMPTS;
+}
+
 // interruptExpiredRuns() runs before almost every read query. A write per read
 // causes lock contention under load, so the sweep is throttled.
 const INTERRUPT_THROTTLE_MS = 30_000;
@@ -104,11 +112,21 @@ export async function restartInterruptedMission(id: number, userId: number): Pro
   if (activeRuns.has(id)) return undefined;
   const db = await requiredDb();
   const now = new Date();
+  // Sprint 045 — Retry-Regeln: der Restart selbst ist begrenzt; das
+  // Wiederholungslimit ist Teil der Bedingung, damit kein zehnter Branch
+  // oder vierter Lauf je entstehen kann. Duplikate verhindert die
+  // Idempotenz-Reserve bereits beim ersten Anlegen.
   const [run] = await db.update(eliteMissionRuns).set({
     status: "running", ownerId: randomUUID(), leaseUntil: new Date(now.getTime() + LEASE_MS),
     attempt: sql`${eliteMissionRuns.attempt} + 1`,
     updatedAt: now, errorCode: null, result: null, finishedAt: null,
-  }).where(and(eq(eliteMissionRuns.id, id), eq(eliteMissionRuns.userId, userId), eq(eliteMissionRuns.status, "interrupted"))).returning();
+  }).where(and(
+    eq(eliteMissionRuns.id, id),
+    eq(eliteMissionRuns.userId, userId),
+    eq(eliteMissionRuns.status, "interrupted"),
+    // Begrenzte Wiederholungen: nur solange Versuche uebrig sind.
+    lt(eliteMissionRuns.attempt, MAX_MISSION_ATTEMPTS)
+  )).returning();
   if (!run) return undefined;
   activeRuns.add(run.id);
   return run;
