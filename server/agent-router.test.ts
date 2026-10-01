@@ -63,11 +63,11 @@ describe("agent access controls", () => {
     vi.spyOn(missionStore, "renewMissionLease").mockResolvedValue(true);
     vi.spyOn(missionStore, "finishMission").mockResolvedValue();
     const mission = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub").mockResolvedValue({ answer: "Entwurf", provider: "openrouter", model: "free", attempts: 1, completed: false, branch: null, pullRequest: null, githubActions: 0 });
-    await expect(caller.agent.eliteMission({ villaId: 91, prompt: "Baue das Projekt", history: [] }))
+    await expect(caller.agent.eliteMission({ villaId: 91, prompt: "Baue das Projekt", history: [], acknowledgeImpact: true }))
       .rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mission).not.toHaveBeenCalled();
     villa.mockResolvedValue({ id: 9, createdBy: 17, name: "Projektvilla", specialty: "Projekt", projectBrief: "Android-Dateimanager", icon: "villa", createdAt: new Date(), updatedAt: new Date() });
-    await caller.agent.eliteMission({ villaId: 9, prompt: "Baue das Projekt", history: [] });
+    await caller.agent.eliteMission({ villaId: 9, prompt: "Baue das Projekt", history: [], acknowledgeImpact: true });
     expect(villa).toHaveBeenCalledWith(9, 17);
     expect(mission).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("Android-Dateimanager") }), expect.any(Function), expect.any(Object));
   });
@@ -574,7 +574,7 @@ describe("Mastervillage controller", () => {
       state: "RUNNING",
       isAdmin: true,
     });
-    await expect(caller.agent.setState({ state: "STOPPED" })).resolves.toEqual({
+    await expect(caller.agent.setState({ state: "STOPPED", acknowledgeStop: true })).resolves.toEqual({
       state: "STOPPED",
     });
   });

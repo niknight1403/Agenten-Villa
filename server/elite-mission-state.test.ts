@@ -25,10 +25,10 @@ describe("durable elite mission boundary", () => {
     vi.spyOn(missionStore, "findMissionByKey").mockResolvedValue({ id: 9, requestHash, status: "completed", result } as never);
     const provider = vi.spyOn(agentEngine, "runAutonomousProjectWithGitHub");
     const caller = appRouter.createCaller(context());
-    await expect(caller.agent.eliteMission({ idempotencyKey: key, prompt, history: [] }))
+    await expect(caller.agent.eliteMission({ idempotencyKey: key, prompt, history: [], acknowledgeImpact: true }))
       .resolves.toMatchObject(result);
     expect(provider).not.toHaveBeenCalled();
-    await expect(caller.agent.eliteMission({ idempotencyKey: key, prompt: "Ein anderes Projekt", history: [] }))
+    await expect(caller.agent.eliteMission({ idempotencyKey: key, prompt: "Ein anderes Projekt", history: [], acknowledgeImpact: true }))
       .rejects.toMatchObject({ code: "CONFLICT" });
   });
 
