@@ -52,6 +52,7 @@ import { routerTelemetrySummary } from "./router-telemetry";
 import { getPackCatalog } from "./pack-catalog";
 import { requireApproval } from "./approval-gates";
 import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./roles";
+import { recordAuditEntry, listAuditEntries, auditLogSize } from "./audit-log";
 import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
 
 // The assistant is ready out of the box so a signed-in user can chat
@@ -505,6 +506,13 @@ export const agentRouter = router({
       // Sprint 047 — Freigabepunkt: Anhalten nur mit ausdrücklicher Quittung.
       requireApproval("controller-stop", input.state !== "STOPPED" || input.acknowledgeStop === true);
       controlState = input.state;
+      // Sprint 052 — Audit-Log: kritische Änderungen besitzen Zeit, Nutzer und Aktion.
+      recordAuditEntry({
+        userId: ctx.user.id,
+        userEmail: ctx.user.email ?? null,
+        action: "controller_state_set",
+        details: `Betriebszustand auf ${input.state} gesetzt (Quittung erteilt).`,
+      });
       return { state: controlState };
     }),
   setSystemPrompt: protectedProcedure
@@ -518,6 +526,13 @@ export const agentRouter = router({
         trimmed ? trimmed : null,
         ctx.user.email ?? "unbekannt"
       );
+      // Sprint 052 — Audit-Log: Prompt-Änderungen sind nachvollziehbar.
+      recordAuditEntry({
+        userId: ctx.user.id,
+        userEmail: ctx.user.email ?? null,
+        action: "system_prompt_set",
+        details: `Systemprompt auf Version ${version.version} gesetzt (${trimmed ? "geändert" : "geleert"}).`,
+      });
       return { systemPrompt: version.prompt, version: version.version };
     }),
   // Sprint 049 — Prompt- und Kontextversionierung: Verlauf und Rollback.
@@ -525,11 +540,28 @@ export const agentRouter = router({
     requireAdmin(ctx.user);
     return listPromptVersions();
   }),
+  /**
+   * Sprint 052 — Audit-Log: kritische Änderungen mit Zeit, Nutzer und
+   * Aktion, newest-first. Nur für Administratoren abrufbar.
+   */
+  auditLog: protectedProcedure
+    .input(z.object({ limit: z.number().int().positive().max(200).default(50) }))
+    .query(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      return { entries: listAuditEntries(input.limit), total: auditLogSize() };
+    }),
   rollbackPromptVersion: protectedProcedure
     .input(z.object({ version: z.number().int().positive() }))
     .mutation(({ ctx, input }) => {
       requireAdmin(ctx.user);
       const version = rollbackPromptVersion(input.version, ctx.user.email ?? "unbekannt");
+      // Sprint 052 — Audit-Log: Rollbacks sind nachvollziehbar.
+      recordAuditEntry({
+        userId: ctx.user.id,
+        userEmail: ctx.user.email ?? null,
+        action: "system_prompt_rollback",
+        details: `Systemprompt auf Version ${input.version} zurückgesetzt; neue Version ${version.version}.`,
+      });
       return { systemPrompt: version.prompt, version: version.version };
     }),
   /**
