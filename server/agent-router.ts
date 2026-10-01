@@ -47,6 +47,7 @@ import {
   checkProviderHealth,
   type ProviderHealthStatus,
 } from "./provider-health";
+import { routerTelemetrySummary } from "./router-telemetry";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -300,6 +301,14 @@ function mapAgentError(error: unknown): never {
 }
 
 export const agentRouter = router({
+  /**
+   * Sprint 038 — Router-Telemetrie: aggregierte Latenz, Erfolg und
+   * Fallback-Gruende. Nur für Administratoren; ohne Nutzdaten.
+   */
+  routerTelemetry: protectedProcedure.query(({ ctx }) => {
+    requireAdmin(ctx.user);
+    return routerTelemetrySummary();
+  }),
   usage: protectedProcedure.query(({ ctx }) => {
     const admin = isAdmin(ctx.user);
     return {
