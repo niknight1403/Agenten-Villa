@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "./_core/trpc";
 import {
   appendRunEvent,
   finishTestRun,
+  releaseRunForResume,
   getTestRun,
   listRunEvents,
   listTestRuns,
@@ -89,14 +90,41 @@ export const testRunRouter = router({
     }),
 
   start: protectedProcedure
-    .input(z.object({ villaId: idSchema, timeLimitSeconds: timeLimitSchema }))
+    .input(
+      z.object({
+        villaId: idSchema,
+        timeLimitSeconds: timeLimitSchema,
+        /** Sprint 027 — Lauf, aus dem explizit freigegeben fortgesetzt wird. */
+        resumeOfRunId: idSchema.optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         return await startTestRun(
           input.villaId,
           ctx.user.id,
-          input.timeLimitSeconds
+          input.timeLimitSeconds,
+          input.resumeOfRunId
         );
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /**
+   * Sprint 027 — Wiederaufnahme-Regeln: einen abgebrochenen Lauf (cancelled/
+   * failed) explizit für die Fortsetzung freigeben. Erst danach kann
+   * run.start mit resumeOfRunId einen neuen Lauf aus ihm fortführen —
+   * die Historie selbst bleibt unverändert.
+   */
+  releaseForResume: protectedProcedure
+    .input(z.object({ runId: idSchema }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await releaseRunForResume({
+          runId: input.runId,
+          userId: ctx.user.id,
+        });
       } catch (error) {
         storeError(error);
       }

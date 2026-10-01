@@ -87,7 +87,7 @@ describe("run router (Sprint 021/022)", () => {
     const run = await caller.run.start({ villaId: 3 });
     expect(run.status).toBe("running");
     expect(run.endedAt).toBeNull();
-    expect(spy).toHaveBeenCalledWith(3, 17, undefined);
+    expect(spy).toHaveBeenCalledWith(3, 17, undefined, undefined);
   });
 
   it("maps foreign villas to NOT_FOUND", async () => {
@@ -250,7 +250,7 @@ describe("run.progress (Sprint 024 — Countdown und Fortschritt)", () => {
       .spyOn(store, "startTestRun")
       .mockResolvedValue(runningRun);
     await caller.run.start({ villaId: 3, timeLimitSeconds: 900 });
-    expect(spy).toHaveBeenCalledWith(3, 17, 900);
+    expect(spy).toHaveBeenCalledWith(3, 17, 900, undefined);
   });
 });
 
@@ -368,5 +368,44 @@ describe("run.finish mit Abbruchgrund (Sprint 026)", () => {
         cancellationKind: "manual",
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});
+
+describe("run.releaseForResume / Wiederaufnahme (Sprint 027)", () => {
+  it("releases an owned aborted run for resume", async () => {
+    const spy = vi.spyOn(store, "releaseRunForResume").mockResolvedValue({
+      ...runningRun,
+      id: 13,
+      status: "cancelled",
+      phase: "result",
+      cancellationKind: "technical",
+      releasedForResumeAt: new Date("2026-10-01T19:10:00Z"),
+    });
+    const run = await caller.run.releaseForResume({ runId: 13 });
+    expect(run.releasedForResumeAt).toBeTruthy();
+    expect(spy).toHaveBeenCalledWith({ runId: 13, userId: 17 });
+  });
+
+  it("maps NOT_RELEASED to CONFLICT — resume without release is a conflict", async () => {
+    vi.spyOn(store, "startTestRun").mockRejectedValue(
+      new store.TestRunError("NOT_RELEASED")
+    );
+    await expect(
+      caller.run.start({ villaId: 3, resumeOfRunId: 13 })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("passes resumeOfRunId through on start", async () => {
+    const spy = vi.spyOn(store, "startTestRun").mockResolvedValue(runningRun);
+    await caller.run.start({ villaId: 3, resumeOfRunId: 13 });
+    expect(spy).toHaveBeenCalledWith(3, 17, undefined, 13);
+  });
+
+  it("rejects non-positive run ids for release at the schema level", async () => {
+    const spy = vi.spyOn(store, "releaseRunForResume");
+    await expect(
+      caller.run.releaseForResume({ runId: 0 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

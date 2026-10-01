@@ -5,6 +5,7 @@ import {
   finishTestRun,
   listRunEvents,
   projectRunProgress,
+  releaseRunForResume,
   setRunPhase,
   startTestRun,
   TestRunError,
@@ -566,5 +567,190 @@ describe("Abbruchgrund (Sprint 026 — manuell vs. technisch)", () => {
     });
     expect(run).toBe(finishedCancelled);
     expect(tx.update).not.toHaveBeenCalled();
+  });
+});
+
+const cancelledRun: VillaTestRun = {
+  ...activeRun,
+  id: 13,
+  status: "cancelled",
+  phase: "result",
+  cancellationKind: "technical",
+  errorCode: "TIME_LIMIT_EXCEEDED",
+  endedAt: new Date("2026-09-30T08:03:00Z"),
+};
+
+/** Mock für releaseRunForResume: Join-Kette villaTestRuns x villas. */
+function mockReleaseTx(overrides: { runRows?: VillaTestRun[] }) {
+  const runRows = overrides.runRows ?? [];
+  const tx = {
+    select: vi.fn(() => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => runRows.map(run => ({ run })),
+            }),
+          }),
+        }),
+      }),
+    })),
+    update: vi.fn().mockReturnValue({
+      set: () => ({
+        where: () => ({
+          returning: async () => [
+            { ...runRows[0], releasedForResumeAt: new Date("2026-09-30T09:00:00Z") },
+          ],
+        }),
+      }),
+    }),
+  };
+  vi.mocked(getDb).mockResolvedValue({
+    transaction: async (callback: (client: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+  } as never);
+  return tx;
+}
+
+describe("Wiederaufnahme-Regeln (Sprint 027)", () => {
+  it("releases an aborted run explicitly for resume — idempotent on repeat", async () => {
+    const releasedRun = {
+      ...cancelledRun,
+      releasedForResumeAt: new Date("2026-09-30T09:00:00Z"),
+    };
+    const tx = mockReleaseTx({ runRows: [cancelledRun] });
+    tx.update.mockImplementation(
+      () =>
+        ({
+          set: (werte: Record<string, unknown>) => {
+            expect(werte.releasedForResumeAt).toBeInstanceOf(Date);
+            return {
+              where: () => ({ returning: async () => [releasedRun] }),
+            };
+          },
+        }) as never
+    );
+    const run = await releaseRunForResume({ runId: 13, userId: 17 });
+    expect(run.releasedForResumeAt).toBeTruthy();
+
+    // Idempotenz: bereits freigegeben -> unverändert zurueck, kein Update
+    const tx2 = mockReleaseTx({ runRows: [releasedRun] });
+    const again = await releaseRunForResume({ runId: 13, userId: 17 });
+    expect(again).toBe(releasedRun);
+    expect(tx2.update).not.toHaveBeenCalled();
+  });
+
+  it("never releases running or succeeded runs", async () => {
+    const txRunning = mockReleaseTx({ runRows: [activeRun] });
+    await expect(
+      releaseRunForResume({ runId: 11, userId: 17 })
+    ).rejects.toMatchObject({ reason: "STATUS_MISMATCH" });
+    expect(txRunning.update).not.toHaveBeenCalled();
+
+    const txDone = mockReleaseTx({ runRows: [finishedRun] });
+    await expect(
+      releaseRunForResume({ runId: 12, userId: 17 })
+    ).rejects.toMatchObject({ reason: "STATUS_MISMATCH" });
+    expect(txDone.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects releases of foreign runs with NOT_FOUND", async () => {
+    mockReleaseTx({ runRows: [] });
+    await expect(
+      releaseRunForResume({ runId: 99, userId: 17 })
+    ).rejects.toMatchObject({ reason: "NOT_FOUND" });
+  });
+
+  it("starts a resumed run only from a released, aborted run", async () => {
+    let erfasst: Record<string, unknown> | undefined;
+    const releasedRun = {
+      ...cancelledRun,
+      releasedForResumeAt: new Date("2026-09-30T09:00:00Z"),
+    };
+    const tx = mockTx({ runRows: [], villaRows: [villa] });
+    tx.select.mockImplementation(
+      (selArgs?: unknown) =>
+        ({
+          from: (table: typeof villaTestRuns | typeof villas) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () =>
+                  selArgs !== undefined ? [] : table === villas ? [villa] : [],
+                then: (resolve: (rows: unknown[]) => unknown) =>
+                  Promise.resolve(
+                    selArgs !== undefined ? [{ run: releasedRun }] : table === villas ? [villa] : []
+                  ).then(resolve),
+              }),
+              for: async () =>
+                selArgs !== undefined ? [] : table === villas ? [villa] : [],
+            }),
+          }),
+        }) as never
+    );
+    tx.insert.mockImplementation(
+      () =>
+        ({
+          values: (werte: Record<string, unknown>) => {
+            erfasst = werte;
+            return { returning: async () => [activeRun] };
+          },
+        }) as never
+    );
+    await startTestRun(3, 17, 600, 13);
+    expect(erfasst).toMatchObject({ resumedFromRunId: 13 });
+  });
+
+  it("rejects resuming from unreleased runs — nothing is silently continued", async () => {
+    const tx = mockTx({ runRows: [], villaRows: [villa] });
+    tx.select.mockImplementation(
+      (selArgs?: unknown) =>
+        ({
+          from: (table: typeof villaTestRuns | typeof villas) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () =>
+                  selArgs !== undefined ? [] : table === villas ? [villa] : [],
+                then: (resolve: (rows: unknown[]) => unknown) =>
+                  Promise.resolve(
+                    selArgs !== undefined ? [{ run: cancelledRun }] : table === villas ? [villa] : []
+                  ).then(resolve),
+              }),
+              for: async () =>
+                selArgs !== undefined ? [] : table === villas ? [villa] : [],
+            }),
+          }),
+        }) as never
+    );
+    await expect(startTestRun(3, 17, 600, 13)).rejects.toMatchObject({
+      reason: "NOT_RELEASED",
+    });
+    expect(tx.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects resuming from foreign or missing runs with NOT_FOUND", async () => {
+    const tx = mockTx({ runRows: [], villaRows: [villa] });
+    tx.select.mockImplementation(
+      (selArgs?: unknown) =>
+        ({
+          from: (table: typeof villaTestRuns | typeof villas) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () =>
+                  selArgs !== undefined ? [] : table === villas ? [villa] : [],
+                then: (resolve: (rows: unknown[]) => unknown) =>
+                  Promise.resolve(
+                    selArgs !== undefined ? [] : table === villas ? [villa] : []
+                  ).then(resolve),
+              }),
+              for: async () =>
+                selArgs !== undefined ? [] : table === villas ? [villa] : [],
+            }),
+          }),
+        }) as never
+    );
+    await expect(startTestRun(3, 17, 600, 99)).rejects.toMatchObject({
+      reason: "NOT_FOUND",
+    });
+    expect(tx.insert).not.toHaveBeenCalled();
   });
 });

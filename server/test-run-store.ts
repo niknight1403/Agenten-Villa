@@ -20,6 +20,7 @@ export class TestRunError extends Error {
       | "STATUS_MISMATCH"
       | "PHASE_MISMATCH"
       | "CANCEL_KIND_MISMATCH"
+      | "NOT_RELEASED"
   ) {
     super(`TEST_RUN_${reason}`);
   }
@@ -159,7 +160,8 @@ export async function getTestRun(
 export async function startTestRun(
   villaId: number,
   userId: number,
-  timeLimitSeconds?: number
+  timeLimitSeconds?: number,
+  resumeOfRunId?: number
 ): Promise<VillaTestRun> {
   const db = await requireDb();
   return db.transaction(async tx => {
@@ -170,6 +172,27 @@ export async function startTestRun(
       .for("update");
     if (!villa) throw new TestRunError("NOT_FOUND");
     if (villa.archivedAt) throw new TestRunError("ARCHIVED");
+
+    // Sprint 027 — Wiederaufnahme nur aus einem explizit freigegebenen,
+    // abgeschlossenen Lauf (cancelled/failed). Nicht freigegeben == nicht sicher.
+    if (resumeOfRunId !== undefined) {
+      const refs = await tx
+        .select({ run: villaTestRuns })
+        .from(villaTestRuns)
+        .where(
+          and(
+            eq(villaTestRuns.id, resumeOfRunId),
+            eq(villaTestRuns.villaId, villaId)
+          )
+        )
+        .limit(1);
+      const ref = refs[0]?.run;
+      if (!ref) throw new TestRunError("NOT_FOUND");
+      if (!ref.releasedForResumeAt) throw new TestRunError("NOT_RELEASED");
+      if (ref.status !== "cancelled" && ref.status !== "failed") {
+        throw new TestRunError("STATUS_MISMATCH");
+      }
+    }
 
     const [active] = await tx
       .select()
@@ -192,6 +215,7 @@ export async function startTestRun(
         status: "running",
         phase: "preparation",
         timeLimitSeconds: clampRunTimeLimitSeconds(timeLimitSeconds),
+        resumedFromRunId: resumeOfRunId ?? null,
       })
       .returning();
     return created;
@@ -380,4 +404,44 @@ export async function listRunEvents(
     .limit(boundedLimit)
     .then(rows => rows.map(row => row.event));
   return rows;
+}
+
+/**
+ * Sprint 027 — Lauf zur Wiederaufnahme freigeben. Nur abgeschlossene,
+ * abgebrochene Läufe (cancelled/failed) sind freigebbar; die Freigabe ist
+ * bewusst explizit, weil Fortsetzen nur für geprüfte, sichere Läufe
+ * erlaubt ist. Erneute Freigabe ist idempotent.
+ */
+export async function releaseRunForResume(input: {
+  runId: number;
+  userId: number;
+}): Promise<VillaTestRun> {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select({ run: villaTestRuns })
+      .from(villaTestRuns)
+      .innerJoin(villas, eq(villaTestRuns.villaId, villas.id))
+      .where(
+        and(
+          eq(villaTestRuns.id, input.runId),
+          eq(villas.createdBy, input.userId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    const run = rows[0]?.run;
+    if (!run) throw new TestRunError("NOT_FOUND");
+    if (run.status !== "cancelled" && run.status !== "failed") {
+      throw new TestRunError("STATUS_MISMATCH");
+    }
+    if (run.releasedForResumeAt) return run;
+
+    const [updated] = await tx
+      .update(villaTestRuns)
+      .set({ releasedForResumeAt: new Date() })
+      .where(eq(villaTestRuns.id, run.id))
+      .returning();
+    return updated;
+  });
 }
