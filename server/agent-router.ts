@@ -51,6 +51,7 @@ import {
 import { routerTelemetrySummary } from "./router-telemetry";
 import { getPackCatalog } from "./pack-catalog";
 import { requireApproval } from "./approval-gates";
+import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -251,7 +252,11 @@ function replayOrConflict(run: EliteMissionRun, expectedHash: string): EliteOutp
   throw new TRPCError({ code: "CONFLICT", message: `Mission ${run.id} ist ${run.status}. Status abfragen; unterbrochene Läufe nur nach Prüfung ausdrücklich neu starten.` });
 }
 
-async function executePersistedMission(run: EliteMissionRun, missionInput: SavedMissionInput): Promise<EliteOutput> {
+async function executePersistedMission(
+  run: EliteMissionRun,
+  missionInput: SavedMissionInput,
+  metricKind: AgentRunKind = "elite"
+): Promise<EliteOutput> {
   const heartbeat = setInterval(() => {
     void renewMissionLease(run).catch(() => { /* no secrets or history in logs */ });
   }, missionLeaseIntervalMs());
@@ -259,19 +264,24 @@ async function executePersistedMission(run: EliteMissionRun, missionInput: Saved
   try {
     // Sprint 044 — Missionskontexte sind gegeneinander isoliert: die
     // Missions-Identität reist mit dem Auftrag und namespaced Cache/Dedupe.
-    const result = await runAutonomousProjectWithGitHub(
-      { ...missionInput, missionId: String(run.id) },
-      async (name, args) => {
-        if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
-        return executeGitHubTool(name, args);
-      },
-      {
-        beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run),
-        // Sprint 043 — Elite-Missionen sind administratoren-only; die
-        // explizite Autorisierung reicht die geprüfte Rolle an die
-        // Werkzeugrunde weiter.
-        authorization: { administrator: true },
-      }
+    // Sprint 048 — Agentenmetriken: Laufzeit, Fehler und Ergebnisstatus.
+    const result = await instrumentAgentRun(
+      metricKind,
+      runResult => runResult.completed,
+      () => runAutonomousProjectWithGitHub(
+        { ...missionInput, missionId: String(run.id) },
+        async (name, args) => {
+          if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
+          return executeGitHubTool(name, args);
+        },
+        {
+          beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run),
+          // Sprint 043 — Elite-Missionen sind administratoren-only; die
+          // explizite Autorisierung reicht die geprüfte Rolle an die
+          // Werkzeugrunde weiter.
+          authorization: { administrator: true },
+        }
+      )
     );
     const output: EliteOutput = {
       ...result,
@@ -618,11 +628,17 @@ export const agentRouter = router({
         };
         const reservation = await reserveMission({ userId: ctx.user.id, idempotencyKey: key, requestHash, missionInput });
         if (!reservation.created) return replayOrConflict(reservation.run, requestHash);
-        return await executePersistedMission(reservation.run, missionInput);
+        // Sprint 048 — auch der Neustart wird als Lauf mit Metriken erfasst.
+        return await executePersistedMission(reservation.run, missionInput, "elite-restart");
       } catch (error) {
         mapAgentError(error);
       }
     }),
+  // Sprint 048 — Agentenmetriken: Laufzeit, Fehler und Ergebnisstatus.
+  agentMetrics: protectedProcedure.query(({ ctx }) => {
+    requireAdmin(ctx.user);
+    return agentMetricsSummary();
+  }),
   eliteMissionRuns: protectedProcedure.query(async ({ ctx }) => {
     requireAdmin(ctx.user);
     try {
@@ -662,7 +678,7 @@ export const agentRouter = router({
           throw new TRPCError({ code: "CONFLICT", message: "Die Mission hat ihr Wiederholungslimit von " + String(MAX_MISSION_ATTEMPTS) + " Versuchen erreicht und bleibt endgültig unterbrochen. Bitte eine neue Mission starten." });
         throw new TRPCError({ code: "CONFLICT", message: "Die Mission ist nicht unterbrochen, die Lease läuft noch, oder der Auftrag gehört einem anderen Konto." });
       }
-      return await executePersistedMission(run, run.input as SavedMissionInput);
+      return await executePersistedMission(run, run.input as SavedMissionInput, "elite-restart");
     } catch (error) { mapAgentError(error); }
   }),
   chat: protectedProcedure
