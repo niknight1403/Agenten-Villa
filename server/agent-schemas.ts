@@ -60,6 +60,26 @@ export type ValidAgentInput = z.infer<typeof agentInputSchema>;
 export type ValidAgentResult = z.infer<typeof agentResultSchema>;
 
 /**
+ * Sprint 046 — Ergebnisvalidierung: Ergebnis der begrenzten GitHub-
+ * Werkzeugrunde. Ungueltige Ergebnisse werden sicher abgewiesen, statt
+ * unstrukturierte Daten an den Aufrufer oder die Persistenz weiterzureichen.
+ */
+export const toolLoopResultSchema = agentResultSchema.extend({
+  completed: z.boolean(),
+  pullRequestOpened: z.boolean(),
+  pullRequest: z
+    .object({
+      number: z.number().int().positive(),
+      url: z.string().url(),
+      branch: z.string().min(1),
+    })
+    .nullable(),
+  branch: z.string().min(1).nullable(),
+});
+
+export type ValidToolLoopResult = z.infer<typeof toolLoopResultSchema>;
+
+/**
  * Prueft eine Eingabe gegen das Schema und wirft bei Verstoß einen
  * AgentError-artigen Fehler mit Fehlercode INVALID_INPUT (die Engine
  * mappend diesen auf BAD_REQUEST).
@@ -81,6 +101,18 @@ export function parseAgentInput(input: unknown): ValidAgentInput {
     );
   }
   return result.data;
+}
+
+/** Sprint 046 — validiert ein Werkzeugrunden-Ergebnis fail-closed. */
+export function parseToolLoopResult(result: unknown): ValidToolLoopResult {
+  const parsed = toolLoopResultSchema.safeParse(result);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new AgentSchemaError(
+      `Ungültiges Werkzeugrunden-Ergebnis (${first?.path.join(".") ?? "Ergebnis"}): ${first?.message ?? "Schema verletzt."}`
+    );
+  }
+  return parsed.data;
 }
 
 export function parseAgentResult(result: unknown): ValidAgentResult {

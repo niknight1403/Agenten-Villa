@@ -34,6 +34,7 @@ import {
   AgentSchemaError,
   parseAgentInput,
   parseAgentResult,
+  parseToolLoopResult,
   AGENT_INPUT_LIMITS,
 } from "./agent-schemas";
 import { authorizeGitHubTool } from "./tool-permissions";
@@ -715,7 +716,9 @@ async function runGitHubToolLoop(
         continue;
       }
 
-      return {
+      // Sprint 046 — Ergebnisvalidierung: ungueltige Ergebnisse werden
+      // sicher abgewiesen, statt ungeprueft weitergereicht zu werden.
+      return parseToolLoopResult({
         answer:
           completion.answer ||
           (pullRequestOpened
@@ -729,7 +732,7 @@ async function runGitHubToolLoop(
         pullRequestOpened,
         pullRequest,
         branch: activeBranch,
-      };
+      });
     }
 
     messages.push({
@@ -836,7 +839,8 @@ async function runGitHubToolLoop(
     }
 
     if (round === profile.maxRounds) {
-      return {
+      // Sprint 046 — Ergebnisvalidierung auch beim Budgetabbruch.
+      return parseToolLoopResult({
         answer:
           `${profile.elite ? "Die Elite-Mission" : "Die begrenzte GitHub-Werkzeugrunde"} hat ihr sicheres Rundenbudget erreicht. Ergebnisse: ` +
           messages
@@ -852,7 +856,7 @@ async function runGitHubToolLoop(
         pullRequestOpened,
         pullRequest,
         branch: activeBranch,
-      };
+      });
     }
   }
 
@@ -892,7 +896,7 @@ export async function runAutonomousProjectWithGitHub(
   });
   if (!input.forge) return result;
   let verification = assessForgeChecks(null, result.branch ?? "");
-  let actions = result.githubActions;
+  let actions = result.githubActions ?? 0;
   // A final read fits INSIDE the same 24-action budget. No polling, restarts,
   // workflow changes, provider calls or fabricated execution evidence.
   if (result.pullRequestOpened && result.branch && result.pullRequest?.branch === result.branch && actions < ELITE_LIMITS.githubActionsPerMission) {
