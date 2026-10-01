@@ -23,7 +23,7 @@ import {
   hfModel,
   openRouterChatUrl,
 } from "./provider-endpoints";
-import { isProviderActive } from "./provider-registry";
+import { fallbackOrder, isProviderActive } from "./provider-registry";
 import type { AgentErrorCode } from "./error-codes";
 
 export type Provider = "openrouter" | "groq" | "gemini" | "huggingface";
@@ -224,7 +224,13 @@ function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
   // bewusste Betriebsentscheidung und wird NICHT fail-open aufgeweicht —
   // im Gegensatz zum Auth-Cooldown, der fail-closed nur verausgabt, solange
   // ein anderer Anbieter nutzbar ist.
-  const activeRoutes = routes.filter(route => isProviderActive(route.name));
+  // Sprint 032 — die Reihenfolge kommt verbindlich aus dem Providerregister:
+  // konfigurierbar, aber immer deterministisch (siehe fallbackOrder).
+  const order = fallbackOrder();
+  const rank = (name: Provider) => order.indexOf(name);
+  const activeRoutes = routes
+    .filter(route => isProviderActive(route.name))
+    .sort((a, b) => rank(a.name) - rank(b.name));
   // Ein Anbieter im Auth-Cooldown wird uebersprungen, solange mindestens ein
   // anderer nutzbar ist; andernfalls bleibt die Kette fail-closed und der
   // echte Fehler wird nicht stillschweigend verschluckt.

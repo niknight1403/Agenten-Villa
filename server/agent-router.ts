@@ -42,7 +42,7 @@ import {
   reserveMission, restartInterruptedMission, type SavedMissionInput,
 } from "./elite-mission-store";
 import type { EliteMissionRun } from "../drizzle/schema";
-import { listProviderCatalog } from "./provider-registry";
+import { fallbackOrder, listProviderCatalog } from "./provider-registry";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -340,8 +340,9 @@ export const agentRouter = router({
    * Statusfelder aller LLM-Anbieter. Nur lesbar; der Status wird ueber
    * die Betriebsumgebung gesetzt, nie vom Client.
    */
-  providers: protectedProcedure.query(() =>
-    listProviderCatalog().map(entry => ({
+  providers: protectedProcedure.query(() => ({
+    fallbackOrder: fallbackOrder(),
+    entries: listProviderCatalog().map(entry => ({
       name: entry.name,
       status: entry.status,
       capabilities: entry.capabilities,
@@ -349,8 +350,8 @@ export const agentRouter = router({
       models: entry.models(),
       chatUrl: entry.chatUrl(),
       docsUrl: entry.docsUrl,
-    }))
-  ),
+    })),
+  })),
   guardian: protectedProcedure.query(({ ctx }) => {
     requireAdmin(ctx.user);
     return getGuardianSnapshot();
