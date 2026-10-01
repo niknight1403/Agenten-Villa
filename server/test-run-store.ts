@@ -26,6 +26,63 @@ export const RUN_PHASE_ORDER: readonly Exclude<RunPhase, "result">[] = [
   "review",
 ];
 
+/**
+ * Sprint 024 — Zeitgrenzen für Testläufe. Fortschritt und Countdown ergeben
+ * sich deterministisch aus startedAt + timeLimitSeconds, nie aus einzelnen
+ * Ticker-Updates.
+ */
+export const RUN_TIME_LIMIT_MIN_SECONDS = 60;
+export const RUN_TIME_LIMIT_MAX_SECONDS = 3600;
+export const RUN_TIME_LIMIT_DEFAULT_SECONDS = 600;
+
+export function clampRunTimeLimitSeconds(value: number | undefined): number {
+  if (value === undefined) return RUN_TIME_LIMIT_DEFAULT_SECONDS;
+  if (!Number.isFinite(value)) return RUN_TIME_LIMIT_DEFAULT_SECONDS;
+  return Math.min(
+    RUN_TIME_LIMIT_MAX_SECONDS,
+    Math.max(RUN_TIME_LIMIT_MIN_SECONDS, Math.round(value))
+  );
+}
+
+/**
+ * Sprint 024 — deterministische Fortschritts-Projektion eines Laufs:
+ * abgeschlossene Läufe sind immer vollstaendig; laufende Läufe berechnen
+ * Countdown und Fortschritt ausschliesslich aus der Zeitgrenze.
+ */
+export function projectRunProgress(
+  run: VillaTestRun,
+  now: Date = new Date()
+): {
+  phase: RunPhase;
+  status: TestRunStatus;
+  progressPercent: number;
+  remainingSeconds: number | null;
+  expired: boolean;
+} {
+  if (run.status !== "running") {
+    return {
+      phase: run.phase as RunPhase,
+      status: run.status,
+      progressPercent: 100,
+      remainingSeconds: null,
+      expired: false,
+    };
+  }
+  const limit = clampRunTimeLimitSeconds(run.timeLimitSeconds ?? undefined);
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - run.startedAt.getTime()) / 1000)
+  );
+  const remainingSeconds = Math.max(0, limit - elapsedSeconds);
+  return {
+    phase: run.phase as RunPhase,
+    status: run.status,
+    progressPercent: Math.min(100, Math.floor((elapsedSeconds / limit) * 100)),
+    remainingSeconds,
+    expired: remainingSeconds === 0,
+  };
+}
+
 async function requireDb() {
   const db = await getDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
@@ -86,7 +143,8 @@ export async function getTestRun(
  */
 export async function startTestRun(
   villaId: number,
-  userId: number
+  userId: number,
+  timeLimitSeconds?: number
 ): Promise<VillaTestRun> {
   const db = await requireDb();
   return db.transaction(async tx => {
@@ -118,6 +176,7 @@ export async function startTestRun(
         actorId: userId,
         status: "running",
         phase: "preparation",
+        timeLimitSeconds: clampRunTimeLimitSeconds(timeLimitSeconds),
       })
       .returning();
     return created;

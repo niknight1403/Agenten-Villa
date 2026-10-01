@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clampRunTimeLimitSeconds,
   finishTestRun,
+  projectRunProgress,
   setRunPhase,
   startTestRun,
   TestRunError,
@@ -38,6 +40,7 @@ const activeRun: VillaTestRun = {
   actorId: 17,
   status: "running",
   phase: "planning",
+  timeLimitSeconds: 600,
   result: null,
   errorCode: null,
   startedAt: now,
@@ -267,5 +270,73 @@ describe("phase lifecycle (Sprint 023)", () => {
     );
     await finishTestRun({ runId: 11, userId: 17, status: "succeeded" });
     expect(patch).toMatchObject({ status: "succeeded", phase: "result" });
+  });
+});
+
+describe("Sprint 024 — Zeitgrenzen und deterministischer Fortschritt", () => {
+  it("clamps the time limit into the allowed range", () => {
+    expect(clampRunTimeLimitSeconds(undefined)).toBe(600);
+    expect(clampRunTimeLimitSeconds(30)).toBe(60);
+    expect(clampRunTimeLimitSeconds(99999)).toBe(3600);
+    expect(clampRunTimeLimitSeconds(123.7)).toBe(124);
+  });
+
+  it("computes progress and countdown deterministically from the time limit", () => {
+    const now = new Date("2026-10-01T19:00:00Z");
+    const run = {
+      ...activeRun,
+      startedAt: new Date("2026-10-01T18:55:00Z"),
+      timeLimitSeconds: 600,
+    };
+    expect(projectRunProgress(run, now)).toEqual({
+      phase: "planning",
+      status: "running",
+      progressPercent: 50,
+      remainingSeconds: 300,
+      expired: false,
+    });
+  });
+
+  it("caps progress at 100 percent and reports expiry after the limit", () => {
+    const now = new Date("2026-10-01T19:20:00Z");
+    const run = {
+      ...activeRun,
+      startedAt: new Date("2026-10-01T19:00:00Z"),
+      timeLimitSeconds: 600,
+    };
+    expect(projectRunProgress(run, now)).toEqual({
+      phase: "planning",
+      status: "running",
+      progressPercent: 100,
+      remainingSeconds: 0,
+      expired: true,
+    });
+  });
+
+  it("reports finished runs as fully complete without countdown", () => {
+    const projection = projectRunProgress(finishedRun, new Date());
+    expect(projection).toEqual({
+      phase: "result",
+      status: "succeeded",
+      progressPercent: 100,
+      remainingSeconds: null,
+      expired: false,
+    });
+  });
+
+  it("persists the clamped time limit on start", async () => {
+    let erfasst: Record<string, unknown> | undefined;
+    const tx = mockTx({ runRows: [] });
+    tx.insert.mockImplementation(
+      () =>
+        ({
+          values: (werte: Record<string, unknown>) => {
+            erfasst = werte;
+            return { returning: async () => [activeRun] };
+          },
+        }) as never
+    );
+    await startTestRun(3, 17, 99999);
+    expect(erfasst).toMatchObject({ timeLimitSeconds: 3600 });
   });
 });

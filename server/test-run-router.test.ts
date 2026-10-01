@@ -34,6 +34,7 @@ const runningRun: VillaTestRun = {
   actorId: 17,
   status: "running",
   phase: "planning",
+  timeLimitSeconds: 600,
   result: null,
   errorCode: null,
   startedAt: new Date("2026-09-30T08:00:00Z"),
@@ -86,7 +87,7 @@ describe("run router (Sprint 021/022)", () => {
     const run = await caller.run.start({ villaId: 3 });
     expect(run.status).toBe("running");
     expect(run.endedAt).toBeNull();
-    expect(spy).toHaveBeenCalledWith(3, 17);
+    expect(spy).toHaveBeenCalledWith(3, 17, undefined);
   });
 
   it("maps foreign villas to NOT_FOUND", async () => {
@@ -208,5 +209,47 @@ describe("run.setPhase (Sprint 023 — Phasenmodell)", () => {
       caller.run.setPhase({ runId: 11, phase: "result" })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("run.progress (Sprint 024 — Countdown und Fortschritt)", () => {
+  it("projects deterministic progress for an owned running run", async () => {
+    vi.spyOn(store, "getTestRun").mockResolvedValue(runningRun);
+    const spy = vi
+      .spyOn(store, "projectRunProgress")
+      .mockReturnValue({
+        phase: "planning",
+        status: "running",
+        progressPercent: 50,
+        remainingSeconds: 300,
+        expired: false,
+      });
+    const result = await caller.run.progress({ runId: 11 });
+    expect(result.progressPercent).toBe(50);
+    expect(result.remainingSeconds).toBe(300);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects progress for foreign runs with NOT_FOUND", async () => {
+    vi.spyOn(store, "getTestRun").mockResolvedValue(undefined);
+    await expect(caller.run.progress({ runId: 99 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("rejects time limits outside the allowed range at start", async () => {
+    const spy = vi.spyOn(store, "startTestRun");
+    await expect(
+      caller.run.start({ villaId: 3, timeLimitSeconds: 10 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("starts with an optional time limit within the range", async () => {
+    const spy = vi
+      .spyOn(store, "startTestRun")
+      .mockResolvedValue(runningRun);
+    await caller.run.start({ villaId: 3, timeLimitSeconds: 900 });
+    expect(spy).toHaveBeenCalledWith(3, 17, 900);
   });
 });

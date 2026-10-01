@@ -5,6 +5,7 @@ import {
   finishTestRun,
   getTestRun,
   listTestRuns,
+  projectRunProgress,
   setRunPhase,
   startTestRun,
   TestRunError,
@@ -17,6 +18,12 @@ const finishStatusSchema = z.enum(["succeeded", "failed", "cancelled"]);
 
 /** Sprint 023 — anwenderseitige Phasen; „result" setzt nur der Abschluss. */
 const phaseSchema = z.enum(["preparation", "planning", "execution", "review"]);
+
+/**
+ * Sprint 024 — Zeitgrenze in Sekunden (60–3600, Default 600). Fortschritt
+ * und Countdown werden deterministisch aus startedAt + Grenze berechnet.
+ */
+const timeLimitSchema = z.number().int().min(60).max(3600).optional();
 
 /** Maximale Ergebnisgröße, damit ein Laufbericht die Datenbank nicht aufbläht. */
 const MAX_RESULT_BYTES = 20_000;
@@ -79,10 +86,31 @@ export const testRunRouter = router({
     }),
 
   start: protectedProcedure
-    .input(z.object({ villaId: idSchema }))
+    .input(z.object({ villaId: idSchema, timeLimitSeconds: timeLimitSchema }))
     .mutation(async ({ ctx, input }) => {
       try {
-        return await startTestRun(input.villaId, ctx.user.id);
+        return await startTestRun(
+          input.villaId,
+          ctx.user.id,
+          input.timeLimitSeconds
+        );
+      } catch (error) {
+        storeError(error);
+      }
+    }),
+
+  /**
+   * Sprint 024 — deterministischer Countdown und Fortschritt eines Laufs,
+   * berechnet ausschließlich aus der Zeitgrenze (startedAt + timeLimitSeconds).
+   * Abgeschlossene Läufe sind immer vollständig, ohne Countdown.
+   */
+  progress: protectedProcedure
+    .input(z.object({ runId: idSchema }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const run = await getTestRun(input.runId, ctx.user.id);
+        if (!run) throw new TestRunError("NOT_FOUND");
+        return projectRunProgress(run);
       } catch (error) {
         storeError(error);
       }
