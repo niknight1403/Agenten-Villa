@@ -30,6 +30,7 @@ import {
   providerInCooldown,
 } from "./provider-cooldown";
 import type { AgentErrorCode } from "./error-codes";
+import { GitHubToolError } from "./github-tools";
 
 export type Provider = "openrouter" | "groq" | "gemini" | "huggingface";
 export type Message = { role: "user" | "assistant"; content: string };
@@ -723,6 +724,16 @@ async function runGitHubToolLoop(
             };
           }
         } catch (error) {
+          // Sprint 037 — Fail-closed bei fehlender Berechtigung: Ein
+          // fehlender oder ungültiger Schlüssel wird NIEMALS still als
+          // Werkzeugmeldung an das Modell zurückgespielt (das Modell
+          // könnte weiterprobieren oder Erfolg behaupten). Der Lauf endet
+          // ehrlich mit MISSING_KEY.
+          if (
+            error instanceof GitHubToolError &&
+            (error.code === "NOT_CONFIGURED" || error.code === "AUTH")
+          )
+            throw new AgentError("MISSING_KEY", error.message);
           result = {
             ok: false,
             error:

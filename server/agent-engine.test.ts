@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentError, LIMITS, parseRetryAfterSeconds, resetProviderChainForTests, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
+import { GitHubToolError } from "./github-tools";
 import { resetProviderGuardianForTests } from "./provider-guardian";
 
 const input = { prompt: "Erstelle einen kurzen Plan", history: [], mode: "home" as const, specialty: "Generalist" };
@@ -218,6 +219,68 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
     expect(urls).not.toContain(
       "https://openrouter.ai/api/v1/chat/completions"
     );
+  });
+});
+
+describe("Fail-closed bei fehlender Berechtigung (Sprint 037)", () => {
+  it("bricht bei fehlendem GitHub-Token ehrlich ab statt still weiterzuproben", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      toolReply("call-1", "github_repo_overview", {})
+    );
+    const executeTool = vi.fn(async () => {
+      throw new GitHubToolError(
+        "NOT_CONFIGURED",
+        "Der GitHub-Token ist noch nicht im geschützten Server-Secret hinterlegt."
+      );
+    });
+    const outcome = await runAgentTurnWithGitHub(workshopInput, executeTool, {
+      fetcher,
+    }).catch(error => error);
+    expect(outcome).toBeInstanceOf(AgentError);
+    expect(outcome).toMatchObject({ code: "MISSING_KEY" });
+    expect(outcome.message).toContain("GitHub-Token");
+    // Keine zweite Modellanfrage — kein stiller Umgehungsversuch
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("bricht bei ungültigem GitHub-Schlüssel (AUTH) ebenfalls fail-closed ab", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      toolReply("call-2", "github_list_commits", { limit: 3 })
+    );
+    const executeTool = vi.fn(async () => {
+      throw new GitHubToolError("AUTH", "Der GitHub-Token ist ungültig.", 401);
+    });
+    await expect(
+      runAgentTurnWithGitHub(workshopInput, executeTool, { fetcher })
+    ).rejects.toMatchObject({ code: "MISSING_KEY" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("lässt behebbare Werkzeugfehler als Tool-Nachricht im Zyklus", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(toolReply("call-3", "github_read_file", { path: "README.md" }))
+      .mockResolvedValueOnce(reply(200, "free-tool-model"));
+    const executeTool = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(
+        new GitHubToolError("RATE_LIMIT", "GitHub begrenzt Anfragen.", 429)
+      )
+      .mockResolvedValueOnce({ ok: true, content: "leer" });
+    const result = await runAgentTurnWithGitHub(workshopInput, executeTool, {
+      fetcher,
+    });
+    expect(result.githubActions).toBe(1);
+    const secondPayload = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+    expect(
+      secondPayload.messages.some(
+        (message: { role: string; content?: string }) =>
+          message.role === "tool" && message.content?.includes("GitHub begrenzt")
+      )
+    ).toBe(true);
   });
 });
 

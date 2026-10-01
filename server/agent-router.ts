@@ -664,6 +664,15 @@ export const agentRouter = router({
               "Standard-GitHub-Modus: maximal drei Aktionen je Auftrag. Für vollständige Idee-zu-Projekt-Umsetzungen steht Administratoren zusätzlich agent.eliteMission mit bis zu 24 kontrollierten GitHub-Aktionen zur Verfügung. Änderungen erfolgen ausschließlich auf agent/*-Branches und als Draft-PR.",
           };
         }
+        // Sprint 037 — Fail-closed bei fehlender Berechtigung: Explizit
+        // angeforderter Hugging-Face-Fallback ohne HF_TOKEN wird NIEMALS
+        // still auf andere Anbieter umgeleitet.
+        if (input.allowHuggingFaceFallback && !process.env.HF_TOKEN?.trim())
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Hugging Face wurde ausdrücklich als Fallback angefragt, aber HF_TOKEN ist nicht als Server-Secret eingerichtet. Es erfolgt keine stille Umleitung auf andere Anbieter.",
+          });
         const result = await runAgentTurn(
           adminSystemPrompt
             ? { ...input, systemOverride: adminSystemPrompt }
