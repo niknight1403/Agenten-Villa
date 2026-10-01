@@ -35,7 +35,8 @@
 | 028     | Grün    | Laufbericht: run.report compiliert Status, Dauer (abgeschlossen: endedAt, laufend: bis jetzt), Phase, Zeitgrenze/Ablauf, Abbruchgrund und Fehlerbild (Level-Zähler + fünf letzte Meldungen) deterministisch — ohne eigenen Speicherzustand (5 neue Tests grün). |
 | 029     | Grün    | Controller-Berechtigungen: controllerRouter in die App eingebunden; globale Steuerungen (start/stop/toggle) nur für Administratoren (FORBIDDEN sonst, Rolle ausschließlich aus verifizierter Auth), Status lesbar für alle Angemeldeten (4 neue Tests grün). |
 | 030     | Grün    | Controller-Review: Zustandsautomat, Rechte-Matrix und Invarianten der Sprints 021–029 dokumentiert (docs/CONTROLLER-REVIEW.md) und als zusammenhängender Zeitstrahl in einer neuen Regressionssuite verifiziert (4 neue Tests, pnpm validate grün). |
-| 031–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
+| 031     | Grün    | Providerregister: zentraler Katalog (server/provider-registry.ts) mit dokumentierten Fähigkeiten, Statusfeld, Consent-Kennzeichen und Modellketten je Anbieter; Status via PROVIDER_STATUS_<NAME> ohne Codeänderung, ungültige Werte fallen auf den dokumentierten Standard; die Failover-Kette lässt maintenance/retired-Anbieter verbindlich aus (fail-closed); agent.providers liefert das Register lesbar (4 neue Tests grün). |
+| 032–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
 
 ## Grüner Validierungsweg
 
