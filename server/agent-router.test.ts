@@ -15,6 +15,7 @@ import {
   isAgentAdminForTests,
   remainingInWindow,
   resetAgentRouterForTests,
+  windowSnapshot,
 } from "./agent-router";
 import { resetProviderGuardianForTests } from "./provider-guardian";
 
@@ -281,6 +282,81 @@ describe("rate limit window reset", () => {
       consumeTurnForTests(100);
     expect(() => consumeTurnForTests(100)).toThrow(TRPCError);
     expect(() => consumeTurnForTests(101)).not.toThrow();
+  });
+});
+
+describe("Kontingentanzeige (Sprint 035)", () => {
+  it("zeigt frische Fenster als ungenutzt mit vollem Rest", async () => {
+    const caller = appRouter.createCaller(createContext("user", "user@example.com"));
+    const result = await caller.agent.usage();
+    expect(result.unlimited).toBe(false);
+    expect(result.windows?.turns).toMatchObject({
+      used: 0,
+      remaining: 12,
+      limit: 12,
+      active: false,
+      resetsAt: null,
+    });
+    expect(result.windows?.github).toMatchObject({
+      used: 0,
+      remaining: 12,
+      limit: 12,
+    });
+    expect(result.windows?.credentialChecks).toMatchObject({
+      used: 0,
+      remaining: 5,
+      limit: 5,
+    });
+  });
+
+  it("zeigt genutzte und verbleibende Aufrufe im aktiven Fenster", () => {
+    const store = new Map<number, { start: number; count: number }>();
+    const now = Date.now();
+    store.set(17, { start: now, count: 9 });
+    expect(windowSnapshot(store, 17, 12, 60 * 60 * 1000, now + 1000)).toMatchObject({
+      used: 9,
+      remaining: 3,
+      limit: 12,
+      active: true,
+    });
+    const snapshot = windowSnapshot(store, 17, 12, 60 * 60 * 1000, now + 1000);
+    expect(snapshot.resetsAt?.getTime()).toBe(now + 60 * 60 * 1000);
+  });
+
+  it("klemmt den Rest bei Überschreitung auf null und erkennt abgelaufene Fenster", () => {
+    const store = new Map<number, { start: number; count: number }>();
+    const now = Date.now();
+    store.set(17, { start: now, count: 15 });
+    expect(windowSnapshot(store, 17, 12, 60 * 60 * 1000, now + 1000)).toMatchObject({
+      used: 15,
+      remaining: 0,
+    });
+    // Fenster abgelaufen: alles wieder voll, kein Reset-Zeitpunkt
+    expect(windowSnapshot(store, 17, 12, 60 * 60 * 1000, now + 61 * 60 * 1000)).toMatchObject({
+      used: 0,
+      remaining: 12,
+      active: false,
+      resetsAt: null,
+    });
+  });
+
+  it("zählt verbrauchte Turns ins Snapshot ein, ohne einen zu verbrauchen", async () => {
+    consumeTurnForTests(17);
+    consumeTurnForTests(17);
+    consumeTurnForTests(17);
+    const caller = appRouter.createCaller(createContext("user", "user@example.com"));
+    const before = await caller.agent.usage();
+    expect(before.windows?.turns).toMatchObject({ used: 3, remaining: 9, active: true });
+    // Die Anzeige selbst verbraucht nichts
+    const after = await caller.agent.usage();
+    expect(after.windows?.turns).toMatchObject({ used: 3, remaining: 9 });
+  });
+
+  it("zeigt Administratoren null-Fenster, weil unbegrenzt", async () => {
+    const admin = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    const result = await admin.agent.usage();
+    expect(result.unlimited).toBe(true);
+    expect(result.windows).toBeNull();
   });
 });
 
