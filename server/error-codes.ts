@@ -6,6 +6,7 @@ export const AGENT_ERROR_CODES = [
   "REJECTED",
   "STOPPED",
   "INVALID_RESPONSE",
+  "INVALID_INPUT",
   "TIMEOUT",
 ] as const;
 
@@ -26,6 +27,7 @@ export const ERROR_CATEGORIES: Record<AgentErrorCode, ErrorCategory> = {
   REJECTED: "provider",
   STOPPED: "control",
   INVALID_RESPONSE: "validation",
+  INVALID_INPUT: "validation",
   TIMEOUT: "provider",
 };
 

@@ -113,9 +113,12 @@ describe("rating and status helpers", () => {
 
 describe("stable error classification", () => {
   it("classifies every agent error code without exposing internal details", () => {
-    expect(AGENT_ERROR_CODES).toHaveLength(8);
+    expect(AGENT_ERROR_CODES).toHaveLength(9);
     // Sprint 033 — TIMEOUT ist Teil des stabilen Katalogs
     expect(AGENT_ERROR_CODES).toContain("TIMEOUT");
+    // Sprint 041 — INVALID_INPUT ist Teil des stabilen Katalogs
+    expect(AGENT_ERROR_CODES).toContain("INVALID_INPUT");
+    expect(categoryForError("INVALID_INPUT")).toBe("validation");
     expect(categoryForError("LIMIT")).toBe("quota");
     expect(categoryForError("UNAVAILABLE")).toBe("provider");
     expect(publicMessageForError("INVALID_RESPONSE")).not.toContain("stack");
