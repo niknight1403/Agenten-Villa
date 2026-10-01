@@ -841,7 +841,13 @@ body:has(.villa-app) {
   font-size: 11px;
   line-height: 1.45;
 }
-.fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
+.fallback-consent input {
+  flex: 0 0 auto;
+  accent-color: #18c8b6;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
 
 
 .credential-modal {
