@@ -18,6 +18,7 @@ import {
   windowSnapshot,
 } from "./agent-router";
 import { resetProviderGuardianForTests } from "./provider-guardian";
+import { resetProviderHealthForTests } from "./provider-health";
 
 function createContext(role: "user" | "admin", email: string): TrpcContext {
   const now = new Date();
@@ -282,6 +283,63 @@ describe("rate limit window reset", () => {
       consumeTurnForTests(100);
     expect(() => consumeTurnForTests(100)).toThrow(TRPCError);
     expect(() => consumeTurnForTests(101)).not.toThrow();
+  });
+});
+
+describe("Provider-Gesundheitscheck (Sprint 036)", () => {
+  afterEach(() => {
+    resetProviderHealthForTests();
+  });
+
+  it("prüft Administratoren ungefährlich und ohne Schlüssel im Ergebnis", async () => {
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response("{}", { status: 200 })
+      )
+    );
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const result = await admin.agent.providerHealth({ provider: "groq" });
+    expect(result).toMatchObject({
+      provider: "groq",
+      status: "valid",
+      cached: false,
+    });
+    expect(result.message).not.toContain("groq-key");
+  });
+
+  it("bleibt administratoren-only", async () => {
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    await expect(
+      user.agent.providerHealth({ provider: "openrouter" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("verlangt für Hugging Face ausdrückliche Einwilligung", async () => {
+    vi.stubEnv("HF_TOKEN", "hf-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("{}", { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const admin = appRouter.createCaller(
+      createContext("admin", "admin@example.com")
+    );
+    const gated = await admin.agent.providerHealth({
+      provider: "huggingface",
+    });
+    expect(gated).toMatchObject({ status: "consent_required" });
+    expect(fetcher).not.toHaveBeenCalled();
+    const consented = await admin.agent.providerHealth({
+      provider: "huggingface",
+      consentHuggingFace: true,
+    });
+    expect(consented).toMatchObject({ status: "valid" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
 

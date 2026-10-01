@@ -43,6 +43,10 @@ import {
 } from "./elite-mission-store";
 import type { EliteMissionRun } from "../drizzle/schema";
 import { fallbackOrder, listProviderCatalog } from "./provider-registry";
+import {
+  checkProviderHealth,
+  type ProviderHealthStatus,
+} from "./provider-health";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -461,6 +465,41 @@ export const agentRouter = router({
       const trimmed = input.prompt?.trim() ?? "";
       adminSystemPrompt = trimmed ? trimmed : null;
       return { systemPrompt: adminSystemPrompt };
+    }),
+  /**
+   * Sprint 036 — Provider-Gesundheitscheck: ungefährliche, begrenzte
+   * Anfragen gegen die Status-Endpunkte der konfigurierten Anbieter.
+   * Nur für Administratoren; Schlüssel bleiben serverseitig.
+   */
+  providerHealth: protectedProcedure
+    .input(
+      z.object({
+        provider: z.enum(["openrouter", "groq", "gemini", "huggingface"]),
+        consentHuggingFace: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      const result = await checkProviderHealth(input.provider, {
+        consentHuggingFace: input.consentHuggingFace,
+      });
+      const messages: Record<ProviderHealthStatus, string> = {
+        valid: "Der Anbieter ist erreichbar und hat den Schlüssel akzeptiert.",
+        invalid:
+          "Der Anbieter hat den Schlüssel abgewiesen. Bitte Konfiguration prüfen.",
+        unavailable:
+          "Der Anbieter ist gerade nicht erreichbar. Keine Daten gesendet worden außer dem Statusabruf.",
+        not_configured:
+          "Für diesen Anbieter ist kein serverseitiger Schlüssel konfiguriert.",
+        consent_required:
+          "Hugging Face wird nur nach ausdrücklicher Einwilligung geprüft und genutzt.",
+      };
+      return {
+        provider: input.provider,
+        status: result.status,
+        cached: result.cached,
+        message: messages[result.status],
+      };
     }),
   testOpenRouterKey: protectedProcedure
     .input(z.object({ apiKey: z.string().trim().min(8).max(512) }))
