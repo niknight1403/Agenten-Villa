@@ -288,6 +288,20 @@ describe("rate limit window reset", () => {
   });
 });
 
+describe("Capability-Pack-Katalog (Sprint 042)", () => {
+  it("liefert jeden Nutzer den vollständigen Katalog", async () => {
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    const packs = await user.agent.packs();
+    expect(packs.length).toBeGreaterThanOrEqual(28);
+    const draftWrites = packs.find(p => p.id === "github-draft-writes");
+    expect(draftWrites?.permissions.length).toBeGreaterThan(0);
+    expect(draftWrites?.limits.length).toBeGreaterThan(0);
+    expect(draftWrites?.purpose.length).toBeGreaterThan(0);
+  });
+});
+
 describe("Router-Telemetrie-Abfrage (Sprint 038)", () => {
   it("liefert Administratoren die aggregierte Telemetrie", async () => {
     const admin = appRouter.createCaller(

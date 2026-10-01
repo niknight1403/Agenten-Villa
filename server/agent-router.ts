@@ -48,6 +48,7 @@ import {
   type ProviderHealthStatus,
 } from "./provider-health";
 import { routerTelemetrySummary } from "./router-telemetry";
+import { getPackCatalog } from "./pack-catalog";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -301,6 +302,11 @@ function mapAgentError(error: unknown): never {
 }
 
 export const agentRouter = router({
+  /**
+   * Sprint 042 — Capability-Packs: der schema-validierte Katalog mit
+   * Zweck, Berechtigungen und Grenzen jedes Packs. Für alle Nutzer lesbar.
+   */
+  packs: protectedProcedure.query(() => getPackCatalog()),
   /**
    * Sprint 038 — Router-Telemetrie: aggregierte Latenz, Erfolg und
    * Fallback-Gruende. Nur für Administratoren; ohne Nutzdaten.
