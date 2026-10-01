@@ -41,6 +41,8 @@ export const agentInputSchema = z
     systemOverride: z.string().max(LIMITS_SCHEMA.systemOverrideChars).nullable().optional(),
     /** Persistierter, strukturierter Missionskontext (Elite). */
     forge: forgeOptionsSchema.optional(),
+    /** Sprint 044 — Aufgaben-Identität: isoliert Cache und Dedupe pro Mission. */
+    missionId: z.string().trim().min(1).max(80).optional(),
   });
 
 /** Ergebnis: ein Agenten-Turn mit Antwort, Anbieter und Versuchen. */

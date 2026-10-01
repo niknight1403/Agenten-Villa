@@ -37,6 +37,7 @@ import {
   AGENT_INPUT_LIMITS,
 } from "./agent-schemas";
 import { authorizeGitHubTool } from "./tool-permissions";
+import { missionCacheScope, scopedCacheKey } from "./context-isolation";
 import type { AgentErrorCode } from "./error-codes";
 import { GitHubToolError } from "./github-tools";
 
@@ -51,6 +52,8 @@ export type AgentInput = {
   systemOverride?: string | null;
   /** Explicit mission-local, persisted structured context. */
   forge?: ForgeOptions;
+  /** Sprint 044 — Aufgaben-Identität für Cache-/Dedupe-Isolation. */
+  missionId?: string;
 };
 export type AgentResult = {
   answer: string;
@@ -584,7 +587,13 @@ export async function runAgentTurn(
   const validatedInput: AgentInput = parseAgentInputOrThrow(input);
   const fetcher = deps.fetcher ?? fetch;
   const messages = makeMessages(validatedInput);
-  const key = cacheKey(messages);
+  // Sprint 044 — Aufgabenkontext isolieren: Cache-Schlüssel und Dedupe sind
+  // pro Mission namespaced. Eine Mission liest nie Cache oder Lauf-Ergebnisse
+  // einer anderen Mission oder des allgemeinen Chats.
+  const key = scopedCacheKey(
+    missionCacheScope(validatedInput.missionId),
+    cacheKey(messages)
+  );
 
   // Free-Tier-Optimierung 1: identische Anfrage im Cache -> 0 Token.
   if (cacheEnabled()) {
