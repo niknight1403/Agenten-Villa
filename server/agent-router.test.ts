@@ -286,6 +286,54 @@ describe("rate limit window reset", () => {
   });
 });
 
+describe("Fail-closed bei fehlender Berechtigung (Sprint 037)", () => {
+  it("lehnt expliziten Hugging-Face-Fallback ohne HF_TOKEN ehrlich ab", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    await expect(
+      user.agent.chat({
+        prompt: "Nutze Hugging Face",
+        history: [],
+        mode: "home",
+        specialty: "Generalist",
+        allowHuggingFaceFallback: true,
+      })
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+  });
+
+  it("läuft mit HF-Fallback weiter, sobald HF_TOKEN konfiguriert ist", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("HF_TOKEN", "hf-test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            model: "free-test",
+            choices: [{ message: { content: "1. Ziel festlegen." } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    const result = await user.agent.chat({
+      prompt: "Nutze Hugging Face",
+      history: [],
+      mode: "home",
+      specialty: "Generalist",
+      allowHuggingFaceFallback: true,
+    });
+    expect(result.answer).toContain("Ziel");
+  });
+});
+
 describe("Provider-Gesundheitscheck (Sprint 036)", () => {
   afterEach(() => {
     resetProviderHealthForTests();
