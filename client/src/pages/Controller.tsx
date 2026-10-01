@@ -79,7 +79,7 @@ export default function Controller() {
     );
   }
 
-  if (status && !status.isAdmin) {
+  if (status && !status.canControl && !status.isAdmin) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 grid place-items-center p-6">
         <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
@@ -204,7 +204,7 @@ export default function Controller() {
                       ...(isRunning ? { acknowledgeStop: true } : {}),
                     })
               }
-              disabled={controlMutation.isPending || !status?.isAdmin}
+              disabled={controlMutation.isPending || !status?.canControl}
             >
               {controlMutation.isPending ? (
                 <Loader2 className="animate-spin" size={22} />

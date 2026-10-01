@@ -477,7 +477,7 @@ export default function Home() {
             >
               <Search />
             </button>
-            {statusQuery.data?.isAdmin && (
+            {(statusQuery.data?.canControl || statusQuery.data?.isAdmin) && (
               <a
                 className="icon-button"
                 aria-label="Mastervillage Controller"

@@ -27,7 +27,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: varchar("role", { length: 10 })
-    .$type<"user" | "admin">()
+    .$type<"user" | "admin" | "operator">()
     .default("user")
     .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
