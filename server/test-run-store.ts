@@ -1,7 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { RunPhase, VillaTestRun } from "../drizzle/schema";
 import { getDb } from "./db";
-import { villaTestRuns, villas } from "../drizzle/schema";
+import { villaRunEvents, villaTestRuns, villas } from "../drizzle/schema";
+import type { VillaRunEvent } from "../drizzle/schema";
 
 /** Sprint 021/022 — Lebenszyklus eines begrenzten Villa-Testlaufs. */
 export type TestRunStatus = "running" | "succeeded" | "failed" | "cancelled";
@@ -90,6 +91,11 @@ async function requireDb() {
 }
 
 const RUN_PAGE_SIZE_MAX = 50;
+
+/** Sprint 025 — Grenzen des Live-Aktivitätsprotokolls je Lauf. */
+export const RUN_EVENT_MESSAGE_MAX = 400;
+export const RUN_EVENT_PAGE_SIZE_MAX = 50;
+export type RunEventLevel = "info" | "warn" | "error";
 
 /**
  * Sprint 021 — Läufe des Aufrufers, neueste zuerst. Ownership läuft über die
@@ -277,4 +283,78 @@ export async function setRunPhase(input: {
       .returning();
     return rows[0];
   });
+}
+
+/**
+ * Sprint 025 — Ereignis an das Live-Protokoll eines LAUFENDEN Testlaufs
+ * anhängen. Abgeschlossene Läufe nehmen keine Ereignisse mehr auf
+ * (STATUS_MISMATCH) — die Historie bleibt unverändert. Ownership läuft über
+ * die Villa; fremde Läufe sind NOT_FOUND.
+ */
+export async function appendRunEvent(input: {
+  runId: number;
+  userId: number;
+  level: RunEventLevel;
+  message: string;
+}): Promise<VillaRunEvent> {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select({ run: villaTestRuns })
+      .from(villaTestRuns)
+      .innerJoin(villas, eq(villaTestRuns.villaId, villas.id))
+      .where(
+        and(
+          eq(villaTestRuns.id, input.runId),
+          eq(villas.createdBy, input.userId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    const run = rows[0]?.run;
+    if (!run) throw new TestRunError("NOT_FOUND");
+    if (run.status !== "running") throw new TestRunError("STATUS_MISMATCH");
+
+    const [event] = await tx
+      .insert(villaRunEvents)
+      .values({
+        runId: run.id,
+        level: input.level,
+        message: input.message,
+      })
+      .returning();
+    return event;
+  });
+}
+
+/**
+ * Sprint 025 — Live-Protokoll eines Laufs lesen: die letzten lokalen
+ * Ereignisse, neueste zuerst, begrenzt. Nur eigene Läufe (Ownership über die
+ * Villa); abgeschlossene Läufe bleiben lesbar.
+ */
+export async function listRunEvents(
+  runId: number,
+  userId: number,
+  limit?: number
+): Promise<VillaRunEvent[]> {
+  const db = await requireDb();
+  const boundedLimit = Math.max(
+    1,
+    Math.min(limit ?? RUN_EVENT_PAGE_SIZE_MAX, RUN_EVENT_PAGE_SIZE_MAX)
+  );
+  const rows = await db
+    .select({ event: villaRunEvents })
+    .from(villaRunEvents)
+    .innerJoin(villaTestRuns, eq(villaRunEvents.runId, villaTestRuns.id))
+    .innerJoin(villas, eq(villaTestRuns.villaId, villas.id))
+    .where(
+      and(
+        eq(villaRunEvents.runId, runId),
+        eq(villas.createdBy, userId)
+      )
+    )
+    .orderBy(desc(villaRunEvents.createdAt))
+    .limit(boundedLimit)
+    .then(rows => rows.map(row => row.event));
+  return rows;
 }

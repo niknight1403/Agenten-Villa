@@ -85,6 +85,13 @@
       "when": 1790884498574,
       "tag": "0011_smiling_ser_duncan",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790884609255,
+      "tag": "0012_typical_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

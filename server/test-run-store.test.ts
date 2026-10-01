@@ -1,15 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  appendRunEvent,
   clampRunTimeLimitSeconds,
   finishTestRun,
+  listRunEvents,
   projectRunProgress,
   setRunPhase,
   startTestRun,
   TestRunError,
 } from "./test-run-store";
 import { getDb } from "./db";
-import { villaTestRuns, villas } from "../drizzle/schema";
-import type { Villa, VillaTestRun } from "../drizzle/schema";
+import {
+  villaRunEvents,
+  villaTestRuns,
+  villas,
+} from "../drizzle/schema";
+import type { Villa, VillaRunEvent, VillaTestRun } from "../drizzle/schema";
 
 vi.mock("./db", async importOriginal => ({
   ...(await importOriginal<typeof import("./db")>()),
@@ -338,5 +344,106 @@ describe("Sprint 024 — Zeitgrenzen und deterministischer Fortschritt", () => {
     );
     await startTestRun(3, 17, 99999);
     expect(erfasst).toMatchObject({ timeLimitSeconds: 3600 });
+  });
+});
+
+const sampleEvent: VillaRunEvent = {
+  id: 71,
+  runId: 11,
+  level: "info",
+  message: "Planung abgeschlossen",
+  createdAt: now,
+};
+
+/** Mock für appendRunEvent: Join-Kette + Capture der Insert-Werte. */
+function mockAppendTx(overrides: { runRows?: VillaTestRun[] }) {
+  const runRows = overrides.runRows ?? [activeRun];
+  let erfasst: Record<string, unknown> | undefined;
+  const tx = {
+    select: vi.fn(() => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => runRows.map(run => ({ run })),
+            }),
+          }),
+        }),
+      }),
+    })),
+    insert: vi.fn().mockImplementation(
+      () =>
+        ({
+          values: (werte: Record<string, unknown>) => {
+            erfasst = werte;
+            return { returning: async () => [sampleEvent] };
+          },
+        }) as never
+    ),
+  };
+  vi.mocked(getDb).mockResolvedValue({
+    transaction: async (callback: (client: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+  } as never);
+  return { tx, erfasst: () => erfasst };
+}
+
+describe("appendRunEvent (Sprint 025 — Live-Aktivitätsprotokoll)", () => {
+  it("appends an event to a running run with level and message", async () => {
+    const { tx, erfasst } = mockAppendTx({});
+    const event = await appendRunEvent({
+      runId: 11,
+      userId: 17,
+      level: "info",
+      message: "Planung abgeschlossen",
+    });
+    expect(event).toBe(sampleEvent);
+    expect(tx.insert).toHaveBeenCalledWith(villaRunEvents);
+    expect(erfasst()).toMatchObject({ runId: 11, level: "info" });
+  });
+
+  it("rejects events on finished runs — the log stays fixed", async () => {
+    const { tx } = mockAppendTx({ runRows: [finishedRun] });
+    await expect(
+      appendRunEvent({
+        runId: 12,
+        userId: 17,
+        level: "info",
+        message: "zu spät",
+      })
+    ).rejects.toMatchObject({ reason: "STATUS_MISMATCH" });
+    expect(tx.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects foreign runs with NOT_FOUND", async () => {
+    mockAppendTx({ runRows: [] });
+    await expect(
+      appendRunEvent({ runId: 99, userId: 17, level: "info", message: "x" })
+    ).rejects.toMatchObject({ reason: "NOT_FOUND" });
+  });
+});
+
+describe("listRunEvents (Sprint 025)", () => {
+  it("returns the last local events, newest first, bounded", async () => {
+    const events = [sampleEvent];
+    const tx = {
+      select: vi.fn(() => ({
+        from: () => ({
+          innerJoin: () => ({
+            innerJoin: () => ({
+              where: () => ({
+                orderBy: () => ({
+                  limit: async () =>
+                    Promise.resolve(events.map(event => ({ event }))),
+                }),
+              }),
+            }),
+          }),
+        }),
+      })),
+    };
+    vi.mocked(getDb).mockResolvedValue({ select: tx.select } as never);
+    const rows = await listRunEvents(11, 17, 20);
+    expect(rows).toEqual([sampleEvent]);
   });
 });
