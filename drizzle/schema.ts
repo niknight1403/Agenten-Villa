@@ -271,6 +271,9 @@ export type EliteMissionRun = typeof eliteMissionRuns.$inferSelect;
  * wird ausschließlich beim Abschluss gesetzt (vorbereitung -> planung ->
  * ausfuehrung -> pruefung -> ergebnis, sichtbar in run.get/run.list).
  */
+/** Sprint 026 — Abbrucharten: manuell (Anwender) vs. technisch. */
+export type CancellationKind = "manual" | "technical";
+
 export type RunPhase =
   | "preparation"
   | "planning"
@@ -297,6 +300,12 @@ export const villaTestRuns = pgTable(
      * werden ausschließlich aus startedAt + timeLimitSeconds berechnet.
      */
     timeLimitSeconds: integer("timeLimitSeconds").notNull().default(600),
+    /**
+     * Sprint 026 — Art des Abbruchs, nur gesetzt wenn status = „cancelled":
+     * „manual" (Anwender) oder „technical" (Zeitgrenze/Infrastruktur).
+     */
+    cancellationKind: varchar("cancellationKind", { length: 16 })
+      .$type<"manual" | "technical">(),
     result: jsonb("result"),
     errorCode: varchar("errorCode", { length: 40 }),
     startedAt: timestamp("startedAt").defaultNow().notNull(),

@@ -30,7 +30,8 @@
 | 023     | Grün    | Phasenmodell: villa_test_runs trägt eine sichtbare Phase (preparation → planning → execution → review → result, Migration 0010); run.setPhase schaltet nur vorwärts und idempotent, „result“ setzt ausschließlich der Abschluss; abgeschlossene Läufe bleiben unverändert (12 neue Tests grün). |
 | 024     | Grün    | Countdown und Fortschritt: villa_test_runs trägt timeLimitSeconds (60–3600 s, Default 600, Migration 0011); run.progress projiziert Fortschritt und Countdown deterministisch aus startedAt + Grenze, abgeschlossene Läufe sind vollständig ohne Countdown (9 neue Tests grün). |
 | 025     | Grün    | Live-Aktivitätsprotokoll: neue Tabelle villa_run_events (Migration 0012) mit Level info/warn/error und max. 400 Zeichen; run.log liest die letzten Ereignisse (neueste zuerst, max. 50), run.appendEvent schreibt nur in laufende Läufe — abgeschlossene bleiben fix (9 neue Tests grün). |
-| 026–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
+| 026     | Grün    | Abbruchgrund: villa_test_runs erfasst cancellationKind „manual“ (Default) oder „technical“ (z. B. Zeitgrenze), Migration 0013; nur mit status „cancelled“ erlaubt, Art wird bei wiederholtem Finish nie umgeschrieben (8 neue Tests grün). |
+| 027–100 | Geplant | Neue Sprints nach Review durch den Eigentümer.                                                                                                                                                                                                                  |
 
 ## Grüner Validierungsweg
 

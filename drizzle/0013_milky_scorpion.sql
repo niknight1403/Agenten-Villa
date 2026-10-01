@@ -1,0 +1,1 @@
+ALTER TABLE "villa_test_runs" ADD COLUMN "cancellationKind" varchar(16);

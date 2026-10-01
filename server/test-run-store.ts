@@ -1,5 +1,9 @@
 import { and, desc, eq } from "drizzle-orm";
-import type { RunPhase, VillaTestRun } from "../drizzle/schema";
+import type {
+  CancellationKind,
+  RunPhase,
+  VillaTestRun,
+} from "../drizzle/schema";
 import { getDb } from "./db";
 import { villaRunEvents, villaTestRuns, villas } from "../drizzle/schema";
 import type { VillaRunEvent } from "../drizzle/schema";
@@ -10,7 +14,12 @@ export type TestRunStatus = "running" | "succeeded" | "failed" | "cancelled";
 /** Technische Gründe, die ein Store-Ergebnis verhindern; der Router mappt sie auf tRPC-Codes. */
 export class TestRunError extends Error {
   constructor(
-    readonly reason: "NOT_FOUND" | "ARCHIVED" | "STATUS_MISMATCH" | "PHASE_MISMATCH"
+    readonly reason:
+      | "NOT_FOUND"
+      | "ARCHIVED"
+      | "STATUS_MISMATCH"
+      | "PHASE_MISMATCH"
+      | "CANCEL_KIND_MISMATCH"
   ) {
     super(`TEST_RUN_${reason}`);
   }
@@ -202,6 +211,12 @@ export async function finishTestRun(input: {
   status: Extract<TestRunStatus, "succeeded" | "failed" | "cancelled">;
   result?: unknown;
   errorCode?: string | null;
+  /**
+   * Sprint 026 — Abbruchart, nur mit status „cancelled" erlaubt. Ohne Angabe
+   * gilt ein Abbruch als „manual" (Anwenderentscheidung); „technical" wird
+   * ausdrücklich gesetzt (Zeitgrenze, Infrastruktur).
+   */
+  cancellationKind?: CancellationKind;
 }): Promise<VillaTestRun> {
   const db = await requireDb();
   return db.transaction(async tx => {
@@ -222,12 +237,20 @@ export async function finishTestRun(input: {
       throw new TestRunError("STATUS_MISMATCH");
     }
 
+    if (input.cancellationKind && input.status !== "cancelled") {
+      throw new TestRunError("CANCEL_KIND_MISMATCH");
+    }
+
     const rows = await tx
       .update(villaTestRuns)
       .set({
         status: input.status,
         phase: "result",
         endedAt: new Date(),
+        cancellationKind:
+          input.status === "cancelled"
+            ? (input.cancellationKind ?? "manual")
+            : null,
         result: input.result === undefined ? null : input.result,
         errorCode: input.errorCode ?? null,
       })
