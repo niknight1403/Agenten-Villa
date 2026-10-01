@@ -24,6 +24,11 @@ import {
   openRouterChatUrl,
 } from "./provider-endpoints";
 import { fallbackOrder, isProviderActive } from "./provider-registry";
+import {
+  clearProviderCooldownsForTests,
+  markProviderFailure,
+  providerInCooldown,
+} from "./provider-cooldown";
 import type { AgentErrorCode } from "./error-codes";
 
 export type Provider = "openrouter" | "groq" | "gemini" | "huggingface";
@@ -189,18 +194,8 @@ type ProviderRoute = {
   models: string[];
 };
 
-/** Ungültige Schlüssel sperren einen Anbieter prozesslokal für 30 Minuten. */
-const PROVIDER_AUTH_COOLDOWN_MS = 30 * 60 * 1000;
-const providerAuthCooldown = new Map<Provider, number>();
-
-function providerInAuthCooldown(name: Provider, now = Date.now()): boolean {
-  const until = providerAuthCooldown.get(name);
-  return until !== undefined && until > now;
-}
-
-function markProviderAuthFailure(name: Provider) {
-  providerAuthCooldown.set(name, Date.now() + PROVIDER_AUTH_COOLDOWN_MS);
-}
+/* Sprint 034 — der Cooldown-Mechanismus lebt in provider-cooldown.ts:
+ * fehlerhafte Anbieter werden zeitlich begrenzt uebersprungen. */
 
 /** True, sobald mindestens ein LLM-Anbieter-Secret eingerichtet ist. */
 export function anyModelProviderConfigured(): boolean {
@@ -264,7 +259,7 @@ function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
   // anderer nutzbar ist; andernfalls bleibt die Kette fail-closed und der
   // echte Fehler wird nicht stillschweigend verschluckt.
   const usable = activeRoutes.filter(
-    route => !providerInAuthCooldown(route.name)
+    route => !providerInCooldown(route.name)
   );
   return usable.length > 0 ? usable : activeRoutes;
 }
@@ -306,6 +301,9 @@ async function callWithProviderChain(
         "Der Agent wurde vor dem Anbieter-Failover gestoppt."
       );
     const route = registry[r];
+    // Sprint 034 — Kontingentfehler der Route beobachten (siehe unten).
+    let routeLimitRetryAfter: number | undefined;
+    let routeSawLimit = false;
     for (const model of route.models) {
       attempts += 1;
       try {
@@ -337,13 +335,26 @@ async function callWithProviderChain(
         lastError = error;
         if (!(error instanceof AgentError)) throw error;
         if (error.code === "REJECTED") throw error;
+        if (error.code === "LIMIT") {
+          // Sprint 034 — Kontingentfehler merken: ist die ganze Route
+          // erschöpft, wird der Anbieter zeitlich begrenzt gesperrt.
+          routeSawLimit = true;
+          routeLimitRetryAfter = Math.max(
+            routeLimitRetryAfter ?? 0,
+            error.retryAfterSeconds ?? 0
+          );
+        }
         if (error.code === "AUTH") {
-          markProviderAuthFailure(route.name);
+          markProviderFailure(route.name, "auth");
           break;
         }
         // Sprint 033 — LIMIT (429/402), UNAVAILABLE, TIMEOUT und
         // INVALID_RESPONSE: naechstes Modell probieren.
       }
+      // Sprint 034 — die ganze Route hat nur Kontingentfehler geliefert:
+      // den Anbieter zeitlich begrenzt sperren (Retry-After, sonst Default).
+      if (routeSawLimit)
+        markProviderFailure(route.name, "limit", routeLimitRetryAfter);
     }
   }
   throw lastError ??
@@ -833,9 +844,9 @@ export function isRetryableStatus(status: number) {
 export function isFallbackEligible(status: number, optedIn: boolean) {
   return optedIn && retryable(status) && status !== 429;
 }
-/** Test hook: clears the process-local provider auth cooldown. */
+/** Test hook: clears process-local provider cooldowns. */
 export function resetProviderChainForTests(): void {
-  providerAuthCooldown.clear();
+  clearProviderCooldownsForTests();
 }
 
 export function configuredProviders() {
