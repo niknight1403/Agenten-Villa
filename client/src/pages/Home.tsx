@@ -877,7 +877,7 @@ export default function Home() {
           </div>
           <div className="composer-area">
 {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
-            {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING" })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
+            {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             {statusQuery.data?.isAdmin && (
               <div className="github-tool-toggle admin-prompt-panel">
                 <span>

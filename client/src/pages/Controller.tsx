@@ -196,9 +196,13 @@ export default function Controller() {
             <button
               className={`mt-7 inline-flex w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${isRunning ? "bg-rose-500 text-white hover:bg-rose-400" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"}`}
               onClick={() =>
-                controlMutation.mutate({
-                  state: isRunning ? "STOPPED" : "RUNNING",
-                })
+                // Sprint 047 — Freigabepunkt: Anhalten nur nach Quittung.
+                isRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")
+                  ? undefined
+                  : controlMutation.mutate({
+                      state: isRunning ? "STOPPED" : "RUNNING",
+                      ...(isRunning ? { acknowledgeStop: true } : {}),
+                    })
               }
               disabled={controlMutation.isPending || !status?.isAdmin}
             >

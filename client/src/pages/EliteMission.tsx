@@ -81,6 +81,10 @@ export default function EliteMission() {
       pendingMissionKey.current = { signature, key: crypto.randomUUID() };
     setLastResult(null);
     try {
+      // Sprint 047 — Freigabepunkt: der Start löst echte GitHub-Aktionen
+      // aus und wird deshalb vor dem Absenden ausdrücklich quittiert.
+      if (!window.confirm("Diese Elite-Mission löst echte GitHub-Aktionen aus (Branches, Dateiänderungen, Draft-PR) und verbraucht Modellkontingente. Wirklich starten?"))
+        return;
       const result = await missionMutation.mutateAsync({
         idempotencyKey: pendingMissionKey.current.key,
         prompt: objective,
@@ -88,6 +92,7 @@ export default function EliteMission() {
         specialty: "Autonomous Product Engineering",
         forge,
         ...(villaId ? { villaId } : {}),
+        acknowledgeImpact: true,
       });
       setLastResult({
         answer: result.answer,

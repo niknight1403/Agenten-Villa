@@ -50,6 +50,7 @@ import {
 } from "./provider-health";
 import { routerTelemetrySummary } from "./router-telemetry";
 import { getPackCatalog } from "./pack-catalog";
+import { requireApproval } from "./approval-gates";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -222,6 +223,9 @@ const eliteMissionSchema = z.object({
     .trim()
     .max(80)
     .default("Autonomous Product Engineering"),
+  // Sprint 047 — Human-in-the-loop: der Start einer Elite-Mission ist ein
+  // Freigabepunkt; requireApproval prueft die Quittung mit klarem Text.
+  acknowledgeImpact: z.boolean(),
 });
 
 type EliteOutput = Awaited<ReturnType<typeof runAutonomousProjectWithGitHub>> & {
@@ -476,9 +480,11 @@ export const agentRouter = router({
     )
     .query(({ input }) => getVillaSnapshot(input.villaId)),
   setState: protectedProcedure
-    .input(z.object({ state: z.enum(["RUNNING", "STOPPED"]) }))
+    .input(z.object({ state: z.enum(["RUNNING", "STOPPED"]), acknowledgeStop: z.literal(true).optional() }))
     .mutation(({ ctx, input }) => {
       requireAdmin(ctx.user);
+      // Sprint 047 — Freigabepunkt: Anhalten nur mit ausdrücklicher Quittung.
+      requireApproval("controller-stop", input.state !== "STOPPED" || input.acknowledgeStop === true);
       controlState = input.state;
       return { state: controlState };
     }),
@@ -553,6 +559,8 @@ export const agentRouter = router({
     .input(eliteMissionSchema)
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user);
+      // Sprint 047 — Freigabepunkt: echte GitHub-Aktionen nur mit Quittung.
+      requireApproval("mission-start", input.acknowledgeImpact);
       const key = input.idempotencyKey ?? randomUUID();
       const requestHash = missionHash(input);
       try {
@@ -639,6 +647,8 @@ export const agentRouter = router({
     acknowledgeExternalChanges: z.literal(true),
   })).mutation(async ({ ctx, input }) => {
     requireAdmin(ctx.user);
+    // Sprint 047 — Freigabepunkt: Neustart nur nach ausdrücklicher Prüfung.
+    requireApproval("mission-restart", input.acknowledgeExternalChanges);
     if (controlState !== "RUNNING" || !process.env.GITHUB_TOKEN?.trim() || !anyModelProviderConfigured())
       throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Agent und Provider-Zugang müssen für einen ausdrücklich neu gestarteten Versuch bereit sein." });
     try {

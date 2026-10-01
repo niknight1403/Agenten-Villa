@@ -418,13 +418,14 @@ describe("VillaForge authenticated integration", () => {
     } as never);
     const caller = appRouter.createCaller(ctx());
     expect(
-      await caller.agent.eliteMission({ idempotencyKey: key, prompt, forge })
+      await caller.agent.eliteMission({ idempotencyKey: key, prompt, forge, acknowledgeImpact: true })
     ).toMatchObject({ verification: { state: "pending" } });
     await expect(
       caller.agent.eliteMission({
         idempotencyKey: key,
         prompt,
         forge: { ...forge, productReview: false },
+        acknowledgeImpact: true,
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
