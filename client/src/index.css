@@ -666,6 +666,7 @@ body:has(.villa-app) {
 .workshop .send-button { background: #5b3be0; }
 .workshop .send-button:disabled { background: #242849; }
 .composer-footnote { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 8px 0 0; color: #65718f; font-size: 10px; }
+.composer-app-version { margin: 4px 0 0; text-align: center; color: #4b5572; font-size: 9px; }
 
 .chat-ready {
   width: min(720px, 100%);

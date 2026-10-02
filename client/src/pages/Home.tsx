@@ -7,6 +7,7 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useDashboardTheme } from "@/contexts/DashboardThemeContext";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { trpc } from "@/lib/trpc";
+import { APP_VERSION, APP_BUILD } from "@shared/const";
 import {
   Archive,
   ArrowLeft,
@@ -1098,6 +1099,9 @@ export default function Home() {
                           ? " · Elite: kein lokales Chat-Gesamtkontingent"
                           : ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`)}
                     </div>
+                    <p className="composer-app-version">
+                      App-Version {APP_VERSION} (Build {APP_BUILD})
+                    </p>
                   </div>
                 )}
               </div>
