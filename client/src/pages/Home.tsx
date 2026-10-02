@@ -57,8 +57,9 @@ type Villa = {
   archivedAt?: string | null;
 };
 const homeIdeas = [
-  "Erstelle einen Aktionsplan",
-  "Analysiere Chancen & Risiken",
+  "Schlage 3 konkrete Verbesserungen für dieses Projekt vor",
+  "Was sollten wir als Nächstes entwickeln?",
+  "Analysiere den aktuellen Stand und mögliche Risiken",
 ];
 const workshopIdeas = [
   "Zeige Repo-Überblick und letzte Commits",
@@ -155,6 +156,7 @@ export default function Home() {
   const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] =
     useState(false);
   const [githubToolsEnabled, setGithubToolsEnabled] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const villas = useMemo<Villa[]>(
     () =>
@@ -1001,28 +1003,46 @@ export default function Home() {
               </p>
             )}
             {isAuthenticated && (
-              <label className="fallback-consent">
-                <input
-                  type="checkbox"
-                  checked={allowHuggingFaceFallback}
-                  onChange={event =>
-                    setAllowHuggingFaceFallback(event.target.checked)
-                  }
-                />{" "}
-                Hugging Face einmalig nur bei vorübergehendem OpenRouter-Ausfall
-                versuchen
-              </label>
+              <div className="advanced-settings">
+                <button
+                  type="button"
+                  className="advanced-toggle"
+                  aria-expanded={advancedOpen}
+                  onClick={() => setAdvancedOpen(previous => !previous)}
+                >
+                  <span>Details &amp; Anbieter-Einstellungen</span>
+                  <ChevronDown
+                    size={14}
+                    className={`advanced-chevron${advancedOpen ? " open" : ""}`}
+                  />
+                </button>
+                {advancedOpen && (
+                  <div className="advanced-settings-body">
+                    <label className="fallback-consent">
+                      <input
+                        type="checkbox"
+                        checked={allowHuggingFaceFallback}
+                        onChange={event =>
+                          setAllowHuggingFaceFallback(event.target.checked)
+                        }
+                      />{" "}
+                      Hugging Face einmalig nur bei vorübergehendem
+                      OpenRouter-Ausfall versuchen
+                    </label>
+                    <div className="composer-footnote">
+                      <Sparkles size={12} />{" "}
+                      {statusQuery.data?.notice ??
+                        "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}
+                      {usageQuery.data &&
+                        !isWorkshop &&
+                        (usageQuery.data.unlimited
+                          ? " · Elite: kein lokales Chat-Gesamtkontingent"
+                          : ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`)}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-            <div className="composer-footnote">
-              <Sparkles size={12} />{" "}
-              {statusQuery.data?.notice ??
-                "Anbieterlimits gelten; keine bezahlte Ausweichroute. Agent standardmäßig gestoppt."}
-              {usageQuery.data &&
-                !isWorkshop &&
-                (usageQuery.data.unlimited
-                  ? " · Elite: kein lokales Chat-Gesamtkontingent"
-                  : ` · ${usageQuery.data.remainingTurns} Chats diese Stunde übrig`)}
-            </div>
           </div>
         </section>
       )}

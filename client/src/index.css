@@ -855,6 +855,27 @@ body:has(.villa-app) {
 }
 .fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
 
+.advanced-settings { width: min(720px, 100%); margin: 9px auto 0; }
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: #65718f;
+  font-size: 10px;
+  cursor: pointer;
+}
+.advanced-toggle:hover { color: #9aa6c6; }
+.advanced-chevron { transition: transform 160ms ease; }
+.advanced-chevron.open { transform: rotate(180deg); }
+.advanced-settings-body { margin-top: 6px; }
+.advanced-settings-body .fallback-consent { margin: 0 auto; }
+.advanced-settings-body .composer-footnote { margin-top: 8px; }
+
 
 .credential-modal {
   width: min(520px, 100%);
