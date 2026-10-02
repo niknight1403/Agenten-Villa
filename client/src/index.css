@@ -759,6 +759,13 @@ body:has(.villa-app) {
 
 @media (max-width: 680px) {
   .villa-app { min-height: 480px; }
+  /* Sprint 062 — Villa Factory mobil: Modal bleibt auch bei geöffneter
+     Bildschirmtastatur erreichbar (scrollbar statt abgeschnitten). */
+  .new-villa-modal { max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .villa-idea-input { min-height: 84px; resize: none; }
+  /* iOS/Android zoomen bei <16px Eingabefeldern automatisch hinein —
+     16px verhindert den Layout-Sprung beim Fokus. */
+  .modal-input, .message-composer textarea, .drawer-search input { font-size: 16px; }
   .app-header { min-height: 77px; gap: 10px; padding: 12px 17px; }
   .nav-menu { width: 40px; height: 40px; }
   .brand-block { gap: 10px; }
