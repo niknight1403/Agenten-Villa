@@ -4,6 +4,7 @@ import { appRouter } from "./routers";
 import * as villaStore from "./villa-store";
 import * as agentEngine from "./agent-engine";
 import * as missionStore from "./elite-mission-store";
+import * as githubTools from "./github-tools";
 import type { TrpcContext } from "./_core/context";
 import {
   agentControlLimits,
@@ -71,6 +72,81 @@ describe("agent access controls", () => {
     expect(villa).toHaveBeenCalledWith(9, 17);
     expect(mission).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("Android-Dateimanager") }), expect.any(Function), expect.any(Object));
   });
+  it("starts the repo import analysis read-only and extracts the recommendation", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("GITHUB_TOKEN", "test-github-key");
+    const caller = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    await caller.agent.setState({ state: "RUNNING" });
+    let captured: agentEngine.AgentToolExecutor = async () => ({});
+    const runSpy = vi.spyOn(agentEngine, "runAgentTurnWithGitHub").mockImplementation(
+      async (_input, executeTool) => {
+        captured = executeTool;
+        return {
+          answer: "Analyse abgeschlossen. Der Bestand ist tragfaehig.\nEMPFEHLUNG: OPTIMIZE",
+          provider: "openrouter",
+          model: "free",
+          attempts: 1,
+          completed: false,
+          branch: null,
+          pullRequest: null,
+          githubActions: 2,
+        } as never;
+      }
+    );
+    const toolSpy = vi.spyOn(githubTools, "executeGitHubTool").mockResolvedValue({ ok: true } as never);
+    const result = await caller.agent.forgeAnalysis({});
+    expect(result.recommendation).toBe("OPTIMIZE");
+    expect(result.repository).toBe("niknight1403/Agenten-Villa");
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ specialty: "Projektanalyse" }),
+      expect.any(Function),
+      expect.any(Object)
+    );
+    // Lesende Werkzeuge laufen durch, schreibende werden blockiert.
+    expect(() => captured("github_create_branch", { purpose: "analyse" })).toThrow("READ_ONLY_ANALYSE");
+    expect(() => captured("github_write_file", { path: "x", branch: "agent/x", content: "y", message: "z" })).toThrow("READ_ONLY_ANALYSE");
+    await captured("github_repo_overview", {});
+    expect(toolSpy).toHaveBeenCalledWith("github_repo_overview", {});
+  });
+
+  it("passes the villa name into the analysis and rejects unknown villas", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("GITHUB_TOKEN", "test-github-key");
+    const caller = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    await caller.agent.setState({ state: "RUNNING" });
+    const runSpy = vi.spyOn(agentEngine, "runAgentTurnWithGitHub").mockResolvedValue({
+      answer: "Keine Empfehlung moeglich.",
+      provider: "openrouter",
+      model: "free",
+      attempts: 1,
+      completed: false,
+      branch: null,
+      pullRequest: null,
+      githubActions: 0,
+    } as never);
+    const villa = vi.spyOn(villaStore, "getVilla").mockResolvedValue(undefined);
+    await expect(caller.agent.forgeAnalysis({ villaId: 91 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    villa.mockResolvedValue({ id: 9, createdBy: 17, name: "Villa Analyse", projectBrief: null, icon: "villa", createdAt: new Date(), updatedAt: new Date() } as never);
+    const result = await caller.agent.forgeAnalysis({ villaId: 9 });
+    expect(result.recommendation).toBeNull();
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: expect.stringContaining("Villa Analyse") }),
+      expect.any(Function),
+      expect.any(Object)
+    );
+  });
+
+  it("blocks the repository analysis for non-admins and stopped agents", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    vi.stubEnv("GITHUB_TOKEN", "test-github-key");
+    const user = appRouter.createCaller(createContext("user", "user@example.com"));
+    await expect(user.agent.forgeAnalysis({})).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const admin = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    await admin.agent.setState({ state: "RUNNING" });
+    await admin.agent.setState({ state: "STOPPED", acknowledgeStop: true });
+    await expect(admin.agent.forgeAnalysis({})).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
+
   it("allows only admin role or the configured OAuth email", () => {
     vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
     expect(

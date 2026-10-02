@@ -1,4 +1,5 @@
 import { buildForgePlan, forgeOptionsSchema } from "../shared/forge";
+import { workforceDirective } from "../shared/villa-workforce";
 import { TRPCError } from "@trpc/server";
 import { consumeAdminMutation } from "./admin-rate-limit";
 import { z } from "zod";
@@ -19,6 +20,7 @@ import {
   executeGitHubTool,
   GITHUB_REPOSITORY,
   GitHubToolError,
+  isReadOnlyGitHubTool,
 } from "./github-tools";
 import {
   CAPABILITY_PACKS,
@@ -718,9 +720,13 @@ export const agentRouter = router({
             code: "FORBIDDEN",
             message: "Diese Villa ist archiviert und startet keine neuen Läufe.",
           });
-        const projectContext = villa
-          ? `Projekt-Villa: ${villa.name}\nProjektziel: ${villa.projectBrief ?? "Noch nicht beschrieben"}\n\n`
-          : "";
+        // Villa-Belegschaft: jede Mission beginnt mit der Einweisung
+        // der 1000 logischen Agenten in ihre Aufgabenbereiche.
+        const projectContext = `${
+          villa
+            ? `Projekt-Villa: ${villa.name}\nProjektziel: ${villa.projectBrief ?? "Noch nicht beschrieben"}\n\n`
+            : ""
+        }${workforceDirective(villa?.name ?? null)}\n\n`;
         if (projectContext.length + input.prompt.length > ELITE_LIMITS.promptChars)
           throw new TRPCError({ code: "BAD_REQUEST", message: "Projektziel und Mission sind zusammen zu lang. Bitte kürzer formulieren." });
         const missionInput: SavedMissionInput = {
@@ -818,6 +824,82 @@ export const agentRouter = router({
             message:
               "Der Speicher-Berater konnte keine gueltigen Vorschlaege erzeugen. Bitte den Auftrag konkreter formulieren.",
           });
+        mapAgentError(error);
+      }
+    }),
+  /**
+   * Repo-Import-Analyse (Sprint Belegschaft): Bevor der Nutzer zwischen
+   * OPTIMIZE und REBUILD waehlt, analysiert eine Villa das verbundene
+   * Repository ausschliesslich mit LESenden GitHub-Werkzeugen und legt
+   * dem Nutzer die Fertigstell-Moeglichkeiten mit klarer Empfehlung
+   * vor. Keine Schreibvorgänge, keine Branches, keine PRs — reine Analyse.
+   */
+  forgeAnalysis: protectedProcedure
+    .input(
+      z.object({
+        villaId: z.number().int().positive().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      requireAdminMutation(ctx.user);
+      if (controlState !== "RUNNING")
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Der Agent steht auf STOPPED. Vor einer Analyse starten.",
+        });
+      if (!process.env.GITHUB_TOKEN?.trim())
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Für die Repository-Analyse muss GITHUB_TOKEN als Server-Secret eingerichtet sein.",
+        });
+      if (!anyModelProviderConfigured())
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Für die Repository-Analyse muss mindestens ein Modellanbieter-Secret eingerichtet sein.",
+        });
+      let villaName: string | null = null;
+      if (input.villaId) {
+        const villa = await getVilla(input.villaId, ctx.user.id);
+        if (!villa)
+          throw new TRPCError({ code: "NOT_FOUND", message: "Projekt-Villa nicht gefunden." });
+        if (villa.archivedAt)
+          throw new TRPCError({ code: "FORBIDDEN", message: "Diese Villa ist archiviert und startet keine neuen Läufe." });
+        villaName = villa.name;
+      }
+      const analysisPrompt = [
+        `Analysiere das verbundene Repository ${GITHUB_REPOSITORY} fuer eine Projekt-Villa${villaName ? ` ('${villaName}')` : ""}.`,
+        "Untersuche mit LESenden Werkzeugen: Repository-Ueberblick, Dateibaum, letzte Commits, offene Issues und Pull Requests sowie CI-Check-Runs.",
+        "Bewerte ehrlich: Projektzustand, Architektur, Test- und CI-Situation, erkennbare Luecken.",
+        "Lege dem Nutzer danach genau zwei Fertigstell-Moeglichkeiten vor, jede mit kurzer Begruendung und Konsequenz:",
+        "1) OPTIMIZE — das bestehende Projekt weiterentwickeln, verbessern und optimieren.",
+        "2) REBUILD — einen begruendeten Neubau als neues Projekt planen.",
+        "Empfehlungspflicht: Nenne die aus deiner Analyse besser geeignete Option als klare Empfehlung.",
+        "Beende die Antwort zwingend mit einer eigenen Zeile im Format 'EMPFEHLUNG: OPTIMIZE' oder 'EMPFEHLUNG: REBUILD'.",
+      ].join(" ");
+      beginProgress(ctx.user.id, analysisPrompt);
+      try {
+        const result = await runAgentTurnWithGitHub(
+          activePrompt()
+            ? { prompt: analysisPrompt, history: [], mode: "workshop", specialty: "Projektanalyse", systemOverride: activePrompt() }
+            : { prompt: analysisPrompt, history: [], mode: "workshop", specialty: "Projektanalyse" },
+          (name, args) => {
+            if (!isReadOnlyGitHubTool(name))
+              throw new Error(
+                "READ_ONLY_ANALYSE: Diese Analysephase darf nur lesende GitHub-Werkzeuge ausführen."
+              );
+            return executeGitHubTool(name, args);
+          },
+          { authorization: { administrator: true }, onEvent: progressEmitter(ctx.user.id) }
+        );
+        const match = /EMPFEHLUNG:\s*(OPTIMIZE|REBUILD)/.exec(result.answer);
+        return {
+          answer: result.answer,
+          recommendation: (match?.[1] as "OPTIMIZE" | "REBUILD" | undefined) ?? null,
+          repository: GITHUB_REPOSITORY,
+          model: result.model,
+          githubActions: result.githubActions ?? 0,
+        };
+      } catch (error) {
         mapAgentError(error);
       }
     }),

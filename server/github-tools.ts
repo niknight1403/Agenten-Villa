@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-export const GITHUB_REPOSITORY = "niknight1403/Agenten-Villa";
+/**
+ * Verbundenes Repository der Villa. Per Server-Secret GITHUB_REPOSITORY
+ * konfigurierbar (Format "owner/repo"), damit die Werkstatt pro Projekt
+ * am jeweils passenden Repository arbeiten kann. Default bleibt die
+ * eigene Agenten-Villa.
+ */
+export const GITHUB_REPOSITORY =
+  process.env.GITHUB_REPOSITORY?.trim() || "niknight1403/Agenten-Villa";
 const API_ROOT = "https://api.github.com";
 const API_VERSION = "2026-03-10";
 const MAX_FILE_BYTES = 48_000;
@@ -241,6 +248,25 @@ export function createGitHubClient(deps: GitHubDependencies = {}) {
 export async function executeGitHubTool(name: string, rawArgs: unknown, deps: GitHubDependencies = {}) { return createGitHubClient(deps).run(name, rawArgs); }
 export function isSafeGitHubPath(path: string) { return pathSchema.safeParse(path).success; }
 export function isAgentBranchName(branch: string) { return agentBranch(branch); }
+/**
+ * Lesende GitHub-Werkzeuge — Basis fuer die Repo-Import-Analyse:
+ * Die Analysephase darf das Repository nur lesen, niemals veraendern.
+ */
+export const READ_ONLY_GITHUB_TOOLS = [
+  "github_repo_overview",
+  "github_list_commits",
+  "github_list_files",
+  "github_list_tree",
+  "github_read_file",
+  "github_list_issues",
+  "github_list_pull_requests",
+  "github_check_runs",
+] as const;
+
+export function isReadOnlyGitHubTool(name: string): boolean {
+  return (READ_ONLY_GITHUB_TOOLS as readonly string[]).includes(name);
+}
+
 export const GITHUB_TOOL_LIMITS = {
   filesPerListing: 100,
   treeItems: MAX_TREE_ITEMS,
