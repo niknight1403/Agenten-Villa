@@ -905,6 +905,17 @@ body:has(.villa-app) {
 .advanced-settings-body { margin-top: 6px; }
 .advanced-settings-body .fallback-consent { margin: 0 auto; }
 .advanced-settings-body .composer-footnote { margin-top: 8px; }
+.system-prompt-settings { width: min(720px, 100%); }
+.advanced-settings-body.admin-prompt-panel {
+  box-sizing: border-box;
+  padding: 11px 13px;
+  border: 1px solid #33416a;
+  border-radius: 14px;
+  background: #121a35;
+  color: #c5d2ee;
+  font-size: 12px;
+  line-height: 1.4;
+}
 
 
 .credential-modal {

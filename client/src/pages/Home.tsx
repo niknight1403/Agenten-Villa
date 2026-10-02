@@ -178,6 +178,7 @@ export default function Home() {
     useState(false);
   const [githubToolsEnabled, setGithubToolsEnabled] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [systemPromptOpen, setSystemPromptOpen] = useState(false);
 
   const villas = useMemo<Villa[]>(
     () =>
@@ -969,16 +970,34 @@ export default function Home() {
 {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
             {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             {statusQuery.data?.isAdmin && (
-              <div className="github-tool-toggle admin-prompt-panel">
-                <span>
-                  <strong>Eigene Systemanweisung (Administrator)</strong>
-                  <small>Ersetzt die Standard-Persona des Assistenten. Leer lassen und speichern = Standard wiederherstellen. GitHub-Sicherheitsregeln und Anbieterrichtlinien gelten weiterhin.</small>
-                  <textarea value={effectivePrompt} onChange={(event) => setPromptDraft(event.target.value)} rows={2} maxLength={4000} aria-label="Eigene Systemanweisung" placeholder="z. B. eigener Stil, eigene Rollenbeschreibung …" />
-                  <span className="prompt-actions">
-                    <button className="agent-control" type="button" disabled={systemPromptMutation.isPending} onClick={() => systemPromptMutation.mutate({ prompt: effectivePrompt.trim() || null })}>{systemPromptMutation.isPending ? "Speichern …" : "Anweisung speichern"}</button>
-                    <button className="agent-control" type="button" disabled={systemPromptMutation.isPending || !statusQuery.data.systemPrompt} onClick={() => { setPromptDraft(null); systemPromptMutation.mutate({ prompt: null }); }}>Zurücksetzen</button>
+              <div className="advanced-settings system-prompt-settings">
+                <button
+                  type="button"
+                  className="advanced-toggle"
+                  aria-expanded={systemPromptOpen}
+                  onClick={() => setSystemPromptOpen(previous => !previous)}
+                >
+                  <span>
+                    Eigene Systemanweisung (Administrator)
+                    {statusQuery.data.systemPrompt && !systemPromptOpen ? " · aktiv" : ""}
                   </span>
-                </span>
+                  <ChevronDown
+                    size={14}
+                    className={`advanced-chevron${systemPromptOpen ? " open" : ""}`}
+                  />
+                </button>
+                {systemPromptOpen && (
+                  <div className="advanced-settings-body admin-prompt-panel">
+                    <span>
+                      <small>Ersetzt die Standard-Persona des Assistenten. Leer lassen und speichern = Standard wiederherstellen. GitHub-Sicherheitsregeln und Anbieterrichtlinien gelten weiterhin.</small>
+                      <textarea value={effectivePrompt} onChange={(event) => setPromptDraft(event.target.value)} rows={2} maxLength={4000} aria-label="Eigene Systemanweisung" placeholder="z. B. eigener Stil, eigene Rollenbeschreibung …" />
+                      <span className="prompt-actions">
+                        <button className="agent-control" type="button" disabled={systemPromptMutation.isPending} onClick={() => systemPromptMutation.mutate({ prompt: effectivePrompt.trim() || null })}>{systemPromptMutation.isPending ? "Speichern …" : "Anweisung speichern"}</button>
+                        <button className="agent-control" type="button" disabled={systemPromptMutation.isPending || !statusQuery.data.systemPrompt} onClick={() => { setPromptDraft(null); systemPromptMutation.mutate({ prompt: null }); }}>Zurücksetzen</button>
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
             )}
             {isWorkshop && statusQuery.data?.isAdmin && <label className="github-tool-toggle"><input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} /><span><strong>GitHub-Werkzeuge aktivieren</strong><small>{statusQuery.data.github?.configured ? `${statusQuery.data.github.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small></span></label>}
