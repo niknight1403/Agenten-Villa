@@ -65,7 +65,8 @@
 | 058     | Grün    | Sicherheitsheader: security-headers.ts setzt nosniff, X-Frame-Options DENY, Referrer-Policy und Permissions-Policy immer; CSP (script-src 'self', frame-ancestors 'none', Objekte verboten) und HSTS nur in Produktion — Native-Client unberührt, Dev/Vite-HMR frei (4 neue Tests grün). |
 | 059     | Grün    | Dependency-Review: `pnpm audit` (prod+dev) ohne bekannte Schwachstellen; Dependabot für npm und GitHub Actions aktiviert (woechentlich, Minor/Patch gruppiert, Major mit Review); CI prüft ab jetzt `pnpm audit --prod --audit-level high`; Ergebnisse in docs/DEPENDENCY-REVIEW.md dokumentiert. |
 | 060     | Grün    | Security-Review: gebündelte Regressionssuite security-review.test.ts über alle kritischen Schutzpfade — UNAUTHORIZED ohne Sitzung, FORBIDDEN ohne Admin, Admin-Budget-E2E (TOO_MANY_REQUESTS nach Limit), Nicht-Admin-Ablehnungen verbrauchen kein Budget, CSRF-Block, Export-Redaktion, Header-Invarianten (7 Tests grün). |
-| 061–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
+| 061     | Grün    | Mobile Navigation: Drawer/Modals sperren jetzt den Hintergrund-Scroll (kein Durchfahren des Chats bei offenem Menü auf Touch-Geräten) und schließen mit Escape; CSS-Prüfung bestätigt: Safe-Areas, 44px-Touch-Ziele, Tabbar ≤680px, Theme-Switcher auch bei ≤370px erreichbar. E2E-Verifizierung nach Deploy folgt im Abschluss-Check. |
+| 062–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
 
 ## Grüner Validierungsweg
 

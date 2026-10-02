@@ -187,6 +187,29 @@ export default function Home() {
     [villas, query]
   );
 
+  // Sprint 061 — Mobile Navigation: Overlays (Drawer, Neue-Villa-Modal,
+  // Key-Dialog) sperren den Hintergrund-Scroll und lassen sich mit
+  // Escape schließen — auf Touch-Geräten läuft die Konversation dahinter
+  // sonst weiter und das Drawer wirkt "durchlässig".
+  useEffect(() => {
+    const overlayActive = drawerOpen || newVillaOpen || keyDialogOpen;
+    if (!overlayActive) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDrawerOpen(false);
+        setNewVillaOpen(false);
+        setKeyDialogOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drawerOpen, newVillaOpen, keyDialogOpen]);
+
   // Verlauf aus der Datenbank übernehmen, sobald er geladen ist.
   useEffect(() => {
     if (!activeVilla) {
