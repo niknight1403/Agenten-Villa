@@ -1,3 +1,4 @@
+import { sanitizeVillaExport } from "./villa-export";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { LimitConfig, Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -297,7 +298,9 @@ export async function exportVilla(
   const messages = await db.select().from(villaMessages)
     .where(eq(villaMessages.villaId, villaId))
     .orderBy(asc(villaMessages.id));
-  return {
+  // Sprint 057 — Export-Schutz: versionierte Whitelist-Redaktion vor der
+  // Rueckgabe; interne Felder koennen den Server nicht verlassen.
+  return sanitizeVillaExport({
     name: villa.name,
     specialty: villa.specialty,
     icon: villa.icon,
@@ -305,13 +308,13 @@ export async function exportVilla(
     description: villa.description,
     capacity: villa.capacity,
     messages: messages.map(m => ({
-      role: m.role as "user" | "assistant",
+      role: m.role as string,
       content: m.content,
       createdAt: m.createdAt,
     })),
     exportedAt: new Date(),
     version: 1,
-  };
+  });
 }
 
 /**
