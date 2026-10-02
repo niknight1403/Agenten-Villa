@@ -247,6 +247,7 @@ body {
   line-height: 1.45;
 }
 
+.auth-version { margin-top: 18px; color: #7783a1; font-size: 12px; text-align: center; }
 .auth-card {
   box-sizing: border-box;
   width: min(312px, 100%);

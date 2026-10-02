@@ -1,4 +1,8 @@
 export const COOKIE_NAME = "app_session_id";
+// Build-Stand der App (muss zu android/app/build.gradle passen:
+// versionName 1.1.0, versionCode 3). Dient der APK-Diagnose auf Geraeten.
+export const APP_VERSION = "1.1.0";
+export const APP_BUILD = 3;
 export const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
 export const AXIOS_TIMEOUT_MS = 30_000;
 export const UNAUTHED_ERR_MSG = 'Please login (10001)';

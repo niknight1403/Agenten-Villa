@@ -90,3 +90,11 @@ Jeder Sprint erhält eine eindeutige Änderung, mindestens eine technische Prüf
 - Android-Emulator-Smoketest (android-smoke) auf 4ca142e: success — App installiert und lauffähig.
 - Google-Sign-In-Probe auf 4ca142e: CONFIG_OK_EMULATOR_LIMITED — Google akzeptiert Paketname/SHA-1 (kein ApiException 10); interaktiver Login nur auf echtem Gerät mit Google-Konto abschließbar (12500 ist emulatorbedingt).
 - Produktion (Render): /api/health 200, DB verbunden, alle Sicherheitsheader aus Sprint 058 aktiv (CSP frame-ancestors 'none', HSTS, DENY, nosniff, Referrer-/Permissions-Policy).
+
+## Login-Diagnose-Build (02.10.2026, abends)
+
+App-Version + Build-Nummer im Login-Footer (shared/const.ts: APP_VERSION 1.1.0,
+APP_BUILD 3; build.gradle versionCode 3). Ein Screenshot zeigt damit sofort,
+welche APK installiert ist — wichtig bei der GCP-Anmeldefehler-Diagnose
+(Web: redirect_uri_mismatch ab ca. 20:00 UTC; Android: ApiException 10 am
+Geraet — OAuth-Clients wurden in der Cloud Console veraendert).

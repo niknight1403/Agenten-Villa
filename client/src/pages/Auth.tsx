@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { LogIn } from "lucide-react";
-import { COOKIE_NAME } from "@shared/const";
+import { APP_BUILD, APP_VERSION, COOKIE_NAME } from "@shared/const";
 
 function GoogleMark() {
   return (
@@ -139,6 +139,7 @@ export default function Auth() {
         </div>
         <a href="/demo" className="mt-4 inline-block text-sm text-cyan-300 underline">Projekt-Demo anfragen</a>
       </section>
+      <p className="auth-version">App-Version {APP_VERSION} (Build {APP_BUILD})</p>
       <span className="sr-only">Agenten-Villa Pro</span>
     </main>
   );
