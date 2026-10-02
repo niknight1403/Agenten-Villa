@@ -1,0 +1,79 @@
+name: Google Sign-In Probe
+
+# E2E-Pruefung des nativen Google-Sign-In in einem Android-Emulator mit der
+# RELEASE-APK (CI-Keystore, SHA-1 B7:60:BF:24:1E:50:A8:04:FF:68:25:5A:52:C9:97:20:CA:17:AE:65).
+# Ergebnis PICKER_OPENED = Google akzeptiert Paketname + SHA-1 (Android-Client OK).
+# DEVELOPER_ERROR_10 = Android-Client in der Google Cloud Console fehlt/nicht propagiert.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - name: Build Android client
+        env:
+          VITE_API_URL: https://agenten-villa.onrender.com
+        run: pnpm exec vite build && pnpm exec cap sync android
+      - name: Provide release signing (CI keystore)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > /tmp/agenten-villa.keystore
+            echo "ANDROID_KEYSTORE_FILE=/tmp/agenten-villa.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PW" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+          fi
+      - name: Signatur-Fingerprints ausgeben (Soll-Ist-Abgleich)
+        if: env.ANDROID_KEYSTORE_FILE != ''
+        run: |
+          keytool -list -v -keystore "$ANDROID_KEYSTORE_FILE" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" | grep -E "SHA1:|SHA256:" || true
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Install screenshot text recognition
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu
+      - name: Probe in Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/google-signin-probe.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: google-signin-probe
+          path: |
+            signin-probe.png
+            probe-ui.xml
+            probe-ocr.txt
+            probe.tsv
+            probe-logcat.txt
+          if-no-files-found: ignore
