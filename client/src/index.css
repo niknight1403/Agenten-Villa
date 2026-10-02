@@ -408,7 +408,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  /* Sprint 063 — deckt alle Animationen ab, auch Tailwind animate-spin/
+     animate-pulse und eigene Keyframes (mic-pulse, fade-in, ...). */
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
 
 .auth-card > .input-wrap + .field { margin-top: 13px; }
@@ -872,7 +874,7 @@ body:has(.villa-app) {
 .credential-modal :focus-visible { outline: 2px solid #37dcc6; outline-offset: 2px; }
 @keyframes key-spin { to { transform: rotate(360deg); } }
 .spin { animation: key-spin 800ms linear infinite; }
-@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.5s; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none !important; } }
 
 .github-tool-toggle {
   width: min(720px, 100%);

@@ -67,7 +67,8 @@
 | 060     | Grün    | Security-Review: gebündelte Regressionssuite security-review.test.ts über alle kritischen Schutzpfade — UNAUTHORIZED ohne Sitzung, FORBIDDEN ohne Admin, Admin-Budget-E2E (TOO_MANY_REQUESTS nach Limit), Nicht-Admin-Ablehnungen verbrauchen kein Budget, CSRF-Block, Export-Redaktion, Header-Invarianten (7 Tests grün). |
 | 061     | Grün    | Mobile Navigation: Drawer/Modals sperren jetzt den Hintergrund-Scroll (kein Durchfahren des Chats bei offenem Menü auf Touch-Geräten) und schließen mit Escape; CSS-Prüfung bestätigt: Safe-Areas, 44px-Touch-Ziele, Tabbar ≤680px, Theme-Switcher auch bei ≤370px erreichbar. E2E-Verifizierung nach Deploy folgt im Abschluss-Check. |
 | 062     | Grün    | Villa Factory mobil: Erstellen-Modal scrollbar statt abgeschnitten (max-height + Safe-Area, wichtig bei geöffneter Tastatur), Textareas ohne Resize-Griff, alle Eingabefelder 16px gegen iOS-Fokuszoom — auch Chat-Composer und Drawer-Suche. |
-| 063–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
+| 063     | Grün    | Reduced-Motion komplett: globaler prefers-reduced-motion-Block erzwingt jetzt animation-duration ~0 + iteration-count 1 für ALLE Animationen (deckt mic-pulse, fade/slide/modal und Tailwind animate-spin/pulse ab); .spin stoppt statt nur langsamer zu drehen. |
+| 064–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
 
 ## Grüner Validierungsweg
 
