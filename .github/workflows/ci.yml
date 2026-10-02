@@ -25,3 +25,7 @@ jobs:
         run: pnpm test
       - name: Production build
         run: pnpm build
+      # Sprint 059 — Dependency-Review in CI: schlaegt bei bekannten
+      # High-/Critical-Schwachstellen in Produktionsabhaengigkeiten fehl.
+      - name: Production dependency audit (high/critical)
+        run: pnpm audit --prod --audit-level high

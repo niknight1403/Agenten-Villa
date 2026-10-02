@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Sprint 059 — Dependabot fuer npm-Pakete (woechentlich, gruppiert).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major-Updates nur bewusst mit Review; Meldungen bleiben sichtbar.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+  # GitHub Actions ebenso pflegen (checkout, setup-node & Co.).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor:
+        update-types:
+          - "minor"
+          - "patch"
