@@ -60,7 +60,8 @@
 | 053     | Grün    | KI-Speicher-Berater: autonomer Dateimanager erhaelt Berater fuer Speicherplanung (Sprint-PR #61). |
 | 054     | Grün    | Native Google-Sign-In korrigiert: Client-ID-Mismatch behoben, Regressionstest pinnt capacitor.config.ts + strings.xml auf die Produktions-Web-Client-ID; Login-Screen zeigt native Fehlerdetails; Emulator-Probe verifiziert den Android-Client (kein ApiException 10 mehr). |
 | 055     | Grün    | CSRF- und Session-Review: Origin/Referer-Guard (csrf.ts) fuer alle unmethodischen /api-Requests; same-origin, native Urspruenge und Nicht-Browser-Clients frei, Cross-Site-Mutationen 403 (10 neue Tests gruen). |
-| 056–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
+| 056     | Grün    | Rate-Limit für Adminaktionen: requireAdminMutation erzwingt Rolle UND ein per-Nutzer-Budget (30 Mutationen/Minute, gleitendes Fenster, prozesslokal); alle 11 schreibenden Admin-Prozeduren sind angeschlossen, lesende Admin-Abfragen bleiben frei (4 neue Tests grün). |
+| 057–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
 
 ## Grüner Validierungsweg
 

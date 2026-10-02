@@ -1,5 +1,6 @@
 import { buildForgePlan, forgeOptionsSchema } from "../shared/forge";
 import { TRPCError } from "@trpc/server";
+import { consumeAdminMutation } from "./admin-rate-limit";
 import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
 import { router, protectedProcedure } from "./_core/trpc";
@@ -87,6 +88,16 @@ function requireAdmin(user: { role: string; email?: string | null }) {
       message:
         "Nur der konfigurierte Administrator kann den Agenten steuern oder geschützte Elite-/GitHub-Werkzeuge verwenden.",
     });
+}
+/**
+ * Sprint 056 — Admin-Mutationen: Rollenpruefung UND per-Nutzer-Budget.
+ * Lesende Admin-Abfragen (Telemetrie, Metriken, Audit) bleiben unbegrenzt.
+ */
+function requireAdminMutation(
+  user: { id?: number; role: string; email?: string | null }
+) {
+  requireAdmin(user);
+  if (typeof user.id === "number") consumeAdminMutation(user.id);
 }
 function consumeInWindow(
   store: Map<number, { start: number; count: number }>,
@@ -466,7 +477,7 @@ export const agentRouter = router({
     return getGuardianSnapshot();
   }),
   runProviderGuardian: protectedProcedure.mutation(async ({ ctx }) => {
-    requireAdmin(ctx.user);
+    requireAdminMutation(ctx.user);
     return runGuardianCycle();
   }),
   setProviderGuardian: protectedProcedure
@@ -477,7 +488,7 @@ export const agentRouter = router({
       })
     )
     .mutation(({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       if (input.enabled !== undefined) setGuardianEnabled(input.enabled);
       if (input.intervalMs !== undefined)
         setGuardianIntervalMs(input.intervalMs);
@@ -520,7 +531,7 @@ export const agentRouter = router({
   setSystemPrompt: protectedProcedure
     .input(z.object({ prompt: z.string().max(4000).nullable() }))
     .mutation(({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       const trimmed = input.prompt?.trim() ?? "";
       // Sprint 049 — jede Änderung wird als versionierter Eintrag
       // aufgezeichnet und ist über den Verlauf nachvollziehbar.
@@ -555,7 +566,7 @@ export const agentRouter = router({
   rollbackPromptVersion: protectedProcedure
     .input(z.object({ version: z.number().int().positive() }))
     .mutation(({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       const version = rollbackPromptVersion(input.version, ctx.user.email ?? "unbekannt");
       // Sprint 052 — Audit-Log: Rollbacks sind nachvollziehbar.
       recordAuditEntry({
@@ -579,7 +590,7 @@ export const agentRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       const result = await checkProviderHealth(input.provider, {
         consentHuggingFace: input.consentHuggingFace,
       });
@@ -604,7 +615,7 @@ export const agentRouter = router({
   testOpenRouterKey: protectedProcedure
     .input(z.object({ apiKey: z.string().trim().min(8).max(512) }))
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       // Administrators have no local application limit; the endpoint stays
       // admin-only and each call still hits the provider's own policy.
       if (!isAdmin(ctx.user)) consumeCredentialCheck(ctx.user.id);
@@ -628,7 +639,7 @@ export const agentRouter = router({
   eliteMission: protectedProcedure
     .input(eliteMissionSchema)
     .mutation(async ({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       // Sprint 047 — Freigabepunkt: echte GitHub-Aktionen nur mit Quittung.
       requireApproval("mission-start", input.acknowledgeImpact);
       const key = input.idempotencyKey ?? randomUUID();
@@ -700,7 +711,7 @@ export const agentRouter = router({
     return agentMetricsSummary();
   }),
   eliteMissionRuns: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.user);
+    requireAdminMutation(ctx.user);
     try {
       const rows = await listMissionRuns(ctx.user.id);
       return rows.map(({ id, idempotencyKey, status, attempt, createdAt, updatedAt, finishedAt }) =>
@@ -709,7 +720,7 @@ export const agentRouter = router({
   }),
   eliteMissionRun: protectedProcedure.input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      requireAdmin(ctx.user);
+      requireAdminMutation(ctx.user);
       try {
         const run = await getMissionRun(input.id, ctx.user.id);
         if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Mission nicht gefunden." });
@@ -722,7 +733,7 @@ export const agentRouter = router({
     id: z.number().int().positive(),
     acknowledgeExternalChanges: z.literal(true),
   })).mutation(async ({ ctx, input }) => {
-    requireAdmin(ctx.user);
+    requireAdminMutation(ctx.user);
     // Sprint 047 — Freigabepunkt: Neustart nur nach ausdrücklicher Prüfung.
     requireApproval("mission-restart", input.acknowledgeExternalChanges);
     if (controlState !== "RUNNING" || !process.env.GITHUB_TOKEN?.trim() || !anyModelProviderConfigured())
@@ -789,7 +800,7 @@ export const agentRouter = router({
       if (!isAdmin(ctx.user)) consumeTurn(ctx.user.id);
       try {
         if (input.useGitHub) {
-          requireAdmin(ctx.user);
+          requireAdminMutation(ctx.user);
           if (!process.env.GITHUB_TOKEN?.trim())
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
