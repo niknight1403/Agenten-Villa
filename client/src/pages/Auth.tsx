@@ -42,6 +42,7 @@ export default function Auth() {
   const [errorCode, setErrorCode] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get("error")
   );
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
   const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
@@ -92,6 +93,7 @@ export default function Auth() {
       // ApiException-Code 10 = DEVELOPER_ERROR: der SHA-1-Fingerprint der
       // signierenden APK fehlt als Android-Client im Google-Cloud-Projekt.
       const code = (err as { code?: string })?.code;
+      setErrorDetail(String(code ?? (err as Error)?.message ?? "unbekannter Fehler"));
       setErrorCode(code === "10" ? "native_config" : "native_failed");
     } finally {
       setPending(false);
@@ -130,6 +132,9 @@ export default function Auth() {
           )}
           {errorMessage && (
             <p className="form-notice info" role="status">{errorMessage}</p>
+          )}
+          {errorCode === "native_failed" && errorDetail && (
+            <p className="form-notice" role="status">Details: {errorDetail}</p>
           )}
         </div>
         <a href="/demo" className="mt-4 inline-block text-sm text-cyan-300 underline">Projekt-Demo anfragen</a>

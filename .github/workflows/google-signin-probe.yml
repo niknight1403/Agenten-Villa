@@ -76,4 +76,5 @@ jobs:
             probe-ocr.txt
             probe.tsv
             probe-logcat.txt
+            probe-logcat-full.txt
           if-no-files-found: ignore

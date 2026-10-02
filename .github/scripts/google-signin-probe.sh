@@ -82,7 +82,7 @@ for attempt in {1..18}; do
   if echo "$UI" | grep -q 'noch nicht freigeschaltet'; then
     verdict="DEVELOPER_ERROR_10"; break
   fi
-  if echo "$UI" | grep -Eq 'Anmeldung bei Google ist fehlgeschlagen|Anmeldung fehlgeschlagen'; then
+  if echo "$UI" | grep -Eq 'Anmeldung bei Google ist fehlgeschlagen|Anmeldung ist fehlgeschlagen|Anmeldung fehlgeschlagen|Details:'; then
     verdict="NATIVE_FAILED"; break
   fi
   if echo "$UI" | grep -q 'Anmeldung läuft'; then
@@ -91,7 +91,8 @@ for attempt in {1..18}; do
 done
 
 echo "=== ERGEBNIS: $verdict ==="
-adb logcat -d -t 3000 -v brief 2>/dev/null | grep -iE 'GoogleAuth|GoogleSignIn|ApiException|DEVELOPER_ERROR|NativeLogin|chromium.*(Console|error)' | tail -40 > probe-logcat.txt || true
+adb logcat -d -t 3000 -v brief 2>/dev/null > probe-logcat-full.txt || true
+grep -iE 'GoogleAuth|GoogleSignIn|ApiException|DEVELOPER_ERROR|GmsSign|gms' probe-logcat-full.txt | tail -50 > probe-logcat.txt || true
 cat probe-logcat.txt || true
 adb exec-out screencap -p > signin-probe.png || true
 
