@@ -98,3 +98,15 @@ APP_BUILD 3; build.gradle versionCode 3). Ein Screenshot zeigt damit sofort,
 welche APK installiert ist — wichtig bei der GCP-Anmeldefehler-Diagnose
 (Web: redirect_uri_mismatch ab ca. 20:00 UTC; Android: ApiException 10 am
 Geraet — OAuth-Clients wurden in der Cloud Console veraendert).
+
+## OAuth-Client-Wechsel (02.10.2026, spaet)
+
+Der Produktionsserver verwendete Web-Client 656137332727-alqdkl..., der in
+der GCP-Console des Projekts nicht mehr auffindbar war und jede Redirect-URI
+ablehnte. Analyse per Live-Fingerprint (o/oauth2/v2/auth): Projekt
+656137332727 enthaelt AgentVilla (656137332727-vhip14vrtg...), Google ID
+(656137332727-aclq3q5...) und Android-Client 1. Nur AgentVilla hat die
+Redirect-URI registriert UND ein gueltiges Client-Secret. App + APK wurden
+auf AgentVilla umgestellt (capacitor.config.ts, versionCode 4 / Build 4).
+Der Render-Server benoetigt GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET auf
+AgentVilla (manueller Dashboard-Schritt).

@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /** Oeffentliche Produktions-Web-Client-ID (sichtbar im Login-Redirect, kein Secret). */
-export const PRODUCTION_WEB_CLIENT_ID = "656137332727-alqdkl30it263co2kr7tq5p1oclht630.apps.googleusercontent.com";
+export const PRODUCTION_WEB_CLIENT_ID = "656137332727-vhip14vrtgmdc65rsbdlpqud4tss0v4q.apps.googleusercontent.com";
 
 const repoRoot = join(__dirname, "..", "..");
 
