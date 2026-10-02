@@ -440,48 +440,56 @@ body:has(.villa-app) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--app-bg);
+  background:
+    radial-gradient(640px 420px at 88% -10%, rgb(34 215 238 / 12%), transparent 62%),
+    radial-gradient(760px 520px at -14% 110%, rgb(149 113 255 / 11%), transparent 60%),
+    radial-gradient(900px 620px at 52% 118%, rgb(23 96 191 / 10%), transparent 58%),
+    var(--app-bg);
   color: var(--app-bright);
   isolation: isolate;
 }
 
 .app-header {
   flex: 0 0 auto;
-  min-height: 82px;
+  min-height: 54px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 14px clamp(18px, 4vw, 40px);
-  background: #0e142a;
-  border-bottom: 1px solid #1e2747;
-  box-shadow: 0 8px 26px rgb(2 4 18 / 12%);
+  gap: 10px;
+  padding: 7px clamp(14px, 3vw, 28px);
+  background: rgb(13 18 40 / 74%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgb(94 220 255 / 14%);
+  box-shadow: 0 10px 30px rgb(2 4 18 / 24%);
   z-index: 2;
 }
 
 .icon-button {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   color: #9faed3;
-  background: #131a37;
-  border: 1px solid #222d53;
-  border-radius: 14px;
+  background: rgb(19 26 50 / 55%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgb(112 152 255 / 16%);
+  border-radius: 11px;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
-.icon-button svg { width: 20px; height: 20px; stroke-width: 1.7; }
-.icon-button:hover, .icon-button.active { color: #e6e8ff; background: #1b2350; border-color: #6654c9; }
+.icon-button svg { width: 17px; height: 17px; stroke-width: 1.7; }
+.icon-button:hover, .icon-button.active { color: #eaffff; background: rgb(34 199 238 / 14%); border-color: rgb(94 220 255 / 45%); }
 .icon-button:active, .round-add:active, .send-button:active { transform: scale(.96); }
-.nav-menu { width: 43px; height: 43px; }
+.nav-menu { width: 34px; height: 34px; }
 
 .brand-block {
   min-width: 0;
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 10px;
   text-align: left;
   color: inherit;
   background: transparent;
@@ -489,30 +497,30 @@ body:has(.villa-app) {
   padding: 0;
 }
 .brand-tile {
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border-radius: 15px;
+  border-radius: 11px;
   color: #e8ffff;
   background: linear-gradient(145deg, #706aff, #10c6cc 88%);
-  box-shadow: 0 8px 24px rgb(37 116 222 / 17%);
+  box-shadow: 0 6px 18px rgb(34 199 238 / 22%), 0 0 26px rgb(34 215 238 / 10%);
 }
-.brand-tile svg { width: 22px; height: 22px; stroke-width: 1.8; }
-.brand-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.brand-tile svg { width: 17px; height: 17px; stroke-width: 1.8; }
+.brand-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .brand-copy strong {
   overflow: hidden;
   max-width: min(360px, 42vw);
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #edf0fa;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -.02em;
+  color: #f2f6ff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
-.brand-copy > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #929ebc; font-size: 12px; }
+.brand-copy > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #7f8cae; font-size: 10px; }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; border-radius: 50%; background: #22d7c2; box-shadow: 0 0 10px rgb(34 215 194 / 38%); }
 .brand-chevron { flex: 0 0 auto; color: #7886a9; }
 .header-tools { display: flex; align-items: center; gap: 9px; }
@@ -624,17 +632,20 @@ body:has(.villa-app) {
   min-height: 66px;
   box-sizing: border-box;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin: 0 auto;
-  padding: 9px 10px 9px 18px;
-  border: 1px solid #2b385f;
-  border-radius: 23px;
-  background: #121832;
-  box-shadow: 0 9px 30px rgb(0 0 0 / 13%);
+  padding: 9px 10px;
+  border: 1px solid rgb(94 220 255 / 20%);
+  border-radius: 24px;
+  background: rgb(13 19 38 / 60%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 16px 44px rgb(2 4 18 / 42%), inset 0 1px 0 rgb(255 255 255 / 4%);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-.message-composer:focus-within { border-color: #47629a; box-shadow: 0 0 0 3px rgb(64 95 165 / 12%); }
+.message-composer:focus-within { border-color: rgb(94 220 255 / 50%); box-shadow: 0 0 0 3px rgb(34 215 238 / 12%), 0 16px 44px rgb(2 4 18 / 42%); }
 .message-composer textarea {
   flex: 1 1 auto;
   min-width: 0;
@@ -661,8 +672,8 @@ body:has(.villa-app) {
   background: #182143;
 }
 .mic-button:hover { color: #f1f5ff; background: #202c54; }
-.send-button { color: #f4f4ff; border-color: transparent; background: linear-gradient(145deg, #5248df, #136f8d); }
-.send-button:disabled { color: #8996b5; background: #20294a; cursor: not-allowed; }
+.send-button { color: #f4f4ff; border-color: transparent; background: linear-gradient(145deg, #19d7ee, #7a5cff); box-shadow: 0 6px 22px rgb(34 199 238 / 28%); }
+.send-button:disabled { color: #8996b5; background: #20294a; box-shadow: none; cursor: not-allowed; }
 .workshop .send-button { background: #5b3be0; }
 .workshop .send-button:disabled { background: #242849; }
 .composer-footnote { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 8px 0 0; color: #65718f; font-size: 10px; }
@@ -676,11 +687,14 @@ body:has(.villa-app) {
   align-items: center;
   gap: 10px;
   margin: 0 auto 13px;
-  padding: 11px 15px;
-  border: 1px solid #08766e;
-  border-radius: 18px;
+  padding: 9px 14px;
+  border: 1px solid rgb(94 220 255 / 20%);
+  border-radius: 999px;
   color: #14e6c7;
-  background: #102830;
+  background: rgb(13 22 44 / 55%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 26px rgb(2 4 18 / 22%);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
@@ -692,10 +706,10 @@ body:has(.villa-app) {
 .message-list { width: min(780px, 100%); display: flex; flex-direction: column; gap: 15px; margin: 0 auto; padding: 28px 0 22px; }
 .chat-message { display: flex; align-items: flex-start; gap: 11px; }
 .chat-message.user { justify-content: flex-end; }
-.assistant-avatar { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; margin-top: 4px; border: 1px solid #5333ab; border-radius: 12px; color: #bca6ff; background: #241542; font-size: 9px; }
-.message-bubble { max-width: min(660px, 88%); padding: 13px 15px; border: 1px solid #28314c; border-radius: 16px; background: #101329; box-shadow: 0 8px 20px rgb(0 0 0 / 10%); }
-.chat-message.user .message-bubble { border-color: #185a69; background: #102b37; }
-.message-author { margin-bottom: 6px; color: #a083ff; font-size: 12px; font-weight: 600; }
+.assistant-avatar { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; margin-top: 4px; border: 1px solid rgb(94 220 255 / 35%); border-radius: 12px; color: #7fe8ff; background: rgb(14 40 56 / 60%); font-size: 9px; }
+.message-bubble { max-width: min(660px, 88%); padding: 13px 16px; border: 1px solid rgb(112 152 255 / 16%); border-radius: 20px; background: rgb(16 22 44 / 52%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgb(0 0 0 / 18%), inset 0 1px 0 rgb(255 255 255 / 4%); }
+.chat-message.user .message-bubble { border-color: rgb(94 220 255 / 30%); background: rgb(10 56 74 / 42%); box-shadow: 0 10px 30px rgb(0 0 0 / 20%), 0 0 22px rgb(34 215 238 / 8%); }
+.message-author { margin-bottom: 6px; color: #7fe8ff; font-size: 12px; font-weight: 600; }
 .message-bubble p { margin: 0; color: #e7e9f4; font-size: 14px; line-height: 1.65; }
 
 .mobile-tabbar { display: none; }
@@ -717,8 +731,8 @@ body:has(.villa-app) {
 .library-heading h1 { margin: 6px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 30px; font-weight: 400; }
 .round-add { width: 42px; height: 42px; display: grid; place-items: center; color: #a8b3d0; border: 1px solid #29365c; border-radius: 14px; background: #151c3b; }
 .villa-list { display: flex; flex-direction: column; gap: 9px; }
-.villa-row { width: 100%; min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left; color: #edf0fc; border: 1px solid #273254; border-radius: 18px; background: #121831; transition: border-color 150ms ease, background 150ms ease; }
-.villa-row:hover, .villa-row.selected { border-color: #6b5bd0; background: #171d3d; }
+.villa-row { width: 100%; min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left; color: #edf0fc; border: 1px solid rgb(112 152 255 / 15%); border-radius: 20px; background: rgb(16 22 44 / 45%); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease; }
+.villa-row:hover, .villa-row.selected { border-color: rgb(94 220 255 / 45%); background: rgb(18 32 58 / 55%); box-shadow: 0 0 24px rgb(34 215 238 / 8%); }
 .villa-row-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; color: #cceff3; border-radius: 13px; background: linear-gradient(145deg, #313b79, #164253); }
 .villa-row-icon svg { width: 22px; height: 22px; }
 .villa-row-copy { flex: 1; display: flex; flex-direction: column; gap: 4px; }
@@ -772,7 +786,7 @@ body:has(.villa-app) {
   /* iOS/Android zoomen bei <16px Eingabefeldern automatisch hinein —
      16px verhindert den Layout-Sprung beim Fokus. */
   .modal-input, .message-composer textarea, .drawer-search input { font-size: 16px; }
-  .app-header { min-height: 77px; gap: 10px; padding: 12px 17px; }
+  .app-header { min-height: 54px; gap: 8px; padding: 7px 12px; }
   .nav-menu { width: 40px; height: 40px; }
   .brand-block { gap: 10px; }
   .brand-tile { width: 42px; height: 42px; border-radius: 14px; }
@@ -856,7 +870,12 @@ body:has(.villa-app) {
 }
 .fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
 
-.progress-live { border-color: #1c5f74; }
+.progress-live { border-color: rgb(94 220 255 / 32%); background: rgb(12 26 44 / 55%); box-shadow: 0 0 26px rgb(34 215 238 / 12%), 0 10px 30px rgb(0 0 0 / 20%); }
+.progress-track { height: 3px; margin: 2px 0 11px; border-radius: 999px; background: rgb(94 220 255 / 14%); overflow: hidden; }
+.progress-fill { width: 38%; height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgb(34 215 238 / 0%), #22d7ee, rgb(122 92 255 / 90%)); animation: progressShimmer 1.6s ease-in-out infinite; }
+.progress-events li.done { color: #9fb4d8; }
+.progress-events li.done .progress-check { flex: 0 0 auto; color: #45ddc8; }
+@keyframes progressShimmer { 0% { transform: translateX(-110%); } 100% { transform: translateX(330%); } }
 .progress-elapsed { margin-left: 6px; color: #7fd8e8; font-weight: 400; font-size: 11px; }
 .progress-events {
   display: flex;
@@ -1121,3 +1140,96 @@ body:has(.villa-app) {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 157, 157, 0.35); }
   50% { box-shadow: 0 0 0 6px rgba(255, 157, 157, 0); }
 }
+
+/* ============================================================
+   Future Glass — Anhang-Menü & Chips (v1.1.3, Build 6)
+   ============================================================ */
+.attach-wrap { position: relative; flex: 0 0 auto; display: flex; align-items: center; }
+.attach-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: #8fd8e8;
+  background: rgb(34 199 238 / 10%);
+  border: 1px solid rgb(94 220 255 / 26%);
+  border-radius: 13px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  cursor: pointer;
+}
+.attach-button:hover, .attach-button.open {
+  color: #eaffff;
+  background: rgb(34 199 238 / 20%);
+  border-color: rgb(94 220 255 / 55%);
+  box-shadow: 0 0 18px rgb(34 215 238 / 25%);
+}
+.attach-button:active { transform: scale(.96); }
+.attach-backdrop { position: fixed; inset: 0; z-index: 1; background: transparent; border: 0; }
+.attach-menu {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  z-index: 2;
+  min-width: 172px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px;
+  border: 1px solid rgb(94 220 255 / 24%);
+  border-radius: 18px;
+  background: rgb(14 20 42 / 86%);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 45%), 0 0 30px rgb(34 215 238 / 8%);
+  animation: progressFadeIn 160ms ease;
+}
+.attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  color: #c9d6f2;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.attach-menu button:hover { color: #eaffff; background: rgb(34 199 238 / 12%); }
+.attach-menu button svg { flex: 0 0 auto; color: #6fdff2; }
+.attachment-chips {
+  flex: 1 0 100%;
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 2px 8px;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 4px 6px 4px 10px;
+  color: #c9f6ff;
+  border: 1px solid rgb(94 220 255 / 30%);
+  border-radius: 999px;
+  background: rgb(34 199 238 / 10%);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.attachment-chip button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #9fd7e8;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.attachment-chip button:hover { color: #eaffff; }

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { offlineBannerMessage, useOnlineStatus } from "../hooks/useOnlineStatus";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
@@ -16,15 +16,19 @@ import {
   Check,
   ChevronDown,
   Code2,
+  FileText,
   FolderGit2,
   FolderOpen,
   Github,
+  Image as ImageIcon,
   KeyRound,
+  Link2,
   LayoutGrid,
   Loader2,
   Menu,
   MessageSquare,
   Mic,
+  Paperclip,
   Plus,
   RotateCcw,
   Route,
@@ -36,6 +40,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
 
@@ -178,6 +183,16 @@ export default function Home() {
     useState(false);
   const [githubToolsEnabled, setGithubToolsEnabled] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  type ComposerAttachment = {
+    id: string;
+    name: string;
+    kind: "Datei" | "Foto" | "Video";
+    size: number;
+  };
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const attachFileInputRef = useRef<HTMLInputElement | null>(null);
+  const attachKindRef = useRef<ComposerAttachment["kind"]>("Datei");
 
   const villas = useMemo<Villa[]>(
     () =>
@@ -265,8 +280,19 @@ export default function Home() {
     );
   });
 
+  function formatAttachmentSize(bytes: number) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${bytes} B`;
+  }
+
   async function sendMessage(text = draft) {
-    const prompt = text.trim();
+    const attachmentNote = attachments.length
+      ? `\n\n[Angehängt: ${attachments
+          .map(item => `${item.kind} „${item.name}" (${formatAttachmentSize(item.size)})`)
+          .join(", ")}]`
+      : "";
+    const prompt = `${text}${attachmentNote}`.trim();
     if (!prompt || chatMutation.isPending) return;
     if (screen !== "workshop" && !activeVilla) {
       toast.error("Erstelle zuerst eine Villa, bevor du chattest.");
@@ -283,6 +309,7 @@ export default function Home() {
     setTurnStartedAt(Date.now());
     setMessages(previous => [...previous, { role: "user", text: prompt }]);
     setDraft("");
+    setAttachments([]);
     try {
       const result = await chatMutation.mutateAsync({
         prompt,
@@ -346,6 +373,33 @@ export default function Home() {
     } catch {
       toast.error("Die Bewertung konnte nicht gespeichert werden.");
     }
+  }
+
+  function openAttachmentPicker(kind: ComposerAttachment["kind"]) {
+    attachKindRef.current = kind;
+    setAttachMenuOpen(false);
+    const input = attachFileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.accept =
+      kind === "Foto" ? "image/*" : kind === "Video" ? "video/*" : "*/*";
+    input.click();
+  }
+
+  function handleAttachmentFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length) {
+      setAttachments(previous => [
+        ...previous,
+        ...files.map(file => ({
+          id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          kind: attachKindRef.current,
+          size: file.size,
+        })),
+      ]);
+    }
+    event.target.value = "";
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -937,21 +991,31 @@ export default function Home() {
                           </span>
                         )}
                       </div>
+                      <div className="progress-track" aria-hidden="true">
+                        <div className="progress-fill" />
+                      </div>
                       <ul className="progress-events">
                         {(progressQuery.data?.events ?? [])
                           .slice(-5)
-                          .map((event, index, list) => (
-                            <li
-                              key={event.seq}
-                              className={index === list.length - 1 ? "active" : ""}
-                            >
-                              <i className="ready-pulse" />
-                              {event.label}
-                              <span className="progress-event-time">
-                                {new Date(event.at).toLocaleTimeString("de-DE")}
-                              </span>
-                            </li>
-                          ))}
+                          .map((event, index, list) => {
+                            const done = index < list.length - 1;
+                            return (
+                              <li
+                                key={event.seq}
+                                className={done ? "done" : "active"}
+                              >
+                                {done ? (
+                                  <Check className="progress-check" size={12} />
+                                ) : (
+                                  <i className="ready-pulse" />
+                                )}
+                                {event.label}
+                                <span className="progress-event-time">
+                                  {new Date(event.at).toLocaleTimeString("de-DE")}
+                                </span>
+                              </li>
+                            );
+                          })}
                       </ul>
                       {progressQuery.data === null && (
                         <p className="progress-hint">
@@ -969,6 +1033,80 @@ export default function Home() {
 {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
             {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             <form className="message-composer" onSubmit={onSubmit}>
+              <input
+                ref={attachFileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={handleAttachmentFiles}
+              />
+              <div className="attach-wrap">
+                <button
+                  className={`attach-button${attachMenuOpen ? " open" : ""}`}
+                  type="button"
+                  aria-label="Anhang hinzufügen"
+                  aria-expanded={attachMenuOpen}
+                  disabled={!isAuthenticated}
+                  onClick={() => setAttachMenuOpen(previous => !previous)}
+                >
+                  <Plus size={20} />
+                </button>
+                {attachMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="attach-backdrop"
+                      aria-label="Anhang-Menü schließen"
+                      onClick={() => setAttachMenuOpen(false)}
+                    />
+                    <div className="attach-menu" role="menu" aria-label="Anhänge">
+                      <button type="button" role="menuitem" onClick={() => openAttachmentPicker("Datei")}>
+                        <Paperclip size={15} />
+                        <span>Dateien</span>
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => openAttachmentPicker("Foto")}>
+                        <ImageIcon size={15} />
+                        <span>Fotos</span>
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => openAttachmentPicker("Video")}>
+                        <Video size={15} />
+                        <span>Videos</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          setAdvancedOpen(true);
+                        }}
+                      >
+                        <Link2 size={15} />
+                        <span>Connectoren</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              {attachments.length > 0 && (
+                <div className="attachment-chips">
+                  {attachments.map(attachment => (
+                    <span className="attachment-chip" key={attachment.id}>
+                      {attachment.name}
+                      <button
+                        type="button"
+                        aria-label={`${attachment.name} entfernen`}
+                        onClick={() =>
+                          setAttachments(previous =>
+                            previous.filter(item => item.id !== attachment.id)
+                          )
+                        }
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <textarea
                 value={draft}
                 onChange={event => setDraft(event.target.value)}
@@ -1033,7 +1171,9 @@ export default function Home() {
                   type="submit"
                   aria-label="Senden"
                   disabled={
-                    !draft.trim() || !agentRunning || chatMutation.isPending
+                    (!draft.trim() && attachments.length === 0) ||
+                    !agentRunning ||
+                    chatMutation.isPending
                   }
                 >
                   <Send size={19} />
