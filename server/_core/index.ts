@@ -14,6 +14,7 @@ import { jsonErrorHandler, requestLogger } from "./request-logger";
 import { logStartupDiagnostics } from "./diagnostics";
 import { registerGoogleAuthRoutes, resolveTrustProxy } from "./googleAuth";
 import { registerNativeGoogleAuthRoutes } from "./nativeAuth";
+import { csrfGuard } from "./csrf";
 import { nativeCors } from "./nativeCors";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -88,6 +89,9 @@ async function startServer() {
   app.use(requestLogger());
   // Native auth preflights must reach CORS before the auth rate limiter.
   app.use("/api", nativeCors());
+  // CSRF-Schutz (Sprint 055): SameSite=None-Cookies erfordern eine
+  // Origin-Pruefung fuer alle Mutationen unter /api.
+  app.use("/api", csrfGuard());
   // Brute-Force-Schutz fuer Login-/OAuth-Endpunkte (20 Anfragen/Minute/IP)
   app.use(
     "/api/auth",
