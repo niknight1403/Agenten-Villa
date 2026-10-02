@@ -68,7 +68,8 @@
 | 061     | Grün    | Mobile Navigation: Drawer/Modals sperren jetzt den Hintergrund-Scroll (kein Durchfahren des Chats bei offenem Menü auf Touch-Geräten) und schließen mit Escape; CSS-Prüfung bestätigt: Safe-Areas, 44px-Touch-Ziele, Tabbar ≤680px, Theme-Switcher auch bei ≤370px erreichbar. E2E-Verifizierung nach Deploy folgt im Abschluss-Check. |
 | 062     | Grün    | Villa Factory mobil: Erstellen-Modal scrollbar statt abgeschnitten (max-height + Safe-Area, wichtig bei geöffneter Tastatur), Textareas ohne Resize-Griff, alle Eingabefelder 16px gegen iOS-Fokuszoom — auch Chat-Composer und Drawer-Suche. |
 | 063     | Grün    | Reduced-Motion komplett: globaler prefers-reduced-motion-Block erzwingt jetzt animation-duration ~0 + iteration-count 1 für ALLE Animationen (deckt mic-pulse, fade/slide/modal und Tailwind animate-spin/pulse ab); .spin stoppt statt nur langsamer zu drehen. |
-| 064–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
+| 064     | Grün    | Offline-Chatcache: QueryClient auf networkMode offlineFirst umgestellt (Verlauf bleibt bei Abbruch lesbar, Cache 30 min), neuer Online-Status-Hook mit Offline-Banner im Chat ("Keine Verbindung — dein Verlauf bleibt lesbar."), 3 neue Tests; vitest nimmt jetzt hooks-Tests auf. |
+| 065–100 | Geplant | Naechste Sprints aus der Roadmap nach Review durch den Eigentümer. | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
 
 ## Grüner Validierungsweg
 

@@ -9,7 +9,18 @@ import { startLogin } from "./const";
 import "./index.css";
 import "./styles/themes.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Sprint 064 — Offline-Chatcache: Cache darf offline weiter
+      // angezeigt werden, Verlauf bleibt 30 Minuten lesbar.
+      networkMode: "offlineFirst",
+      staleTime: 60_000,
+      gcTime: 30 * 60_000,
+      retry: 1,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

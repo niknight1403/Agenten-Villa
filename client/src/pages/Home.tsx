@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { offlineBannerMessage, useOnlineStatus } from "../hooks/useOnlineStatus";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -437,6 +438,9 @@ export default function Home() {
 
   const isWorkshop = screen === "workshop";
   const agentRunning = statusQuery.data?.state === "RUNNING";
+  // Sprint 064 — Offline-Chatcache: Verbindungsstatus und Lesehinweis.
+  const isOnline = useOnlineStatus();
+  const offlineBanner = offlineBannerMessage(isOnline, messages.length > 0);
 
   return (
     <main className={`villa-app theme-${theme}`} data-theme={theme}>
@@ -899,6 +903,7 @@ export default function Home() {
             )}
           </div>
           <div className="composer-area">
+{offlineBanner && <div className="offline-banner" role="status">{offlineBanner}</div>}
 {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
             {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             {statusQuery.data?.isAdmin && (

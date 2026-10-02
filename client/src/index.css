@@ -683,6 +683,8 @@ body:has(.villa-app) {
   font-size: 13px;
 }
 .chat-ready > span:not(.ready-pulse) { color: #718499; }
+/* Sprint 064 — Offline-Chatcache-Banner */
+.offline-banner { margin: 0 17px 10px; padding: 9px 13px; color: #ffd9a0; border: 1px solid #6b5227; border-radius: 12px; background: #2a2213; font-size: 12px; text-align: center; }
 .ready-pulse { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #14e6c7; box-shadow: 0 0 11px rgb(20 230 199 / 50%); }
 .chat-ready button { margin-left: auto; display: grid; place-items: center; color: #95a5bc; background: none; border: 0; }
 .message-list { width: min(780px, 100%); display: flex; flex-direction: column; gap: 15px; margin: 0 auto; padding: 28px 0 22px; }
