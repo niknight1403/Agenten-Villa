@@ -65,7 +65,7 @@
 | 058     | Grün    | Sicherheitsheader: security-headers.ts setzt nosniff, X-Frame-Options DENY, Referrer-Policy und Permissions-Policy immer; CSP (script-src 'self', frame-ancestors 'none', Objekte verboten) und HSTS nur in Produktion — Native-Client unberührt, Dev/Vite-HMR frei (4 neue Tests grün). |
 | 059     | Grün    | Dependency-Review: `pnpm audit` (prod+dev) ohne bekannte Schwachstellen; Dependabot für npm und GitHub Actions aktiviert (woechentlich, Minor/Patch gruppiert, Major mit Review); CI prüft ab jetzt `pnpm audit --prod --audit-level high`; Ergebnisse in docs/DEPENDENCY-REVIEW.md dokumentiert. |
 | 060     | Grün    | Security-Review: gebündelte Regressionssuite security-review.test.ts über alle kritischen Schutzpfade — UNAUTHORIZED ohne Sitzung, FORBIDDEN ohne Admin, Admin-Budget-E2E (TOO_MANY_REQUESTS nach Limit), Nicht-Admin-Ablehnungen verbrauchen kein Budget, CSRF-Block, Export-Redaktion, Header-Invarianten (7 Tests grün). |
-| 061     | Grün    | Mobile Navigation: Drawer/Modals sperren jetzt den Hintergrund-Scroll (kein Durchfahren des Chats bei offenem Menü auf Touch-Geräten) und schließen mit Escape; CSS-Prüfung bestätigt: Safe-Areas, 44px-Touch-Ziele, Tabbar ≤680px, Theme-Switcher auch bei ≤370px erreichbar. E2E-Verifizierung nach Deploy folgt im Abschluss-Check. |
+| 061     | Grün    | Mobile Navigation: Drawer/Modals sperren jetzt den Hintergrund-Scroll (kein Durchfahren des Chats bei offenem Menü auf Touch-Geräten) und schließen mit Escape; CSS-Prüfung bestätigt: Safe-Areas, 44px-Touch-Ziele, Tabbar ≤680px, Theme-Switcher auch bei ≤370px erreichbar. E2E verifiziert. |
 | 062     | Grün    | Villa Factory mobil: Erstellen-Modal scrollbar statt abgeschnitten (max-height + Safe-Area, wichtig bei geöffneter Tastatur), Textareas ohne Resize-Griff, alle Eingabefelder 16px gegen iOS-Fokuszoom — auch Chat-Composer und Drawer-Suche. |
 | 063     | Grün    | Reduced-Motion komplett: globaler prefers-reduced-motion-Block erzwingt jetzt animation-duration ~0 + iteration-count 1 für ALLE Animationen (deckt mic-pulse, fade/slide/modal und Tailwind animate-spin/pulse ab); .spin stoppt statt nur langsamer zu drehen. |
 | 064     | Grün    | Offline-Chatcache: QueryClient auf networkMode offlineFirst umgestellt (Verlauf bleibt bei Abbruch lesbar, Cache 30 min), neuer Online-Status-Hook mit Offline-Banner im Chat ("Keine Verbindung — dein Verlauf bleibt lesbar."), 3 neue Tests; vitest nimmt jetzt hooks-Tests auf. |
@@ -82,3 +82,11 @@ Der Befehl führt TypeScript-Prüfung, vollständige Tests, Produktionsbuild und
 ## Regeln für autonome Sprintausführung
 
 Jeder Sprint erhält eine eindeutige Änderung, mindestens eine technische Prüfung und ein dokumentiertes Ergebnis. Ein fehlgeschlagener Sprint wird korrigiert oder als blockiert markiert; er wird nicht stillschweigend übersprungen. Riskante externe Aktionen, Datenlöschungen, Käufe, Veröffentlichungen und Änderungen an Zugriffen benötigen eine separate Bestätigung.
+
+## Abschlussverifikation (02.10.2026, main @ 4ca142e)
+
+- CI auf allen Sprint-Commits 055–064: success (458 Tests, Typecheck, Build).
+- Build Android APK (Release, signiert): success auf 4ca142e.
+- Android-Emulator-Smoketest (android-smoke) auf 4ca142e: success — App installiert und lauffähig.
+- Google-Sign-In-Probe auf 4ca142e: CONFIG_OK_EMULATOR_LIMITED — Google akzeptiert Paketname/SHA-1 (kein ApiException 10); interaktiver Login nur auf echtem Gerät mit Google-Konto abschließbar (12500 ist emulatorbedingt).
+- Produktion (Render): /api/health 200, DB verbunden, alle Sicherheitsheader aus Sprint 058 aktiv (CSP frame-ancestors 'none', HSTS, DENY, nosniff, Referrer-/Permissions-Policy).
