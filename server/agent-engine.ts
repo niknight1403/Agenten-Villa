@@ -159,6 +159,9 @@ type Dependencies = {
   authorization?: { administrator: boolean };
   fetcher?: typeof fetch;
   beforeFallback?: () => Promise<boolean>;
+  /** Live-Fortschritt: echte Meilensteine eines Laufs (Modellaufrufe,
+   * Anbieterwechsel, Werkzeugaktionen). Optional, rein informativ. */
+  onEvent?: (label: string) => void;
 };
 type ProviderCallOptions = {
   maxTokens?: number;
@@ -294,6 +297,7 @@ async function callWithProviderChain(
   options: ProviderCallOptions & {
     allowHuggingFace?: boolean;
     beforeFallback?: () => Promise<boolean>;
+    onEvent?: (label: string) => void;
   } = {}
 ): Promise<{
   completion: Awaited<ReturnType<typeof callProvider>>;
@@ -320,11 +324,14 @@ async function callWithProviderChain(
         "Der Agent wurde vor dem Anbieter-Failover gestoppt."
       );
     const route = registry[r];
+    if (r > 0) options.onEvent?.(`Wechsle zu Anbieter ${route.name}`);
+    else options.onEvent?.(`Anbieter ${route.name}: Modell ${route.models[0]} wird angefragt`);
     // Sprint 034 — Kontingentfehler der Route beobachten (siehe unten).
     let routeLimitRetryAfter: number | undefined;
     let routeSawLimit = false;
     for (const model of route.models) {
       attempts += 1;
+      if (attempts > 1) options.onEvent?.(`Anbieter ${route.name}: Modell ${model} wird angefragt`);
       try {
         const completion = await callProvider(
           fetcher,
@@ -339,6 +346,7 @@ async function callWithProviderChain(
           route.name === "openrouter" ? model : `${route.name}:${model}`,
           "ok"
         );
+        options.onEvent?.(`Antwort von ${route.name} · ${completion.model ?? model} empfangen`);
         recordRouterTelemetry({
           success: true,
           provider: route.name,
@@ -365,6 +373,11 @@ async function callWithProviderChain(
           error instanceof AgentError ? error.message : undefined
         );
         lastError = error;
+        options.onEvent?.(
+          `Modell ${route.name === "openrouter" ? model : `${route.name}:${model}`} fehlgeschlagen${
+            error instanceof AgentError ? ` (${error.code})` : ""
+          } — nächster Versuch`
+        );
         if (!(error instanceof AgentError)) throw error;
         if (error.code === "REJECTED") throw error;
         if (error.code === "LIMIT") {
@@ -586,6 +599,7 @@ export async function runAgentTurn(
   // Verarbeitung gegen das validierte Schema geprueft (unbekannte
   // Schlüssel werden abgestreift).
   const validatedInput: AgentInput = parseAgentInputOrThrow(input);
+  deps.onEvent?.("Auftrag geprüft und validiert");
   const fetcher = deps.fetcher ?? fetch;
   const messages = makeMessages(validatedInput);
   // Sprint 044 — Aufgabenkontext isolieren: Cache-Schlüssel und Dedupe sind
@@ -599,7 +613,8 @@ export async function runAgentTurn(
   // Free-Tier-Optimierung 1: identische Anfrage im Cache -> 0 Token.
   if (cacheEnabled()) {
     const hit = readCache(key);
-    if (hit)
+    if (hit) {
+      deps.onEvent?.("Cache-Treffer — Antwort sofort verfügbar");
       return parseAgentResult({
         answer: hit.answer,
         provider: hit.provider as Provider,
@@ -607,6 +622,7 @@ export async function runAgentTurn(
         attempts: 0,
         cached: true,
       });
+    }
   }
 
   // Free-Tier-Optimierung 2 + 3: Dedupe identischer Parallelanfragen und
@@ -619,6 +635,7 @@ export async function runAgentTurn(
       {
         allowHuggingFace: allowFallback,
         beforeFallback: deps.beforeFallback,
+        onEvent: deps.onEvent,
       }
     );
     return parseAgentResult({
@@ -679,11 +696,13 @@ async function runGitHubToolLoop(
   const branchesCreatedThisTurn = new Set<string>();
 
   for (let round = 0; round <= profile.maxRounds; round += 1) {
+    if (round > 0) deps.onEvent?.(`Runde ${round + 1} der Werkzeugkette läuft`);
     const { completion, provider } = await callWithProviderChain(
       fetcher,
       messages,
       githubTools,
       {
+        onEvent: deps.onEvent,
         maxTokens: profile.maxTokens,
         maxToolCalls: profile.maxActions,
         timeoutMs: profile.timeoutMs,
@@ -773,6 +792,7 @@ async function runGitHubToolLoop(
           }
 
           actions += 1;
+          deps.onEvent?.(`GitHub-Aktion ${actions}/${profile.maxActions}: ${call.function.name}`);
           result = await executeTool(call.function.name, args);
 
           if (

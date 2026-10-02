@@ -855,6 +855,35 @@ body:has(.villa-app) {
 }
 .fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
 
+.progress-live { border-color: #1c5f74; }
+.progress-elapsed { margin-left: 6px; color: #7fd8e8; font-weight: 400; font-size: 11px; }
+.progress-events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-events li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b9c5e2;
+  font-size: 12px;
+  line-height: 1.4;
+  animation: progressFadeIn 240ms ease;
+}
+.progress-events li.active { color: #e7f6ff; }
+.progress-events .ready-pulse { flex: 0 0 auto; }
+.progress-events li:not(.active) .ready-pulse { animation: none; opacity: .4; }
+.progress-event-time { margin-left: auto; flex: 0 0 auto; color: #65718f; font-size: 10px; }
+.progress-hint { margin: 4px 0 0; color: #8e9ab7; font-size: 12px; }
+@keyframes progressFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
 .advanced-settings { width: min(720px, 100%); margin: 9px auto 0; }
 .advanced-toggle {
   display: flex;

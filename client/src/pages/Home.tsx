@@ -119,6 +119,26 @@ export default function Home() {
     { enabled: isAuthenticated, refetchOnWindowFocus: false }
   );
   const chatMutation = trpc.agent.chat.useMutation();
+  // Live-Fortschritt: während ein Auftrag läuft, werden die echten
+  // Server-Meilensteine (Modellaufrufe, Anbieterwechsel, GitHub-Aktionen)
+  // gepollt und im Chat angezeigt.
+  const progressQuery = trpc.agent.progress.useQuery(undefined, {
+    enabled: isAuthenticated && chatMutation.isPending,
+    refetchInterval: 1500,
+    refetchOnWindowFocus: false,
+  });
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
+  useEffect(() => {
+    if (!chatMutation.isPending) return;
+    const startedAt = turnStartedAt ?? Date.now();
+    if (turnStartedAt === null) setTurnStartedAt(startedAt);
+    const timer = window.setInterval(() => setElapsedTick(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [chatMutation.isPending, turnStartedAt]);
+  useEffect(() => {
+    if (!chatMutation.isPending && turnStartedAt !== null) setTurnStartedAt(null);
+  }, [chatMutation.isPending, turnStartedAt]);
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
   const systemPromptMutation = trpc.agent.setSystemPrompt.useMutation({ onSuccess: () => statusQuery.refetch() });
   const [promptDraft, setPromptDraft] = useState<string | null>(null);
@@ -259,6 +279,7 @@ export default function Home() {
       ...messages.slice(activeVilla?.projectBrief ? -7 : -8)
         .map(({ role, text: content }) => ({ role, content })),
     ];
+    setTurnStartedAt(Date.now());
     setMessages(previous => [...previous, { role: "user", text: prompt }]);
     setDraft("");
     try {
@@ -901,6 +922,44 @@ export default function Home() {
                     </div>
                   </article>
                 ))}
+                {chatMutation.isPending && (
+                  <article className="chat-message assistant" aria-live="polite">
+                    <span className="assistant-avatar">
+                      <Bot size={16} />
+                    </span>
+                    <div className="message-bubble progress-live">
+                      <div className="message-author">
+                        Superagent arbeitet
+                        {turnStartedAt !== null && (
+                          <span className="progress-elapsed">
+                            · {Math.max(0, elapsedTick)} s
+                          </span>
+                        )}
+                      </div>
+                      <ul className="progress-events">
+                        {(progressQuery.data?.events ?? [])
+                          .slice(-5)
+                          .map((event, index, list) => (
+                            <li
+                              key={event.seq}
+                              className={index === list.length - 1 ? "active" : ""}
+                            >
+                              <i className="ready-pulse" />
+                              {event.label}
+                              <span className="progress-event-time">
+                                {new Date(event.at).toLocaleTimeString("de-DE")}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                      {progressQuery.data === null && (
+                        <p className="progress-hint">
+                          Auftrag wird vorbereitet …
+                        </p>
+                      )}
+                    </div>
+                  </article>
+                )}
               </div>
             )}
           </div>

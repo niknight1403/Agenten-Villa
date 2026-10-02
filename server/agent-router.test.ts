@@ -699,3 +699,52 @@ describe("provider guardian access and elite unlimited status", () => {
     expect(result.rules[0]?.category).toBe("Videos");
   });
 });
+
+describe("Live-Fortschritt (agent.progress)", () => {
+  it("meldet echte Meilensteine während eines laufenden Auftrags und räumt danach ab", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-model-key");
+    let resolveFetch!: (value: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockImplementation(
+        () =>
+          new Promise<Response>(resolve => {
+            resolveFetch = resolve;
+          })
+      )
+    );
+    const user = appRouter.createCaller(
+      createContext("user", "user@example.com")
+    );
+    const chatPromise = user.agent.chat({
+      prompt: "Analysiere den Projektfortschritt",
+      history: [],
+      mode: "home",
+      specialty: "Generalist",
+    });
+    // Der Anbieteraufruf hängt — der Fortschritt muss kurz nach dem Absenden
+    // sichtbar sein (der Resolver startet asynchron, daher kurz pollig warten).
+    let pendingProgress = await user.agent.progress();
+    for (let tries = 0; tries < 30 && !pendingProgress; tries += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      pendingProgress = await user.agent.progress();
+    }
+    expect(pendingProgress?.prompt).toBe("Analysiere den Projektfortschritt");
+    const labels = (pendingProgress?.events ?? []).map(event => event.label);
+    expect(labels).toContain("Auftrag beim Superagenten eingegangen");
+    expect(labels.some(label => label.includes("wird angefragt"))).toBe(true);
+    resolveFetch(
+      new Response(
+        JSON.stringify({
+          model: "free-test",
+          choices: [{ message: { content: "1. Ziel festlegen." } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const result = await chatPromise;
+    expect(result.answer).toContain("Ziel");
+    // Nach Abschluss ist kein Auftrag mehr aktiv.
+    expect(await user.agent.progress()).toBeNull();
+  });
+});

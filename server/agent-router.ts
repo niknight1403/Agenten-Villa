@@ -74,6 +74,42 @@ const githubUsage = new Map<number, { start: number; count: number }>();
 const GITHUB_WINDOW_MS = 60 * 60 * 1000;
 const MAX_GITHUB_TURNS_PER_WINDOW = 12;
 
+// Live-Fortschritt pro Konto: echte Meilensteine eines laufenden Chat-
+// Auftrags (Modellaufrufe, Anbieterwechsel, GitHub-Aktionen). Der Client
+// pollt agent.progress, während die Chat-Mutation läuft. Einträge werden
+// nach Abschluss gelöscht; verwaiste Einträge räumt die Query ab.
+type ProgressEvent = { seq: number; label: string; at: string };
+type LiveProgress = {
+  prompt: string;
+  startedAt: string;
+  events: ProgressEvent[];
+};
+const liveProgress = new Map<number, LiveProgress>();
+const LIVE_PROGRESS_TTL_MS = 15 * 60 * 1000;
+function beginProgress(userId: number, prompt: string) {
+  liveProgress.set(userId, { prompt, startedAt: new Date().toISOString(), events: [{ seq: 1, label: "Auftrag beim Superagenten eingegangen", at: new Date().toISOString() }] });
+}
+function progressEmitter(userId: number) {
+  let seq = 1;
+  return (label: string) => {
+    const entry = liveProgress.get(userId);
+    if (!entry) return;
+    seq += 1;
+    entry.events.push({ seq, label, at: new Date().toISOString() });
+    if (entry.events.length > 30) entry.events.splice(0, entry.events.length - 30);
+  };
+}
+function finishProgress(userId: number) {
+  liveProgress.delete(userId);
+}
+function staleProgressCleanup() {
+  const now = Date.now();
+  liveProgress.forEach((entry, userId) => {
+    if (now - new Date(entry.startedAt).getTime() > LIVE_PROGRESS_TTL_MS)
+      liveProgress.delete(userId);
+  });
+}
+
 function isAdmin(user: { role: string; email?: string | null }) {
   const allowlisted = process.env.AGENT_ADMIN_EMAIL?.trim().toLowerCase();
   return (
@@ -798,6 +834,8 @@ export const agentRouter = router({
       // quotas, per-request safety caps, and external service policies still
       // apply and are never bypassed.
       if (!isAdmin(ctx.user)) consumeTurn(ctx.user.id);
+      beginProgress(ctx.user.id, input.prompt);
+      const emitProgress = progressEmitter(ctx.user.id);
       try {
         if (input.useGitHub) {
           requireAdminMutation(ctx.user);
@@ -816,7 +854,7 @@ export const agentRouter = router({
             // Sprint 043 — requireAdmin hat den Aufrufer bereits geprüft;
             // die explizite Autorisierung macht die Werkzeugrunde nicht von
             // außengerufenen Annahmen abhängig.
-            { authorization: { administrator: true } }
+            { authorization: { administrator: true }, onEvent: emitProgress }
           );
           return {
             ...result,
@@ -844,7 +882,10 @@ export const agentRouter = router({
             ? { ...input, systemOverride: activePrompt() }
             : input,
           input.allowHuggingFaceFallback,
-          { beforeFallback: async () => controlState === "RUNNING" }
+          {
+            beforeFallback: async () => controlState === "RUNNING",
+            onEvent: emitProgress,
+          }
         );
         return {
           ...result,
@@ -858,8 +899,18 @@ export const agentRouter = router({
         };
       } catch (error) {
         mapAgentError(error);
+      } finally {
+        finishProgress(ctx.user.id);
       }
     }),
+  /**
+   * Live-Fortschritt: Ereignisse des aktuell laufenden Chat-Auftrags des
+   * eigenen Kontos. Liefert null, wenn gerade kein Auftrag läuft.
+   */
+  progress: protectedProcedure.query(({ ctx }) => {
+    staleProgressCleanup();
+    return liveProgress.get(ctx.user.id) ?? null;
+  }),
 });
 
 export const agentControlLimits = {
@@ -877,6 +928,7 @@ export const githubControlLimits = {
 export function resetAgentRouterForTests() {
   resetPromptVersionsForTests();
   controlState = "RUNNING";
+  liveProgress.clear();
   resetPromptVersionsForTests();
   usage.clear();
   credentialChecks.clear();
