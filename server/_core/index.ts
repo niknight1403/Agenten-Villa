@@ -15,6 +15,7 @@ import { logStartupDiagnostics } from "./diagnostics";
 import { registerGoogleAuthRoutes, resolveTrustProxy } from "./googleAuth";
 import { registerNativeGoogleAuthRoutes } from "./nativeAuth";
 import { csrfGuard } from "./csrf";
+import { securityHeaders } from "./security-headers";
 import { nativeCors } from "./nativeCors";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -86,6 +87,8 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(compression());
+  // Sprint 058 — Browser-Sicherheitsheader (CSP/HSTS nur Produktion).
+  app.use(securityHeaders());
   app.use(requestLogger());
   // Native auth preflights must reach CORS before the auth rate limiter.
   app.use("/api", nativeCors());

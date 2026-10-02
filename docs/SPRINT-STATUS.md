@@ -62,7 +62,8 @@
 | 055     | Grün    | CSRF- und Session-Review: Origin/Referer-Guard (csrf.ts) fuer alle unmethodischen /api-Requests; same-origin, native Urspruenge und Nicht-Browser-Clients frei, Cross-Site-Mutationen 403 (10 neue Tests gruen). |
 | 056     | Grün    | Rate-Limit für Adminaktionen: requireAdminMutation erzwingt Rolle UND ein per-Nutzer-Budget (30 Mutationen/Minute, gleitendes Fenster, prozesslokal); alle 11 schreibenden Admin-Prozeduren sind angeschlossen, lesende Admin-Abfragen bleiben frei (4 neue Tests grün). |
 | 057     | Grün    | Export-Schutz: villa.export läuft vor Rückgabe durch ein versioniertes Whitelist-Schema (villa-export.ts) — interne Felder (IDs, createdBy, Provider-/Modell-Metadaten) und unzulässige Rollen/Inhalte werden garantiert entfernt, Export-Version ist fixiert (6 neue Tests grün). |
-| 058–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
+| 058     | Grün    | Sicherheitsheader: security-headers.ts setzt nosniff, X-Frame-Options DENY, Referrer-Policy und Permissions-Policy immer; CSP (script-src 'self', frame-ancestors 'none', Objekte verboten) und HSTS nur in Produktion — Native-Client unberührt, Dev/Vite-HMR frei (4 neue Tests grün). |
+| 059–100 | Geplant | Naechste Sprints aus der Roadmap (Security, Mobile UX, Persistenz). |
 
 ## Grüner Validierungsweg
 
