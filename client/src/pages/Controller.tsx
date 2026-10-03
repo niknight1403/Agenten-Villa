@@ -126,9 +126,7 @@ function WatchdogPanel() {
           </dd>
         </div>
         <div className="rounded-2xl bg-slate-800/70 p-4">
-          <dt className="text-xs text-slate-400">
-            Unterbrochene Missionen
-          </dt>
+          <dt className="text-xs text-slate-400">Unterbrochene Missionen</dt>
           <dd
             className={`mt-1 text-2xl font-bold ${
               (tick?.interruptedMissions ?? 0) > 0 ? "text-amber-300" : ""
@@ -136,6 +134,17 @@ function WatchdogPanel() {
           >
             {formatNumber(tick?.interruptedMissions ?? undefined)}
           </dd>
+          {/* Sprint 066 — HITL: Der Watchdog zaehlt nur; die Pruefung und
+              der freigabepflichtige Neustart passiert in Elite Mission
+              Control, niemals automatisch. */}
+          {(tick?.interruptedMissions ?? 0) > 0 ? (
+            <a
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-300 underline-offset-2 hover:underline"
+              href="/core/elite"
+            >
+              Zur Prüfung und Freigabe
+            </a>
+          ) : null}
         </div>
       </dl>
 
