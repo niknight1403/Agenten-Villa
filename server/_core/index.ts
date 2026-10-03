@@ -5,7 +5,8 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
-import { registerHealthRoute, setDatabaseHealthReport } from "./health";
+import { registerHealthRoute, setDatabaseHealthReport, setControllerStateSource } from "./health";
+import { validateProductionEnv } from "./env-validation";
 import { startProviderGuardian } from "../provider-guardian";
 import { checkDatabaseHealth } from "../db-health";
 import { rateLimit } from "./rate-limit";
@@ -23,6 +24,23 @@ import { villaController } from "../controller";
 import { controllerSseRouter } from "../controller-sse";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+
+/**
+ * Sprint 076 — strenge Produktions-Validierung: unvollstaendige
+ * Konfiguration bricht den Start sofort mit klarer Meldung ab.
+ * Entwicklungsmodus bleibt bewusst tolerannt (siehe env-validation.ts).
+ */
+const productionEnvCheck = validateProductionEnv(
+  process.env,
+  process.env.NODE_ENV
+);
+if (!productionEnvCheck.ok) {
+  console.error(productionEnvCheck.message);
+  process.exit(1);
+}
+
+// Sprint 076 — Health-Endpoint liest den Controller-Live-Status ab.
+setControllerStateSource(() => villaController.getState());
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
