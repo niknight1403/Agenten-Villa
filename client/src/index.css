@@ -466,8 +466,11 @@ body:has(.villa-app) {
 }
 
 .icon-button {
-  width: 34px;
-  height: 34px;
+  /* Sprint 068 — Touch-Ziele: 40px visuell, effektive Trefferfläche
+     mind. 44x44 (auch auf schmalsten Displays, siehe ::after). */
+  width: 40px;
+  height: 40px;
+  position: relative;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -480,6 +483,8 @@ body:has(.villa-app) {
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 .icon-button svg { width: 17px; height: 17px; stroke-width: 1.7; }
+/* Sprint 068 — unsichtbare Hit-Area-Erweiterung: +4px je Seite. */
+.icon-button::after { content: ""; position: absolute; inset: -4px; }
 .icon-button:hover, .icon-button.active { color: #eaffff; background: rgb(34 199 238 / 14%); border-color: rgb(94 220 255 / 45%); }
 .icon-button:active, .round-add:active, .send-button:active { transform: scale(.96); }
 .nav-menu { width: 34px; height: 34px; }
@@ -702,7 +707,7 @@ body:has(.villa-app) {
 /* Sprint 064 — Offline-Chatcache-Banner */
 .offline-banner { margin: 0 17px 10px; padding: 9px 13px; color: #ffd9a0; border: 1px solid #6b5227; border-radius: 12px; background: #2a2213; font-size: 12px; text-align: center; }
 .ready-pulse { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #14e6c7; box-shadow: 0 0 11px rgb(20 230 199 / 50%); }
-.chat-ready button { margin-left: auto; display: grid; place-items: center; color: #95a5bc; background: none; border: 0; }
+.chat-ready button { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; color: #95a5bc; background: none; border: 0; }
 .message-list { width: min(780px, 100%); display: flex; flex-direction: column; gap: 15px; margin: 0 auto; padding: 28px 0 22px; }
 .chat-message { display: flex; align-items: flex-start; gap: 11px; }
 .chat-message.user { justify-content: flex-end; }
@@ -794,7 +799,7 @@ body:has(.villa-app) {
 .library-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 21px; }
 .eyebrow { color: #7786aa; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
 .library-heading h1 { margin: 6px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 30px; font-weight: 400; }
-.round-add { width: 42px; height: 42px; display: grid; place-items: center; color: #a8b3d0; border: 1px solid #29365c; border-radius: 14px; background: #151c3b; }
+.round-add { width: 44px; height: 44px; display: grid; place-items: center; color: #a8b3d0; border: 1px solid #29365c; border-radius: 14px; background: #151c3b; }
 .villa-list { display: flex; flex-direction: column; gap: 9px; }
 .villa-row { width: 100%; min-height: 72px; box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 12px 14px; text-align: left; color: #edf0fc; border: 1px solid rgb(112 152 255 / 15%); border-radius: 20px; background: rgb(16 22 44 / 45%); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease; }
 .villa-row:hover, .villa-row.selected { border-color: rgb(94 220 255 / 45%); background: rgb(18 32 58 / 55%); box-shadow: 0 0 24px rgb(34 215 238 / 8%); }
@@ -858,7 +863,7 @@ body:has(.villa-app) {
   .brand-copy strong { max-width: 38vw; font-size: 17px; }
   .brand-copy > span { font-size: 11px; }
   .brand-chevron { display: none; }
-  .header-tools { gap: 7px; }
+  .header-tools { gap: 8px; }
   .header-tools .icon-button { width: 40px; height: 40px; border-radius: 13px; }
   .header-tools .tool-optional { display: none; }
   .new-project-button { min-height: 40px; padding: 0 11px; font-size: 12px; }
@@ -874,7 +879,7 @@ body:has(.villa-app) {
   .composer-area { padding: 10px 17px calc(9px + env(safe-area-inset-bottom)); }
   .message-composer { min-height: 61px; gap: 8px; padding: 7px 8px 7px 15px; border-radius: 20px; }
   .message-composer textarea { font-size: 14px; }
-  .mic-button, .send-button { width: 43px; height: 43px; }
+  .mic-button, .send-button { width: 44px; height: 44px; }
   .composer-footnote { margin-top: 6px; font-size: 9px; }
   .chat-ready { min-height: 58px; margin-bottom: 11px; padding: 10px 13px; font-size: 12px; }
   .message-list { padding: 19px 17px 15px; gap: 12px; }
@@ -1182,7 +1187,7 @@ body:has(.villa-app) {
   color: rgb(148 163 184 / 95%);
 }
 .message-retry {
-  min-height: 32px;
+  min-height: 44px;
   padding: 5px 12px;
   border: 1px solid rgb(251 191 36 / 45%);
   border-radius: 9px;
@@ -1204,14 +1209,16 @@ body:has(.villa-app) {
 }
 .message-rating {
   display: flex;
-  gap: 8px;
+  gap: 12px; /* Sprint 068 — keine ueberlappenden Hit-Areas (2x6px Expansion) */
   margin-top: 8px;
 }
 .message-rating button {
+  /* Sprint 068 — 32px visuell, effektive Trefferflaeche 44x44 (::after). */
+  position: relative;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   color: #8a97bd;
   border: 1px solid #273254;
   border-radius: 9px;
@@ -1219,6 +1226,7 @@ body:has(.villa-app) {
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease;
 }
+.message-rating button::after { content: ""; position: absolute; inset: -6px; }
 .message-rating button:hover:not(:disabled) { color: #edf0fc; border-color: #6b5bd0; }
 .message-rating button.rated { color: #8fd6ff; border-color: #6b5bd0; background: #1b2145; }
 .message-rating button:disabled { opacity: 0.5; cursor: default; }
