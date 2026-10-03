@@ -110,6 +110,16 @@ pnpm dev     # lokaler Entwicklungsserver mit Vite
 
 Datenbankmigrationen laufen über `pnpm db:push` (Drizzle Kit).
 
+### Lokaler Produktivstart (Server-Bundle)
+
+```bash
+pnpm install
+pnpm build
+pnpm start   # NODE_ENV=production node dist/index.js — lädt .env automatisch (dotenv)
+```
+
+Der Server liest `.env` beim Start via `dotenv/config` aus dem Projektverzeichnis. Bereits in der Umgebung gesetzte Variablen werden **nicht überschrieben** — wer in einer Umgebung mit vorbefüllter `DATABASE_URL` arbeitet (z. B. Container/CI), startet mit `env -u DATABASE_URL pnpm start`, damit die Neon-URL aus `.env` greift. Ohne erreichbare Datenbank startet die App trotzdem sauber; `/api/health` meldet den DB-Status (`status: "fehler"` oder `"verbunden"`).
+
 ### Sprint 071/072 — Villa-Repository & Autonome Mission im Chat
 
 Jede Villa kann optional ein verbundenes GitHub-Repository im Format „owner/repo“ speichern (`villas.repository`, Migration `drizzle/0015_rich_mister_fear.sql`; vor dem Deployment einmal `pnpm db:push` ausführen). Chat-Aufträge mit GitHub-Werkzeugen, die Repository-Analyse und autonome Missionen der Villa arbeiten dann auf genau diesem Projekt; ohne Eintrag gilt das Server-Standard-Repository.
