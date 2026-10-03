@@ -1,0 +1,28 @@
+name: DB Migrate
+
+# Sprint 072 — Datenbankmigrationen ohne SSH: Der Workflow installiert die
+# Abhängigkeiten und wendet alle ausstehenden Drizzle-Migrationen auf die
+# Neon-Datenbank an. DATABASE_URL kommt aus den verschlüsselten
+# Repository-Secrets und wird nie ins Log geschrieben.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Drizzle-Migrationen anwenden
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Migrationen anwenden (drizzle-kit generate + migrate)
+        run: pnpm db:push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
