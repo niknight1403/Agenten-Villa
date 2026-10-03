@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkCouldTrigger,
   evaluateMergeGate,
   isProtectedPath,
+  PATH_FILTERED_CHECKS,
   REQUIRED_CHECKS,
   type MergeGateInput,
 } from "./auto-merge-gate";
@@ -20,6 +22,55 @@ function baseInput(overrides: Partial<MergeGateInput> = {}): MergeGateInput {
     ...overrides,
   };
 }
+
+describe("Pfadgefilterte Pflichtchecks (Sprint 081)", () => {
+  it("fasst einen fehlenden Android-Smoke bei Server-only-PR als erfuellt auf", () => {
+    const decision = evaluateMergeGate(
+      baseInput({
+        changedFiles: ["server/route-wait.ts", "docs/SPRINT-STATUS.md"],
+        checks: [
+          { name: "CI", conclusion: "SUCCESS" },
+          { name: "PR Agent (Gemini)", conclusion: "SUCCESS" },
+        ],
+      })
+    );
+    expect(decision.merge).toBe(true);
+    expect(decision.reason).toContain("Pflichtchecks gruen");
+  });
+
+  it("blockiert weiter, wenn der Pfadfilter den Check haette triggern muessen", () => {
+    const decision = evaluateMergeGate(
+      baseInput({
+        changedFiles: ["server/x.ts", "client/src/lib/y.ts"],
+        checks: [
+          { name: "CI", conclusion: "SUCCESS" },
+          { name: "PR Agent (Gemini)", conclusion: "SUCCESS" },
+        ],
+      })
+    );
+    expect(decision.merge).toBe(false);
+    expect(decision.reason).toContain("Android mobile smoke fehlt noch");
+  });
+
+  it("bewertet die Trigger-Pfade exakt: Datei-Filter und Verzeichnis-Prefix", () => {
+    expect(checkCouldTrigger("Android mobile smoke", ["package.json"])).toBe(true);
+    expect(
+      checkCouldTrigger("Android mobile smoke", ["client/irgendwas.tsx"])
+    ).toBe(true);
+    expect(
+      checkCouldTrigger("Android mobile smoke", ["server/nichts-mobil.ts"])
+    ).toBe(false);
+    expect(
+      checkCouldTrigger("Android mobile smoke", ["android/egal.kt"])
+    ).toBe(true);
+    expect(checkCouldTrigger("Android mobile smoke", ["android.d.ts"])).toBe(false);
+  });
+
+  it("haelt Checks ohne bekannten Pfadfilter bedingungslos Pflicht", () => {
+    expect(checkCouldTrigger("CI", ["server/nur-server.ts"])).toBe(true);
+    expect(PATH_FILTERED_CHECKS["Android mobile smoke"]).toContain("client/");
+  });
+});
 
 describe("Auto-Merge-Gate (Sprint 078)", () => {
   it("merged einen offenen agent/*-PR auf main mit allen Pflichtchecks gruen", () => {

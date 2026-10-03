@@ -148,6 +148,27 @@ existiert die Route nicht und die Cloud-Kette bleibt unangetastet.
   1 Health-Summary, +4 Bestandstests an 5-Anbieter-Katalog angepasst).
   Gesamt 606/610 gruen (4 bewusste Skips), check + build sauber.
 
+## Sprint 081 — Auto-Merge-Gate: Skip-Semantik fuer pfadgefilterte Pflichtchecks (03.10.2026)
+
+Befund aus PR #75: Das Gate verlangte alle Pflichtchecks VORHANDEN und
+gruen — aber "Android mobile smoke" triggert nur bei Mobile-relevanten
+Pfaden (android/, client/, capacitor.config.ts, package.json,
+pnpm-lock.yaml, Workflow-Datei). Server-only-PRs wuerden also selbst
+nach grünem Review ewig offen stehen ("Pflichtcheck fehlt noch").
+
+- auto-merge-gate.ts: PATH_FILTERED_CHECKS spiegelt die paths:-Filter
+  der Workflows; checkCouldTrigger(name, changedFiles) entscheidet,
+  ob ein fehlender Check haette laufen muessen. Fehlt er UND haette er
+  laut Filter ohnehin nicht getriggert => gilt als erfuellt (weiter-
+  gemerged). Fehlt er, obwohl der Filter trifft => blockiert weiter.
+  Kein bekannter Filter (CI, PR Agent) => bedingungslos Pflicht.
+- docs/BRANCH-PROTECTION.md: Ergänzung dokumentiert die Einordnung.
+- Ehrlich: Es wird nie ein Check simuliert oder uebersprungen — nur
+  korrekt eingeordnet, dass sein Workflow bei diesen Dateien gar nicht
+  laufen kann. Geaenderte Gate-Datei bleibt Admin-Pflicht: dieser PR
+  selbst kann nicht automatisch gemerged werden (Owner-Beschluss).
+- Tests: +4 neue; 610/614 gruen (4 bewusste Skips), check + build sauber.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte
