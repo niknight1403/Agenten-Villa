@@ -13,6 +13,8 @@ export const AGENT_ERROR_CODES = [
   "INVALID_RESPONSE",
   "INVALID_INPUT",
   "TIMEOUT",
+  // Sprint 079 — Admin-Pin auf einen aktuell nicht nutzbaren Anbieter.
+  "PIN_UNAVAILABLE",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
@@ -36,6 +38,7 @@ export const ERROR_CATEGORIES: Record<AgentErrorCode, ErrorCategory> = {
   INVALID_RESPONSE: "validation",
   INVALID_INPUT: "validation",
   TIMEOUT: "provider",
+  PIN_UNAVAILABLE: "configuration",
 };
 
 export const PUBLIC_ERROR_MESSAGES: Record<ErrorCategory, string> = {

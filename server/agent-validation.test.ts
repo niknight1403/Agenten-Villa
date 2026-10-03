@@ -113,9 +113,12 @@ describe("rating and status helpers", () => {
 
 describe("stable error classification", () => {
   it("classifies every agent error code without exposing internal details", () => {
-    expect(AGENT_ERROR_CODES).toHaveLength(10);
+    expect(AGENT_ERROR_CODES).toHaveLength(11);
     // Sprint 033 — TIMEOUT ist Teil des stabilen Katalogs
     expect(AGENT_ERROR_CODES).toContain("TIMEOUT");
+    // Sprint 079 — PIN_UNAVAILABLE: Admin-Pin auf unbrauchbaren Anbieter
+    expect(AGENT_ERROR_CODES).toContain("PIN_UNAVAILABLE");
+    expect(categoryForError("PIN_UNAVAILABLE")).toBe("configuration");
     // Sprint 074 — CONTEXT_TOO_LARGE trennt Kontextlimit von Ablehnung
     expect(AGENT_ERROR_CODES).toContain("CONTEXT_TOO_LARGE");
     expect(categoryForError("CONTEXT_TOO_LARGE")).toBe("capacity");

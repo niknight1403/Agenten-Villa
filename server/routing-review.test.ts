@@ -146,6 +146,9 @@ describe("Routing-Review: Sicherheits-Invarianten (Sprint 040)", () => {
   });
 
   it("klassifiziert Erschöpfung ehrlich als LIMIT mit dokumentiertem Retry-After", async () => {
+    // Sprint 079 — Erholungswartebudget auf 1 ms: das 42-s-Fenster liegt
+    // ausserhalb, also bleibt es beim ehrlichen LIMIT-Fehler.
+    vi.stubEnv("ROUTE_WAIT_BUDGET_MS", "1");
     const fetcher = vi.fn<typeof fetch>().mockImplementation(
       async () =>
         new Response(JSON.stringify({ error: "limit" }), {

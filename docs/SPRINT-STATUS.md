@@ -74,6 +74,44 @@ Ausnahme in BRANCH-PROTECTION.md verankert.
   sauber. Hinweis: dieser PR aendert selbst .github/ — das Gate
   blockiert ihn korrekt, der Merge erfolgt einmalig manuell.
 
+## Sprint 079 — Free-Tier-Erholung, Admin-Pin & Routing-Transparenz (03.10.2026)
+
+Supreme Directive "Unlimited Token Routing": Die Multi-Provider-Kette
+(Sprints 031–038, 075) war schon stark — dieser Sprint schliesst die drei
+echten Restluecken. Ehrlich vorweg: Free-Tier-Kontingente sind externe
+harte Limits; "Unlimited" erreicht das System durch nahtlose Rotation
+UND begrenztes Warten auf Kontingentfenster — ein abgelaufenes
+Tageskontingent wird nie vorgetaeuscht.
+
+- server/route-wait.ts (neu): deterministischer Erholungsplaner. Scheitert
+  die Kette am Kontingent (429/402) oder kurzem Ausfall und ist das
+  naechste Fenster innerhalb des Wartebudgets (ROUTE_WAIT_BUDGET_MS,
+  Default 60 s, max 300 s), wartet der Turn einmal begrenzt (max. 2
+  Kettelaeufe — nie Endlos-Retry, nie Haengen auf Tageskontingente).
+  Terminale Fehler (REJECTED, CONTEXT_TOO_LARGE, STOPPED, Auth) bleiben
+  sofort terminal.
+- server/route-override.ts (neu): Admin-Pin auf EINEN Anbieter
+  (prozesslokal, nicht persistiert, nur aktiv Anbieter). Ein Pin auf
+  einen nicht nutzbaren Anbieter scheitert ehrlich mit PIN_UNAVAILABLE
+  (neuer Fehlercode, Kategorie configuration). Consent-/Schluesselregeln
+  bleiben unangetastet.
+- provider-cooldown.ts: Cooldown-Info/Snapshot-Getter fuer Health und
+  Erholungsplanung.
+- _core/health.ts: /api/health zeigt jetzt routing (Pin + naechste
+  aktive Route) und je Anbieter Cooldown-Art und Restsekunden — ohne
+  Secrets, ohne Netzproben.
+- _core/systemRouter.ts: tRPC routingStatus (public) und
+  routingOverride (admin-only, null = Auto-Kette).
+- client: RoutingPanel auf der Controller-Seite — Live-Status je
+  Anbieter (bereit/Kontingent-Fenster/Schluessel), aktive Route,
+  Pin-Buttons fuer Admins.
+- Engine-Tests bewusst angepasst: ohne Retry-After-Fenster erlaubt die
+  Kette einen begrenzten Erholungslauf (HF bleibt consent-gated, hard
+  LIMIT bleibt hard LIMIT).
+- Tests: +22 neue (8 Erholungsplaner, 5 Pin, 4 Engine-Integration,
+  2 Health-Routing, +3 Cooldown-Getter-Nutzung via Health/Engine).
+  Gesamt 595/599 gruen (4 bewusste Skips), check + build sauber.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte

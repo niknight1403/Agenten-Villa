@@ -84,6 +84,33 @@ export function providerInCooldown(
   return entry !== undefined && entry.until > now;
 }
 
+/** Vollstaendige Sperren-Info eines Anbieters oder null (nicht gesperrt). */
+export function providerCooldownInfo(
+  name: ProviderName,
+  now = Date.now()
+): { kind: ProviderCooldownKind; untilMs: number } | null {
+  const entry = providerCooldowns.get(name);
+  return entry === undefined || entry.until <= now
+    ? null
+    : { kind: entry.kind, untilMs: entry.until };
+}
+
+/** Snapshot aller aktiven Sperren (Sprint 079 — Erholungsplanung/Health). */
+export function providerCooldownSnapshot(
+  now = Date.now()
+): Array<{ provider: ProviderName; kind: ProviderCooldownKind; untilMs: number }> {
+  const snapshot: Array<{
+    provider: ProviderName;
+    kind: ProviderCooldownKind;
+    untilMs: number;
+  }> = [];
+  for (const [provider, entry] of Array.from(providerCooldowns.entries())) {
+    if (entry.until > now)
+      snapshot.push({ provider, kind: entry.kind, untilMs: entry.until });
+  }
+  return snapshot;
+}
+
 /** Sperrt alle Anbieter für Tests zurück. */
 export function clearProviderCooldownsForTests(): void {
   providerCooldowns.clear();

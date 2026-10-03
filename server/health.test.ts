@@ -7,12 +7,17 @@ import {
   setControllerStateSource,
 } from "./_core/health";
 import { clearProviderCooldownsForTests, markProviderFailure } from "./provider-cooldown";
+import {
+  resetRouteOverrideForTests,
+  setRouteOverride,
+} from "./route-override";
 import type { ControllerState } from "./controller";
 
 afterEach(() => {
   resetVersionCacheForTests();
   resetControllerStateSourceForTests();
   clearProviderCooldownsForTests();
+  resetRouteOverrideForTests();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -62,6 +67,29 @@ describe("Health: LLM-Anbieter-Zusammenfassung (Sprint 076)", () => {
       entry => entry.name === "groq"
     );
     expect(groq).toMatchObject({ configured: true, cooldown: true });
+  });
+});
+
+describe("Health: Routing-Transparenz (Sprint 079)", () => {
+  it("zeigt aktive Route und Cooldown-Details ohne Secrets", () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "test-key");
+    markProviderFailure("openrouter", "limit", 120);
+    const payload = getHealthPayload();
+    expect(payload.routing.pinned).toBeNull();
+    expect(payload.routing.activeRoute).toBe("groq");
+    const openrouter = payload.providers.find(p => p.name === "openrouter");
+    expect(openrouter).toMatchObject({ cooldown: true, cooldownKind: "limit" });
+    expect(openrouter!.cooldownSecLeft).toBeGreaterThan(0);
+  });
+
+  it("zeigt den Admin-Pin ehrlich an, auch wenn er die aktive Route ueberdeckt", () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "test-key");
+    setRouteOverride("groq", "chef@villa.test");
+    const payload = getHealthPayload();
+    expect(payload.routing.pinned).toBe("groq");
+    expect(payload.routing.pinnedBy).toBe("chef@villa.test");
   });
 });
 
