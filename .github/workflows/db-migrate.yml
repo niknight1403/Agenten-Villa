@@ -26,3 +26,18 @@ jobs:
         run: pnpm db:push
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Schema-Diagnose (nur Spaltennamen, keine Secrets im Log)
+        run: |
+          node -e "
+          const postgres = require('postgres');
+          const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
+          (async () => {
+            const cols = await sql\`SELECT column_name FROM information_schema.columns WHERE table_name = 'villas' ORDER BY column_name\`;
+            console.log('villas-Spalten:', cols.map(c => c.column_name).join(', '));
+            const host = new URL(process.env.DATABASE_URL).host;
+            console.log('DB-Host (gekürzt):', host.replace(/^([a-z0-9-]{0,12}).*/, '\$1…'));
+            await sql.end();
+          })().catch(e => { console.error('Diagnose-Fehler:', e.message); process.exit(1); });
+          "
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
