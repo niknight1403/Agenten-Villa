@@ -1010,7 +1010,13 @@ body:has(.villa-app) {
   font-size: 11px;
   line-height: 1.45;
 }
-.fallback-consent input { flex: 0 0 auto; accent-color: #18c8b6; }
+.fallback-consent input {
+  flex: 0 0 auto;
+  accent-color: #18c8b6;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
 
 .progress-live { border-color: rgb(94 220 255 / 32%); background: rgb(12 26 44 / 55%); box-shadow: 0 0 26px rgb(34 215 238 / 12%), 0 10px 30px rgb(0 0 0 / 20%); }
 .progress-track { height: 3px; margin: 2px 0 11px; border-radius: 999px; background: rgb(94 220 255 / 14%); overflow: hidden; }
