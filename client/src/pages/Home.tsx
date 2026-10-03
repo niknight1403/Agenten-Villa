@@ -37,8 +37,10 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Rocket,
   SlidersHorizontal,
   Sparkles,
+  Square,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -66,6 +68,8 @@ type Villa = {
   description?: string | null;
   capacity?: number;
   archivedAt?: string | null;
+  /** Sprint 071 — verbundenes GitHub-Repository („owner/repo“). */
+  repository?: string | null;
 };
 const homeIdeas = [
   "Schlage 3 konkrete Verbesserungen für dieses Projekt vor",
@@ -130,26 +134,31 @@ export default function Home() {
     { enabled: isAuthenticated, refetchOnWindowFocus: false }
   );
   const chatMutation = trpc.agent.chat.useMutation();
-  // Live-Fortschritt: während ein Auftrag läuft, werden die echten
-  // Server-Meilensteine (Modellaufrufe, Anbieterwechsel, GitHub-Aktionen)
-  // gepollt und im Chat angezeigt.
+  // Sprint 072 — Autonome Villa-Mission mit Stopp-Knopf.
+  const startVillaMissionMutation = trpc.agent.startVillaMission.useMutation();
+  const stopVillaMissionMutation = trpc.agent.stopVillaMission.useMutation();
+  const missionPending =
+    startVillaMissionMutation.isPending || stopVillaMissionMutation.isPending;
+  // Live-Fortschritt: während ein Auftrag oder eine Mission läuft, werden die
+  // echten Server-Meilensteine gepollt und im Chat angezeigt.
+  const agentBusy = chatMutation.isPending || startVillaMissionMutation.isPending;
   const progressQuery = trpc.agent.progress.useQuery(undefined, {
-    enabled: isAuthenticated && chatMutation.isPending,
+    enabled: isAuthenticated && agentBusy,
     refetchInterval: 1500,
     refetchOnWindowFocus: false,
   });
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
   useEffect(() => {
-    if (!chatMutation.isPending) return;
+    if (!agentBusy) return;
     const startedAt = turnStartedAt ?? Date.now();
     if (turnStartedAt === null) setTurnStartedAt(startedAt);
     const timer = window.setInterval(() => setElapsedTick(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     return () => window.clearInterval(timer);
-  }, [chatMutation.isPending, turnStartedAt]);
+  }, [agentBusy, turnStartedAt]);
   useEffect(() => {
-    if (!chatMutation.isPending && turnStartedAt !== null) setTurnStartedAt(null);
-  }, [chatMutation.isPending, turnStartedAt]);
+    if (!agentBusy && turnStartedAt !== null) setTurnStartedAt(null);
+  }, [agentBusy, turnStartedAt]);
   const controlMutation = trpc.agent.setState.useMutation({ onSuccess: () => statusQuery.refetch() });
   const systemPromptMutation = trpc.agent.setSystemPrompt.useMutation({ onSuccess: () => statusQuery.refetch() });
   const [promptDraft, setPromptDraft] = useState<string | null>(null);
@@ -182,6 +191,8 @@ export default function Home() {
   const [villaDescription, setVillaDescription] = useState("");
   const [villaCapacity, setVillaCapacity] = useState(8);
   const [villaIdea, setVillaIdea] = useState("");
+  const [villaRepository, setVillaRepository] = useState("");
+  const [missionObjective, setMissionObjective] = useState("");
   const [activeVillaId, setActiveVillaId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allowHuggingFaceFallback, setAllowHuggingFaceFallback] =
@@ -323,6 +334,7 @@ export default function Home() {
         specialty: activeVilla?.specialty ?? "Generalist",
         allowHuggingFaceFallback,
         useGitHub: githubToolsEnabled,
+        ...(screen === "home" && activeVilla ? { villaId: activeVilla.id } : {}),
       });
       const actionInfo = result.githubActions
         ? ` · ${result.githubActions} GitHub-Aktionen`
@@ -469,11 +481,13 @@ export default function Home() {
         capacity: villaCapacity,
         ...(villaIdea.trim() ? { projectBrief: villaIdea.trim() } : {}),
         ...(cleanDescription ? { description: cleanDescription } : {}),
+        ...(villaRepository.trim() ? { repository: villaRepository.trim() } : {}),
       });
       setVillaName("");
       setVillaDescription("");
       setVillaCapacity(8);
       setVillaIdea("");
+      setVillaRepository("");
       setNewVillaOpen(false);
       setScreen("home");
       setActiveVillaId(villa.id);
@@ -483,6 +497,51 @@ export default function Home() {
         error instanceof Error
           ? error.message
           : "Die Villa konnte nicht erstellt werden."
+      );
+    }
+  }
+
+  /** Sprint 072 — Autonome Mission aus dem Chat-Entwicklungsfenster. */
+  async function startVillaMission() {
+    if (!activeVilla || startVillaMissionMutation.isPending || chatMutation.isPending) return;
+    if (
+      !window.confirm(
+        `Autonome Mission für „${activeVilla.name}" starten${activeVilla.repository ? ` auf ${activeVilla.repository}` : ""}? Der Superagent analysiert zuerst, verbessert dann umsatz- und autonomie-orientiert und übergibt am Ende einen Bericht. Änderungen laufen ausschließlich über agent/*-Branches und einen Draft-PR.`
+      )
+    )
+      return;
+    try {
+      const result = await startVillaMissionMutation.mutateAsync({
+        villaId: activeVilla.id,
+        ...(missionObjective.trim() ? { objective: missionObjective.trim() } : {}),
+        acknowledgeImpact: true,
+      });
+      setMissionObjective("");
+      await messagesQuery.refetch();
+      if (result.stopped) {
+        toast.info("Mission über den Stopp-Knopf sauber abgeschlossen. Der Bericht steht im Chat.");
+      } else {
+        toast.success("Mission abgeschlossen. Der Bericht steht im Chat.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Die Mission konnte nicht gestartet werden."
+      );
+    }
+  }
+
+  async function stopVillaMission() {
+    if (!activeVilla || stopVillaMissionMutation.isPending) return;
+    try {
+      await stopVillaMissionMutation.mutateAsync({ villaId: activeVilla.id });
+      toast.info("Stopp signalisiert — die Mission schließt sich sauber ab.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Der Stopp konnte nicht signalisiert werden."
       );
     }
   }
@@ -907,6 +966,40 @@ export default function Home() {
                 {activeVilla && (
                   <div className="villa-project-actions">
                     {activeVilla.projectBrief && <p className="villa-project-brief">Projektziel: {activeVilla.projectBrief}</p>}
+                    {activeVilla.repository && <p className="villa-project-brief">Verbundenes Repository: {activeVilla.repository}</p>}
+                    {statusQuery.data?.isAdmin && (
+                      <div className="mission-launcher">
+                        <input
+                          className="mission-objective"
+                          type="text"
+                          value={missionObjective}
+                          onChange={event => setMissionObjective(event.target.value)}
+                          placeholder="Optionaler Auftrag (z. B. Fokus: Monetarisierung stabilisieren)"
+                          aria-label="Auftrag für die autonome Mission"
+                          maxLength={2000}
+                          disabled={missionPending}
+                        />
+                        <button
+                          className="mission-start"
+                          type="button"
+                          onClick={startVillaMission}
+                          disabled={missionPending || chatMutation.isPending}
+                        >
+                          <Rocket size={16} />
+                          {startVillaMissionMutation.isPending ? "Mission läuft …" : "Autonome Mission starten"}
+                        </button>
+                        {startVillaMissionMutation.isPending && (
+                          <button
+                            className="mission-stop"
+                            type="button"
+                            onClick={stopVillaMission}
+                            disabled={stopVillaMissionMutation.isPending}
+                          >
+                            <Square size={14} /> Stoppen
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {statusQuery.data?.isAdmin && (
                       <a className="villa-project-link" href={`/core/elite?villaId=${activeVilla.id}`}>
                         <Sparkles size={16} /> Projekt mit Superagent entwickeln
@@ -1013,20 +1106,30 @@ export default function Home() {
                     </div>
                   </article>
                 ))}
-                {chatMutation.isPending && (
+                {agentBusy && (
                   <article className="chat-message assistant" aria-live="polite">
                     <span className="assistant-avatar">
                       <Bot size={16} />
                     </span>
                     <div className="message-bubble progress-live">
                       <div className="message-author">
-                        Superagent arbeitet
+                        {startVillaMissionMutation.isPending ? "Autonome Mission läuft" : "Superagent arbeitet"}
                         {turnStartedAt !== null && (
                           <span className="progress-elapsed">
                             · {Math.max(0, elapsedTick)} s
                           </span>
                         )}
                       </div>
+                      {startVillaMissionMutation.isPending && (
+                        <button
+                          className="mission-stop bubble-stop"
+                          type="button"
+                          onClick={stopVillaMission}
+                          disabled={stopVillaMissionMutation.isPending}
+                        >
+                          <Square size={13} /> Stoppen — sauber abschließen
+                        </button>
+                      )}
                       <div className="progress-track" aria-hidden="true">
                         <div className="progress-fill" />
                       </div>
@@ -1505,6 +1608,22 @@ export default function Home() {
               maxLength={4000}
               placeholder="z. B. Entwickle einen Android-Dateimanager mit Speicheranalyse und bestätigten Dateiaktionen"
             />
+            <label className="modal-label" htmlFor="villa-repository">
+              GitHub-Repository (optional, „owner/repo“)
+            </label>
+            <input
+              id="villa-repository"
+              className="modal-input"
+              value={villaRepository}
+              onChange={event => setVillaRepository(event.target.value)}
+              maxLength={120}
+              placeholder="z. B. niknight1403/CyberSarah-control-center"
+            />
+            <p className="modal-hint">
+              Mit Repository arbeitet die Villa (Chat-Werkzeuge und autonome
+              Missionen) direkt auf diesem Projekt; ohne Eintrag gilt das
+              Server-Standard-Repository.
+            </p>
             <label className="modal-label" htmlFor="villa-description">
               Beschreibung (optional, max. 1000 Zeichen)
             </label>

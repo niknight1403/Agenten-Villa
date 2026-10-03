@@ -64,6 +64,9 @@ export const villas = pgTable(
     archivedAt: timestamp("archivedAt"),
     /** Sprint 015 — zugeordnetes Projekt; eine Villa hat höchstens ein Projekt. */
     projectId: integer("projectId"),
+    /** Sprint 071 — verbundenes GitHub-Repository („owner/repo“), z. B.
+     * für Missions- und Chat-GitHub-Werkzeuge dieser Villa. null = Server-Default. */
+    repository: varchar("repository", { length: 120 }),
     /** Sprint 016 — Superagenten-Profil der Villa (Rolle + Aufgabenprofil). */
     profileId: integer("profileId"),
     icon: varchar("icon", { length: 8 })

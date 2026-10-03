@@ -108,7 +108,13 @@ pnpm build   # Vite-Build + esbuild-Server-Bundle
 pnpm dev     # lokaler Entwicklungsserver mit Vite
 ```
 
-Datenbankmigrationen laufen über `pnpm db:push` (Drizzle Kit). Build-Skripte für `esbuild` und `@tailwindcss/oxide` sind über `pnpm.onlyBuiltDependencies` freigegeben.
+Datenbankmigrationen laufen über `pnpm db:push` (Drizzle Kit).
+
+### Sprint 071/072 — Villa-Repository & Autonome Mission im Chat
+
+Jede Villa kann optional ein verbundenes GitHub-Repository im Format „owner/repo“ speichern (`villas.repository`, Migration `drizzle/0015_rich_mister_fear.sql`; vor dem Deployment einmal `pnpm db:push` ausführen). Chat-Aufträge mit GitHub-Werkzeugen, die Repository-Analyse und autonome Missionen der Villa arbeiten dann auf genau diesem Projekt; ohne Eintrag gilt das Server-Standard-Repository.
+
+Im Chat-Entwicklungsfenster einer Villa können Administratoren eine **autonome Mission** starten: Der Superagent analysiert zuerst das verbundene Repository, verbessert und stabilisiert danach alles Umsatz- und Autonomie-orientiert und schließt mit klaren Empfehlungen (weiterentwickeln oder neues Projekt) sowie einem saubereren Bericht ab, der im Villa-Chat gespeichert wird. Änderungen laufen ausschließlich über `agent/*`-Branches und einen Draft-PR. Der Lauf ist technisch begrenzt (maximal 24 GitHub-Aktionen, 12 Werkzeugrunden). Ein **Stopp-Knopf** beendet die Mission kooperativ vor der nächsten GitHub-Aktion — die Mission schließt sich sauber mit einem ehrlichen Zwischenbericht ab; bereits erstellte Branches/Draft-PRs bleiben dauerhaft und müssen geprüft werden. Build-Skripte für `esbuild` und `@tailwindcss/oxide` sind über `pnpm.onlyBuiltDependencies` freigegeben.
 
 ## Tests
 

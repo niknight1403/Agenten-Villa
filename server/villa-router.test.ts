@@ -74,6 +74,7 @@ describe("villa router validation and ownership", () => {
       specialty: "Neuer Agent",
       icon: "bot",
       projectBrief: undefined,
+      repository: null,
       description: undefined,
       capacity: 8,
     });

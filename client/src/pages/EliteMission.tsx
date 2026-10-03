@@ -96,6 +96,22 @@ export default function EliteMission() {
         ...(villaId ? { villaId } : {}),
         acknowledgeImpact: true,
       });
+      if (result.stopped) {
+        // Sprint 072 — kooperativer Stopp: sauberer Abschlussbericht.
+        setLastResult({
+          answer: result.answer,
+          completed: false,
+          branch: null,
+          githubActions: 0,
+          model: result.model,
+          verification: undefined,
+          pullRequest: null,
+        });
+        pendingMissionKey.current = null;
+        void runsQuery.refetch();
+        toast.info("Mission über den Stopp-Knopf sauber abgeschlossen.");
+        return;
+      }
       setLastResult({
         answer: result.answer,
         completed: Boolean(result.completed),
@@ -125,6 +141,14 @@ export default function EliteMission() {
     if (!window.confirm(`Mission #${id} erneut von vorn starten? Der vorherige Versuch kann bereits GitHub-Branches, Dateien oder einen Draft-PR verändert haben. Prüfe diese Änderungen zuerst. Dieser neue Versuch kann weitere Modellaufrufe und GitHub-Aktionen auslösen.`)) return;
     try {
       const result = await restartMutation.mutateAsync({ id, acknowledgeExternalChanges: true });
+      if (result.stopped) {
+        setLastResult({ answer: result.answer, completed: false, branch: null,
+          githubActions: 0, model: result.model, verification: undefined, pullRequest: null });
+        pendingMissionKey.current = null;
+        await runsQuery.refetch();
+        toast.info("Neuer Versuch über den Stopp-Knopf sauber abgeschlossen.");
+        return;
+      }
       setLastResult({ answer: result.answer, completed: Boolean(result.completed), branch: result.branch ?? null,
         githubActions: result.githubActions ?? 0, model: result.model, verification: result.verification, pullRequest: result.pullRequest ?? null });
       pendingMissionKey.current = null;

@@ -38,7 +38,9 @@ import {
   setGuardianEnabled,
   setGuardianIntervalMs,
 } from "./provider-guardian";
-import { getVilla } from "./villa-store";
+import { appendMessages, getVilla } from "./villa-store";
+import { villaRepositoryToToolTarget } from "../shared/villa-repository";
+import { buildStoppedMissionReport, buildVillaMissionObjective } from "./villa-mission";
 import { advisorStatsSchema } from "@shared/storage-advisor";
 import { runStorageAdvisor } from "./storage-advisor";
 import {
@@ -104,6 +106,16 @@ function progressEmitter(userId: number) {
 }
 function finishProgress(userId: number) {
   liveProgress.delete(userId);
+}
+
+/**
+ * Sprint 072 — Stopp-Knopf für laufende Missionen. Der Stopp ist kooperativ:
+ * das Flag wird vor jeder GitHub-Aktion geprüft, die Mission schließt sauber
+ * mit einem ehrlichen Bericht ab (kein Abbruch mitten in einem API-Aufruf).
+ */
+const villaMissionStops = new Set<number>();
+class MissionStoppedByUserError extends Error {
+  constructor() { super("MISSION_STOPPED_BY_USER"); this.name = "MissionStoppedByUserError"; }
 }
 function staleProgressCleanup() {
   const now = Date.now();
@@ -255,6 +267,8 @@ const inputSchema = z
     specialty: z.string().max(80),
     allowHuggingFaceFallback: z.boolean().default(false),
     useGitHub: z.boolean().default(false),
+    /** Sprint 071 — Ziel-Villa: bestimmt das verbundene Repository. */
+    villaId: z.number().int().positive().optional(),
   });
 
 const eliteMissionSchema = z.object({
@@ -279,6 +293,8 @@ const eliteMissionSchema = z.object({
 
 type EliteOutput = Awaited<ReturnType<typeof runAutonomousProjectWithGitHub>> & {
   elite: true;
+  /** Sprint 072 — Diskriminante: false = regulärer Abschluss, true = Stopp. */
+  stopped: false;
   plan: string;
   workflow: string[];
   notice: string;
@@ -300,11 +316,43 @@ function replayOrConflict(run: EliteMissionRun, expectedHash: string): EliteOutp
   throw new TRPCError({ code: "CONFLICT", message: `Mission ${run.id} ist ${run.status}. Status abfragen; unterbrochene Läufe nur nach Prüfung ausdrücklich neu starten.` });
 }
 
+/** Sprint 072 — Ausgabe nach dem Stopp-Knopf: sauber, ehrlich, ohne
+ * Behauptung einer Vollendung. */
+type StoppedMissionOutput = {
+  elite: true;
+  stopped: true;
+  answer: string;
+  provider: string;
+  model: string;
+  plan: string;
+  workflow: string[];
+  notice: string;
+  missionId: number;
+};
+
+async function appendMissionReportToVilla(
+  run: EliteMissionRun,
+  villaContext: NonNullable<SavedMissionInput["villaContext"]>,
+  answer: string,
+  provider: string,
+  model: string
+): Promise<void> {
+  try {
+    await appendMessages(villaContext.villaId, run.userId, [
+      { role: "user", content: villaContext.objective },
+      { role: "assistant", content: answer, provider, model },
+    ]);
+  } catch { /* Bericht ist im Missionslauf persistiert; Chat-Anhang darf den Abschluss nicht brechen. */ }
+}
+
 async function executePersistedMission(
   run: EliteMissionRun,
   missionInput: SavedMissionInput,
   metricKind: AgentRunKind = "elite"
-): Promise<EliteOutput> {
+): Promise<EliteOutput | StoppedMissionOutput> {
+  const emitProgress = progressEmitter(run.userId);
+  const villaContext = missionInput.villaContext ?? null;
+  let toolActions = 0;
   const heartbeat = setInterval(() => {
     void renewMissionLease(run).catch(() => { /* no secrets or history in logs */ });
   }, missionLeaseIntervalMs());
@@ -319,8 +367,16 @@ async function executePersistedMission(
       () => runAutonomousProjectWithGitHub(
         { ...missionInput, missionId: String(run.id) },
         async (name, args) => {
+          // Sprint 072 — kooperativer Stopp vor jeder externen Aktion.
+          if (villaMissionStops.has(run.userId)) throw new MissionStoppedByUserError();
           if (!await renewMissionLease(run)) throw new Error("MISSION_OWNERSHIP_LOST");
-          return executeGitHubTool(name, args);
+          toolActions += 1;
+          emitProgress(`GitHub-Aktion ${toolActions}: ${name}`);
+          return executeGitHubTool(
+            name, args,
+            // Sprint 071 — Ziel-Repository der Villa, sonst Server-Default.
+            villaRepositoryToToolTarget(villaContext?.repository)
+          );
         },
         {
           beforeFallback: async () => controlState === "RUNNING" && await renewMissionLease(run),
@@ -334,6 +390,7 @@ async function executePersistedMission(
     const output: EliteOutput = {
       ...result,
       elite: true,
+      stopped: false as const,
       plan: ELITE_PLAN.name,
       workflow: [
         "Repository analysieren", "Akzeptanzkriterien & Architektur", "agent/*-Branch",
@@ -344,11 +401,43 @@ async function executePersistedMission(
       missionId: run.id,
     };
     await finishMission(run, output);
+    finishProgress(run.userId);
+    if (villaContext) {
+      emitProgress("Bericht wird im Villa-Chat gespeichert");
+      await appendMissionReportToVilla(run, villaContext, result.answer, result.provider, result.model);
+    }
     return output;
   } catch (error) {
+    // Sprint 072 — Stopp-Knopf: sauberer Abschluss mit ehrlichem Bericht.
+    if (error instanceof MissionStoppedByUserError) {
+      villaMissionStops.delete(run.userId);
+      const events = (liveProgress.get(run.userId)?.events ?? []).map(entry => entry.label);
+      const report = buildStoppedMissionReport({
+        villaName: villaContext?.villaName ?? "Projekt-Villa",
+        toolActions,
+        lastEvents: events,
+        lastEventAt: new Date().toISOString(),
+      });
+      const output: StoppedMissionOutput = {
+        elite: true,
+        stopped: true,
+        answer: report,
+        provider: "mission-stop",
+        model: "cooperative-stop",
+        plan: ELITE_PLAN.name,
+        workflow: ["Analyse", "GitHub-Aktionen", "Stopp durch Benutzer", "Sauberer Abschlussbericht"],
+        notice: "Die Mission wurde über den Stopp-Knopf beendet. Bereits erstellte Branches oder Draft-PRs bleiben bestehen und müssen geprüft werden.",
+        missionId: run.id,
+      };
+      await finishMission(run, output, "MISSION_STOPPED_BY_USER").catch(() => { /* Ownership-Verlust bleibt sichtbar */ });
+      finishProgress(run.userId);
+      if (villaContext) await appendMissionReportToVilla(run, villaContext, report, "mission-stop", "cooperative-stop");
+      return output;
+    }
     // A lost lease is never overwritten by this attempt. The old GitHub side
     // effects may already exist and require manual review before restarting.
     try { await finishMission(run, null, "MISSION_FAILED"); } catch { /* preserve original error */ }
+    finishProgress(run.userId);
     throw error;
   } finally {
     clearInterval(heartbeat);
@@ -739,15 +828,109 @@ export const agentRouter = router({
           ...(activePrompt()
             ? { systemOverride: activePrompt() }
             : {}),
+          ...(villa
+            ? { villaContext: { villaId: villa.id, villaName: villa.name, repository: villa.repository ?? null, objective: input.prompt } }
+            : {}),
         };
         const reservation = await reserveMission({ userId: ctx.user.id, idempotencyKey: key, requestHash, missionInput });
         if (!reservation.created) return replayOrConflict(reservation.run, requestHash);
         // Sprint 048 — auch der Neustart wird als Lauf mit Metriken erfasst.
+        beginProgress(ctx.user.id, input.prompt);
         return await executePersistedMission(reservation.run, missionInput, "elite-restart");
       } catch (error) {
         mapAgentError(error);
       }
     }),
+  /**
+   * Sprint 072 — Autonome Villa-Mission aus dem Chat-Entwicklungsfenster.
+   * Analyse zuerst, dann Umsatz-/Autonomie-Verbesserung, am Ende
+   * Empfehlungen und ein sauberer Bericht im Villa-Chat.
+   */
+  startVillaMission: protectedProcedure
+    .input(
+      z.object({
+        villaId: z.number().int().positive(),
+        objective: z.string().trim().max(2_000).optional(),
+        strategy: z.enum(["OPTIMIZE", "REBUILD"]).optional(),
+        idempotencyKey: z.uuid().optional(),
+        acknowledgeImpact: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      requireAdminMutation(ctx.user);
+      requireApproval("mission-start", input.acknowledgeImpact);
+      if (controlState !== "RUNNING")
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Der Superagent steht auf STOPPED. Starte ihn vor einer Villa-Mission.",
+        });
+      if (!process.env.GITHUB_TOKEN?.trim())
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Für autonome Villa-Missionen muss GITHUB_TOKEN als geschütztes Server-Secret eingerichtet sein.",
+        });
+      if (!anyModelProviderConfigured())
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Für autonome Villa-Missionen muss mindestens ein Modellanbieter-Secret eingerichtet sein (OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY oder HF_TOKEN).",
+        });
+      try {
+        const villa = await getVilla(input.villaId, ctx.user.id);
+        if (!villa) throw new TRPCError({ code: "NOT_FOUND", message: "Projekt-Villa nicht gefunden." });
+        if (villa.archivedAt)
+          throw new TRPCError({ code: "FORBIDDEN", message: "Diese Villa ist archiviert und startet keine neuen Läufe." });
+        const objective = buildVillaMissionObjective(
+          { villaName: villa.name, projectBrief: villa.projectBrief, repository: villa.repository ?? null },
+          input.objective ?? null
+        );
+        const workforce = `${workforceDirective(villa.name)}\n\n`;
+        const missionInput: SavedMissionInput = {
+          prompt: `${workforce}${objective}`,
+          history: [],
+          mode: "workshop" as const,
+          specialty: villa.specialty,
+          forge: {
+            strategy: input.strategy ?? "OPTIMIZE",
+            productReview: true,
+            memory: [],
+          },
+          ...(activePrompt() ? { systemOverride: activePrompt() } : {}),
+          villaContext: {
+            villaId: villa.id,
+            villaName: villa.name,
+            repository: villa.repository ?? null,
+            objective,
+          },
+        };
+        villaMissionStops.delete(ctx.user.id);
+        const reservation = await reserveMission({
+          userId: ctx.user.id,
+          idempotencyKey: input.idempotencyKey ?? randomUUID(),
+          requestHash: createHash("sha256").update(JSON.stringify({ villaMission: missionInput.prompt, villaId: villa.id })).digest("hex"),
+          missionInput,
+        });
+        if (!reservation.created) return replayOrConflict(reservation.run, reservation.run.requestHash);
+        beginProgress(ctx.user.id, objective);
+        return await executePersistedMission(reservation.run, missionInput, "elite");
+      } catch (error) {
+        mapAgentError(error);
+      }
+    }),
+
+  /**
+   * Sprint 072 — Stopp-Knopf: kooperativer, sauberer Abschluss der
+   * laufenden Mission des Kontos (Elite- wie Villa-Missionen).
+   */
+  stopVillaMission: protectedProcedure
+    .input(z.object({ villaId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      requireAdminMutation(ctx.user);
+      const villa = await getVilla(input.villaId, ctx.user.id).catch(() => undefined);
+      if (!villa) throw new TRPCError({ code: "NOT_FOUND", message: "Projekt-Villa nicht gefunden." });
+      villaMissionStops.add(ctx.user.id);
+      return { stopping: true };
+    }),
+
   // Sprint 048 — Agentenmetriken: Laufzeit, Fehler und Ergebnisstatus.
   agentMetrics: protectedProcedure.query(({ ctx }) => {
     requireAdmin(ctx.user);
@@ -792,7 +975,8 @@ export const agentRouter = router({
           throw new TRPCError({ code: "CONFLICT", message: "Die Mission hat ihr Wiederholungslimit von " + String(MAX_MISSION_ATTEMPTS) + " Versuchen erreicht und bleibt endgültig unterbrochen. Bitte eine neue Mission starten." });
         throw new TRPCError({ code: "CONFLICT", message: "Die Mission ist nicht unterbrochen, die Lease läuft noch, oder der Auftrag gehört einem anderen Konto." });
       }
-      return await executePersistedMission(run, run.input as SavedMissionInput, "elite-restart");
+      beginProgress(ctx.user.id, (run.input as SavedMissionInput).prompt);
+    return await executePersistedMission(run, run.input as SavedMissionInput, "elite-restart");
     } catch (error) { mapAgentError(error); }
   }),
   /**
@@ -859,6 +1043,7 @@ export const agentRouter = router({
           message: "Für die Repository-Analyse muss mindestens ein Modellanbieter-Secret eingerichtet sein.",
         });
       let villaName: string | null = null;
+      let villaRepository: string | null = null;
       if (input.villaId) {
         const villa = await getVilla(input.villaId, ctx.user.id);
         if (!villa)
@@ -866,9 +1051,12 @@ export const agentRouter = router({
         if (villa.archivedAt)
           throw new TRPCError({ code: "FORBIDDEN", message: "Diese Villa ist archiviert und startet keine neuen Läufe." });
         villaName = villa.name;
+        villaRepository = villa.repository ?? null;
       }
+      // Sprint 071 — Repository der Villa (falls gesetzt) statt Server-Default.
+      const analysisRepository = villaRepository ?? GITHUB_REPOSITORY;
       const analysisPrompt = [
-        `Analysiere das verbundene Repository ${GITHUB_REPOSITORY} fuer eine Projekt-Villa${villaName ? ` ('${villaName}')` : ""}.`,
+        `Analysiere das verbundene Repository ${analysisRepository} fuer eine Projekt-Villa${villaName ? ` ('${villaName}')` : ""}.`,
         "Untersuche mit LESenden Werkzeugen: Repository-Ueberblick, Dateibaum, letzte Commits, offene Issues und Pull Requests sowie CI-Check-Runs.",
         "Bewerte ehrlich: Projektzustand, Architektur, Test- und CI-Situation, erkennbare Luecken.",
         "Lege dem Nutzer danach genau zwei Fertigstell-Moeglichkeiten vor, jede mit kurzer Begruendung und Konsequenz:",
@@ -888,7 +1076,7 @@ export const agentRouter = router({
               throw new Error(
                 "READ_ONLY_ANALYSE: Diese Analysephase darf nur lesende GitHub-Werkzeuge ausführen."
               );
-            return executeGitHubTool(name, args);
+            return executeGitHubTool(name, args, villaRepositoryToToolTarget(villaRepository));
           },
           { authorization: { administrator: true }, onEvent: progressEmitter(ctx.user.id) }
         );
@@ -896,7 +1084,7 @@ export const agentRouter = router({
         return {
           answer: result.answer,
           recommendation: (match?.[1] as "OPTIMIZE" | "REBUILD" | undefined) ?? null,
-          repository: GITHUB_REPOSITORY,
+          repository: analysisRepository,
           model: result.model,
           githubActions: result.githubActions ?? 0,
         };
@@ -929,11 +1117,15 @@ export const agentRouter = router({
                 "Der GitHub-Token ist noch nicht im geschützten Server-Secret eingerichtet.",
             });
           if (!isAdmin(ctx.user)) consumeGitHubTurn(ctx.user.id);
+          // Sprint 071 — verbundenes Repository der Villa verwenden.
+          const villa = input.villaId
+            ? await getVilla(input.villaId, ctx.user.id).catch(() => undefined)
+            : undefined;
           const result = await runAgentTurnWithGitHub(
             activePrompt()
               ? { ...input, systemOverride: activePrompt() }
               : input,
-            (name, args) => executeGitHubTool(name, args),
+            (name, args) => executeGitHubTool(name, args, villaRepositoryToToolTarget(villa?.repository)),
             // Sprint 043 — requireAdmin hat den Aufrufer bereits geprüft;
             // die explizite Autorisierung macht die Werkzeugrunde nicht von
             // außengerufenen Annahmen abhängig.

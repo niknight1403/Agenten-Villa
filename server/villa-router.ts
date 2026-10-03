@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { villaRepositorySchema } from "../shared/villa-repository";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { validRating } from "./agent-engine";
@@ -105,6 +106,7 @@ export const villaRouter = router({
         projectBrief: z.string().trim().min(3).max(4000).optional(),
         description: descriptionSchema,
         capacity: capacitySchema,
+        repository: villaRepositorySchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -117,6 +119,7 @@ export const villaRouter = router({
           projectBrief: input.projectBrief,
           description: input.description,
           capacity: input.capacity,
+          repository: input.repository ?? null,
         });
       } catch (error) {
         if (error instanceof VillaLimitError) {
@@ -137,6 +140,7 @@ export const villaRouter = router({
         specialty: specialtySchema.optional(),
         description: z.string().trim().max(1000).nullable().optional(),
         capacity: z.number().int().min(1).max(25).optional(),
+        repository: villaRepositorySchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -146,6 +150,7 @@ export const villaRouter = router({
           specialty: input.specialty,
           description: input.description,
           capacity: input.capacity,
+          repository: input.repository,
         });
         if (!villa) {
           throw new TRPCError({

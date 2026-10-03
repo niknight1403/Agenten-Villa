@@ -97,6 +97,7 @@ export async function createVilla(input: {
   projectBrief?: string | null;
   description?: string | null;
   capacity?: number;
+  repository?: string | null;
 }): Promise<Villa> {
   const db = await requireDb();
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
@@ -167,6 +168,7 @@ export async function updateVilla(
     specialty?: string;
     description?: string | null;
     capacity?: number;
+    repository?: string | null;
   }
 ): Promise<Villa | undefined> {
   const db = await requireDb();
@@ -176,6 +178,7 @@ export async function updateVilla(
   if (patch.specialty !== undefined) set.specialty = patch.specialty;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.capacity !== undefined) set.capacity = patch.capacity;
+  if (patch.repository !== undefined) set.repository = patch.repository;
   if (Object.keys(set).length === 0) return undefined;
   return db.transaction(async tx => {
     const owned = await tx.select().from(villas)

@@ -11,6 +11,15 @@ export type SavedMissionInput = {
   specialty: string;
   systemOverride?: string | null;
   forge?: ForgeOptions;
+  /** Sprint 072 — Villa-Kontext: Ziel-Repository und Chat-Anbindung
+   * der Mission. Persistiert mit dem Lauf; Replay-sicher. */
+  villaContext?: {
+    villaId: number;
+    villaName: string;
+    repository: string | null;
+    /** Sichtbarer Missionsauftrag für den Chat-Verlauf der Villa. */
+    objective: string;
+  };
 };
 
 const activeRuns = new Set<number>();

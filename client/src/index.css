@@ -712,6 +712,65 @@ body:has(.villa-app) {
   outline-offset: 2px;
 }
 
+/* Sprint 072 — Chat-Entwicklungsfenster: Autonome Mission + Stopp. */
+.mission-launcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  width: 100%;
+  margin-top: 10px;
+  align-items: center;
+}
+.mission-objective {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  color: #eef0fc;
+  border: 1px solid #2c385d;
+  border-radius: 12px;
+  background: #0f142b;
+  font: inherit;
+  font-size: 13px;
+}
+.mission-objective::placeholder { color: #718499; }
+.mission-objective:focus { border-color: #2f9db4; outline: 0; }
+.mission-objective:disabled { opacity: 0.55; }
+.mission-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 42px;
+  padding: 0 15px;
+  color: #051224;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #37dcc6, #26a8d8);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mission-start:disabled { opacity: 0.55; cursor: default; }
+.mission-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  color: #ffd7dd;
+  border: 1px solid #a13548;
+  border-radius: 12px;
+  background: rgb(161 53 72 / 22%);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mission-stop.bubble-stop { height: 34px; margin: 8px 0 2px; font-size: 12.5px; }
+.mission-stop:disabled { opacity: 0.55; cursor: default; }
+.modal-hint { margin: 6px 0 0; color: #8a97bd; font-size: 12.5px; line-height: 1.5; }
+
 /* Sprint 069 — Fehler- und Ladezustände */
 .query-state { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 14px 16px; color: #8a97bd; font-size: 13px; }
 .query-state[data-phase="error"] { flex-direction: column; align-items: flex-start; color: #ff9db1; border: 1px solid rgb(244 63 94 / 30%); border-radius: 14px; background: rgb(60 12 30 / 30%); }

@@ -106,7 +106,8 @@ describe("agent access controls", () => {
     expect(() => captured("github_create_branch", { purpose: "analyse" })).toThrow("READ_ONLY_ANALYSE");
     expect(() => captured("github_write_file", { path: "x", branch: "agent/x", content: "y", message: "z" })).toThrow("READ_ONLY_ANALYSE");
     await captured("github_repo_overview", {});
-    expect(toolSpy).toHaveBeenCalledWith("github_repo_overview", {});
+    // Sprint 071 — ohne Villa-Repository ist der Ziel-Override undefined.
+    expect(toolSpy).toHaveBeenCalledWith("github_repo_overview", {}, undefined);
   });
 
   it("passes the villa name into the analysis and rejects unknown villas", async () => {
