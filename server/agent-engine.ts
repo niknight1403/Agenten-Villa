@@ -29,6 +29,7 @@ import {
   markProviderFailure,
   providerInCooldown,
 } from "./provider-cooldown";
+import { extractTurnUsage, recordTurnUsage } from "./turn-usage";
 import { recordRouterTelemetry } from "./router-telemetry";
 import {
   AgentSchemaError,
@@ -155,6 +156,8 @@ type Completion = {
   choices?: Array<{
     message?: { content?: string | null; tool_calls?: ToolCall[] };
   }>;
+  /** Sprint 077 — Token-Nutzung der Anfrage, wenn der Anbieter sie liefert. */
+  usage?: unknown;
 };
 type Dependencies = {
   /** Sprint 043 — Werkzeug-Autorisierung; ohne sie ist die Runde fail-closed. */
@@ -358,6 +361,14 @@ async function callWithProviderChain(
           route.name === "openrouter" ? model : `${route.name}:${model}`,
           "ok"
         );
+        // Sprint 077 — Token-Nutzung des erfolgreichen Turns erfassen
+        // (begrenztes Live-Aggregat fuer das Budget-Widget).
+        if (completion.usage)
+          recordTurnUsage({
+            provider: route.name,
+            model: completion.model ?? model,
+            usage: completion.usage,
+          });
         options.onEvent?.(`Antwort von ${route.name} · ${completion.model ?? model} empfangen`);
         recordRouterTelemetry({
           success: true,
@@ -669,10 +680,13 @@ async function callProvider(
       "INVALID_RESPONSE",
       "Der Modellanbieter lieferte weder Text noch einen Werkzeugaufruf."
     );
+  // Sprint 077 — usage-Objekt durchreichen (null, wenn unlesbar/fehlt).
+  const turnUsage = extractTurnUsage(data);
   return {
     answer: answer.slice(0, options.maxTokens ? 60_000 : 20_000),
     toolCalls,
     model: (data.model || model).slice(0, 120),
+    ...(turnUsage ? { usage: turnUsage } : {}),
   };
 }
 

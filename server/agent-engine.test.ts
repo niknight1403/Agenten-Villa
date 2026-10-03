@@ -9,8 +9,9 @@ const reply = (status: number, model = "free-test") => new Response(JSON.stringi
 const toolReply = (id: string, name: string, args: unknown) => new Response(JSON.stringify({ model: "free-tool-model", choices: [{ message: { content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
 
 import { resetRouterTelemetryForTests, routerTelemetrySummary } from "./router-telemetry";
+import { resetTurnUsageForTests, turnUsageSummary } from "./turn-usage";
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); resetRouterTelemetryForTests(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); resetRouterTelemetryForTests(); resetTurnUsageForTests(); });
 
 describe("bounded provider router", () => {
   it("calls OpenRouter Free once and returns provider metadata", async () => {
@@ -221,6 +222,38 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
     expect(urls).not.toContain(
       "https://openrouter.ai/api/v1/chat/completions"
     );
+  });
+});
+
+describe("Token-Nutzungserfassung (Sprint 077)", () => {
+  it("erfasst die usage-Angabe eines erfolgreichen Turns im Live-Aggregat", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const usageReply = () =>
+      new Response(
+        JSON.stringify({
+          model: "free-test",
+          choices: [{ message: { content: "1. Ziel festlegen. 2. Ergebnis prüfen." } }],
+          usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    await expect(
+      runAgentTurn(input, false, { fetcher: vi.fn<typeof fetch>().mockResolvedValue(usageReply()) })
+    ).resolves.toMatchObject({ provider: "openrouter" });
+    expect(turnUsageSummary()).toMatchObject({
+      turns: 1,
+      promptTokens: 5,
+      completionTokens: 7,
+      totalTokens: 12,
+    });
+  });
+
+  it("bleibt stoerfrei, wenn der Anbieter kein usage-Objekt liefert", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    await expect(
+      runAgentTurn(input, false, { fetcher: vi.fn<typeof fetch>().mockResolvedValue(reply(200)) })
+    ).resolves.toMatchObject({ provider: "openrouter" });
+    expect(turnUsageSummary().turns).toBe(0);
   });
 });
 
