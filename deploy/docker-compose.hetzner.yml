@@ -1,0 +1,16 @@
+# Variante fuer den Hetzner-Server (cybersarah-ki.com):
+# Der bereits laufende systemd-Caddy auf dem Host uebernimmt weiter TLS und
+# die Domain. Die Villa laeuft auf Port 3000 - exakt der Port, den vorher der
+# OpenHands-Container belegt hat. Kein zweiter Caddy noetig.
+#
+# Vorher: docker stop openhands-app
+# Start:  docker compose -f docker-compose.hetzner.yml up -d --build
+services:
+  villa:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"

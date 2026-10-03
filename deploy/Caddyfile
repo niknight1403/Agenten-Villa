@@ -1,0 +1,11 @@
+# Automatisches HTTPS-Zertifikat via Let's Encrypt (Caddy kuemmert sich darum).
+# Vor dem Start: DNS-A-Record von cybersarah-ki.com auf die Server-IP setzen.
+cybersarah-ki.com {
+	encode gzip zstd
+	reverse_proxy villa:3000
+}
+
+# Optional: www weiterleiten
+www.cybersarah-ki.com {
+	redir https://cybersarah-ki.com{uri} permanent
+}
