@@ -254,14 +254,6 @@ const inputSchema = z
     specialty: z.string().max(80),
     allowHuggingFaceFallback: z.boolean().default(false),
     useGitHub: z.boolean().default(false),
-  })
-  .superRefine((value, ctx) => {
-    if (value.useGitHub && value.mode !== "workshop")
-      ctx.addIssue({
-        code: "custom",
-        message:
-          "GitHub-Werkzeuge sind nur in der Projekt-Werkstatt verfügbar.",
-      });
   });
 
 const eliteMissionSchema = z.object({

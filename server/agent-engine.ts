@@ -671,10 +671,16 @@ async function runGitHubToolLoop(
   deps: Dependencies,
   profile: GitHubLoopProfile
 ) {
-  if (input.mode !== "workshop")
+  // Sprint 044 — Repository-Zugriff gilt jetzt auch im normalen Villa-Chat
+  // (mode "home"), nicht mehr nur in der Werkstatt: Admins fragen dort nach
+  // konkreten, repo-begruendeten Vorschlaegen (z.B. "3 Verbesserungen"), und
+  // ohne echten Lesezugriff antwortete das Modell bislang blind/ungenau.
+  // Dieselben Sicherheitsgrenzen (admin-only, max. Aktionen, agent/*-Branches,
+  // Draft-PRs) gelten unveraendert fuer beide Modi.
+  if (input.mode !== "workshop" && input.mode !== "home")
     throw new AgentError(
       "REJECTED",
-      "GitHub-Werkzeuge sind ausschließlich in der Projekt-Werkstatt verfügbar."
+      "GitHub-Werkzeuge sind nur in Villa-Chat oder Werkstatt verfügbar."
     );
 
   // Sprint 041 — Auftragsschema: auch die Werkzeugrunde laeuft nur mit

@@ -318,7 +318,7 @@ export default function Home() {
         mode: screen === "workshop" ? "workshop" : "home",
         specialty: activeVilla?.specialty ?? "Generalist",
         allowHuggingFaceFallback,
-        useGitHub: screen === "workshop" && githubToolsEnabled,
+        useGitHub: githubToolsEnabled,
       });
       const actionInfo = result.githubActions
         ? ` · ${result.githubActions} GitHub-Aktionen`
@@ -1205,7 +1205,6 @@ export default function Home() {
                       ? " · Anweisung aktiv"
                       : ""}
                     {!advancedOpen &&
-                      isWorkshop &&
                       statusQuery.data?.isAdmin &&
                       githubToolsEnabled
                       ? " · GitHub aktiv"
@@ -1236,7 +1235,7 @@ export default function Home() {
                         </span>
                       </div>
                     )}
-                    {isWorkshop && statusQuery.data?.isAdmin && (
+                    {statusQuery.data?.isAdmin && (
                       <label className="github-tool-toggle">
                         <input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} />
                         <span>
