@@ -9,12 +9,19 @@
  */
 import type { ProviderName } from "./provider-registry";
 
-export type ProviderCooldownKind = "auth" | "limit";
+export type ProviderCooldownKind = "auth" | "limit" | "timeout";
 
-/** Dokumentierte Standard-Sperrzeiten je Fehlerart. */
+/**
+ * Dokumentierte Standard-Sperrzeiten je Fehlerart.
+ * Sprint 075 — "timeout": ein Anbieter, dessen Route ausschliesslich
+ * Timeouts/Unerreichbarkeit geliefert hat, wird nur kurz gesperrt —
+ * ein Hänger ist meist voruebergehend, aber ohne Sperre bremst er jede
+ * Anfrage um seine volle Timeout-Latenz aus.
+ */
 const DEFAULT_COOLDOWN_MS: Record<ProviderCooldownKind, number> = {
   auth: 30 * 60 * 1000,
   limit: 5 * 60 * 1000,
+  timeout: 2 * 60 * 1000,
 };
 
 /** Retry-After kann Stunden nennen (Tageskontingent): begrenzt auf 60 min. */
@@ -30,6 +37,7 @@ const providerCooldowns = new Map<ProviderName, CooldownEntry>();
 /**
  * Sperrt einen Anbieter zeitlich begrenzt. Bei "limit" mit dokumentiertem
  * Retry-After (Sekunden) gilt dieser Wert — begrenzt auf 60 Minuten;
+ * "timeout" (Sprint 075) nutzt die kurze Standard-Sperrzeit;
  * "0" bedeutet "sofort wieder" und sperrt nicht. Eine bestehende,
  * laengere Sperre wird nie verkuerzt.
  */

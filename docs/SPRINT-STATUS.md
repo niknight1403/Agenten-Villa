@@ -1,5 +1,27 @@
 # Sprintstatus Agenten-Villa
 
+
+## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
+
+Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte
+Kontingente (429/402) und ungültige Schluessel (401/403). Ein haengender
+oder unerreichbarer Primaer-Anbieter blieb unbestraft an erster Stelle und
+verzoegerte jede Anfrage um seine volle Timeout-Latenz.
+
+- provider-cooldown.ts: neue Cooldown-Art "timeout" (2 Minuten, bewusst
+  kurz — Hänger sind meist voruebergehend).
+- agent-engine.ts: eine Route, die ausschliesslich TIMEOUT/UNAVAILABLE
+  geliefert hat, wird nach dem Routenende kurzzeitig gesperrt; fail-closed
+  bleibt erhalten (ohne Alternative wird der Gesperrte weiterhin ehrlich
+  versucht, laengere Limit-/Auth-Sperren werden nie verkuerzt).
+- agent-engine.ts: strukturierter, sicherer Failover-Log beim
+  Anbieterwechsel ("[agent-router] Anbieterwechsel: openrouter -> groq
+  (Grund: TIMEOUT)") — nur Anbieter, Fehlercode und HTTP-Status, niemals
+  Schluessel oder Anfrageinhalte.
+- agent-engine.test.ts: 4 neue deterministische Tests (Timeout-Sperre,
+  UNAVAILABLE-Sperre, fail-closed, log ohne Secrets). 544/544 gruen,
+  check + build sauber.
+
 **Roadmap:** [100-Sprint-Roadmap](./ROADMAP-100-SPRINTS.md)  
 **Branch:** `main`  
 **Startstand:** `69df273`
