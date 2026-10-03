@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentError, LIMITS, parseRetryAfterSeconds, resetProviderChainForTests, runAgentTurn, runAgentTurnWithGitHub, verifyOpenRouterKey } from "./agent-engine";
 import { GitHubToolError } from "./github-tools";
 import { resetProviderGuardianForTests } from "./provider-guardian";
@@ -10,8 +10,20 @@ const toolReply = (id: string, name: string, args: unknown) => new Response(JSON
 
 import { resetRouterTelemetryForTests, routerTelemetrySummary } from "./router-telemetry";
 import { resetTurnUsageForTests, turnUsageSummary } from "./turn-usage";
+import {
+  resetRouteOverrideForTests,
+  setRouteOverride,
+} from "./route-override";
+import { clearProviderCooldownsForTests } from "./provider-cooldown";
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); resetRouterTelemetryForTests(); resetTurnUsageForTests(); });
+// Sprint 079 — Standard-Wartebudget fuer Fehlerpfad-Tests: 1 ms heisst
+// "ausserhalb des Budgets" => ehrlicher Abbruch statt realer Wartezeit.
+// Tests, die die Erholung selbst pruefen, setzen ein groesseres Budget.
+beforeEach(() => {
+  vi.stubEnv("ROUTE_WAIT_BUDGET_MS", "1");
+});
+
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); resetProviderGuardianForTests(); resetProviderChainForTests(); resetRouterTelemetryForTests(); resetTurnUsageForTests(); resetRouteOverrideForTests(); clearProviderCooldownsForTests(); });
 
 describe("bounded provider router", () => {
   it("calls OpenRouter Free once and returns provider metadata", async () => {
@@ -27,7 +39,12 @@ describe("bounded provider router", () => {
     vi.stubEnv("HF_TOKEN", "hf-test-key");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(429));
     await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    // Sprint 079 — ohne Retry-After-Fenster darf die Kette einmal
+    // sofort neu starten; Hugging Face bleibt trotzdem consent-gated.
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(
+      fetcher.mock.calls.every(call => String(call[0]).includes("openrouter.ai"))
+    ).toBe(true);
   });
 
   it("uses at most one explicitly authorized HF fallback after a temporary failure", async () => {
@@ -225,6 +242,72 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
   });
 });
 
+describe("Admin-Pin und Limit-Erholung (Sprint 079)", () => {
+  it("scheitert ehrlich mit PIN_UNAVAILABLE, wenn der gepinnte Anbieter nicht nutzbar ist", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    setRouteOverride("groq", "chef@villa.test");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).rejects.toMatchObject({ code: "PIN_UNAVAILABLE" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("bedient nur die gepinnte Route, wenn sie nutzbar ist", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    setRouteOverride("groq", "chef@villa.test");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).resolves.toMatchObject({ provider: "groq", attempts: 1 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("groq.com");
+  });
+
+  it("erholt sich: wartet auf ein kurzes Kontingentfenster und bedient im zweiten Lauf", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("ROUTE_WAIT_BUDGET_MS", "5000");
+    const limitReply = () =>
+      new Response(JSON.stringify({ error: { code: "rate_limit" } }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "1" },
+      });
+    const events: string[] = [];
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(limitReply())
+      .mockResolvedValueOnce(reply(200));
+    await expect(
+      runAgentTurn(input, false, {
+        fetcher,
+        onEvent: label => events.push(label),
+      })
+    // attempts zaehlt den erfolgreichen Kettelauf; die Erholung davor
+    // erzaehlt der [router]-Event, nicht die Versuchszahl.
+    ).resolves.toMatchObject({ provider: "openrouter", attempts: 1 });
+    expect(events.some(label => label.startsWith("[router]"))).toBe(true);
+  }, 15_000);
+
+  it("bricht beim Tageskontingent ehrlich ab, statt endlos zu warten", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const dailyQuotaReply = () =>
+      new Response(
+        JSON.stringify({ error: { code: "rate_limit_exceeded" } }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json", "Retry-After": "7200" },
+        }
+      );
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(dailyQuotaReply());
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).rejects.toMatchObject({ code: "LIMIT" });
+    // Kein zweiter Kettelauf: nur die Route-Modelle, kein Retry-Sturm.
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Token-Nutzungserfassung (Sprint 077)", () => {
   it("erfasst die usage-Angabe eines erfolgreichen Turns im Live-Aggregat", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
@@ -393,7 +476,14 @@ describe("Router-Telemetrie (Sprint 038)", () => {
 
   it("erfasst den terminalen Fehlercode eines gescheiterten Turns", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(429));
+    // Sprint 079 — mit Retry-After-Fenster jenseits des Wartebudgets bleibt
+    // es bei genau einem Kettelauf (kein zweiter Versuch).
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: "rate limit" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "600" },
+      })
+    );
     await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({
       code: "LIMIT",
     });
@@ -529,7 +619,11 @@ describe("free-tier optimization (cache, dedupe, model chain)", () => {
     vi.stubEnv("OPENROUTER_MODELS", "model-a:free,model-b:free");
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(402));
     await expect(runAgentTurn(input, true, { fetcher })).rejects.toMatchObject({ code: "LIMIT" });
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    // Sprint 079 — ein begrenzter Erholungslauf ist erlaubt: dieselben
+    // 3 ehrlichen Versuche (2 OpenRouter-Modelle + consent-erteilter
+    // HF-Anbieter) laufen einmal mehr, bleiben aber ein hartes LIMIT —
+    // kein Kontingent-Bypass, kein weiterer Sturm.
+    expect(fetcher).toHaveBeenCalledTimes(6);
   });
 });
 

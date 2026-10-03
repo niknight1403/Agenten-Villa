@@ -30,6 +30,9 @@ import {
   providerInCooldown,
 } from "./provider-cooldown";
 import { extractTurnUsage, recordTurnUsage } from "./turn-usage";
+import { getRouteOverride } from "./route-override";
+import { providerCooldownSnapshot } from "./provider-cooldown";
+import { planChainRecovery, waitBudgetMs } from "./route-wait";
 import { recordRouterTelemetry } from "./router-telemetry";
 import {
   AgentSchemaError,
@@ -322,6 +325,94 @@ async function callWithProviderChain(
       "MISSING_KEY",
       "Kein Modellanbieter ist eingerichtet. Mindestens eines der Server-Secrets OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY oder HF_TOKEN fehlt."
     );
+
+  // Sprint 079 — Admin-Pin: nur die gepinnte Route, sonst Auto-Kette.
+  const pinned = (() => {
+    try {
+      return getRouteOverride();
+    } catch {
+      return null;
+    }
+  })();
+  const chain: ProviderRoute[] = pinned
+    ? (() => {
+        const pinnedRoute = registry.find(route => route.name === pinned.provider);
+        if (!pinnedRoute)
+          throw new AgentError(
+            "PIN_UNAVAILABLE",
+            `Admin-Pin auf ${pinned.provider} ist aktiv, aber dieser Anbieter ist aktuell nicht nutzbar (Schluessel fehlt, Status nicht aktiv oder Consent nicht erteilt). Pin im Admin-Dashboard aufheben oder Anbieter konfigurieren.`
+          );
+        return [pinnedRoute];
+      })()
+    : registry;
+
+  // Sprint 079 — begrenzte Erholung: schlaegt die Kette am Kontingent fehl,
+  // wird maximal ein weiterer Lauf geplant (kurzes Warten auf ein
+  // Kontingentfenster oder sofortiger Neustart bei freier Route) — nie eine
+  // Endlosschleife, nie ein Haengen auf Tageskontingente.
+  const MAX_CHAIN_RUNS = 2;
+  for (let chainRun = 1; chainRun <= MAX_CHAIN_RUNS; chainRun += 1) {
+    try {
+      return await runProviderChain(chain, fetcher, messages, tools, options);
+    } catch (error) {
+      if (chainRun >= MAX_CHAIN_RUNS) throw error;
+      // Recovery nur fuer quota-/ausfallbedingte Kettenfehler; terminale
+      // Fehler (REJECTED, CONTEXT_TOO_LARGE, STOPPED, Auth, Pin, Validierung)
+      // bleiben sofort terminal — keine zweite Anfrage, keine doppelte
+      // Telemetrie, kein "Ablehnungen durchprobieren".
+      const recoverable =
+        error instanceof AgentError &&
+        (error.code === "LIMIT" ||
+          error.code === "TIMEOUT" ||
+          error.code === "UNAVAILABLE");
+      if (!recoverable) throw error;
+      const decision = planChainRecovery({
+        chainRuns: chainRun,
+        maxChainRuns: MAX_CHAIN_RUNS,
+        waitBudgetMs: waitBudgetMs(),
+        now: Date.now(),
+        routes: chain.map(route => route.name),
+        cooldowns: providerCooldownSnapshot().filter(entry =>
+          chain.some(route => route.name === entry.provider)
+        ),
+      });
+      options.onEvent?.(`[router] ${decision.reason}`);
+      if (decision.action === "fail") throw error;
+      if (decision.action === "wait") {
+        await new Promise(resolve => {
+          const handle = setTimeout(resolve, decision.waitMs);
+          handle.unref?.();
+        });
+      }
+      // retry-now: sofortiger zweiter Lauf; wait: nach dem Fenster.
+    }
+  }
+  throw new AgentError(
+    "UNAVAILABLE",
+    "Kein Modellanbieter konnte die Anfrage beantworten."
+  );
+}
+
+/**
+ * Ein Lauf der Multi-Provider-Kette (Sprint 079 — von der Erholungs-
+ * schleife ummantelt). registry/Kette und alle Regeln bleiben unveraendert.
+ */
+async function runProviderChain(
+  registry: ProviderRoute[],
+  fetcher: typeof fetch,
+  messages: ApiMessage[],
+  tools: typeof githubTools | undefined,
+  options: ProviderCallOptions & {
+    allowHuggingFace?: boolean;
+    beforeFallback?: () => Promise<boolean>;
+    onEvent?: (label: string) => void;
+  }
+): Promise<{
+  completion: Awaited<ReturnType<typeof callProvider>>;
+  provider: Provider;
+  model: string;
+  attempts: number;
+}> {
   let lastError: unknown = null;
   let attempts = 0;
   // Sprint 038 — Router-Telemetrie: Latenz, Erfolg und Fallback-Grund.

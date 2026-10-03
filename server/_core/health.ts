@@ -2,8 +2,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Express } from "express";
 import type { DatabaseHealthReport } from "../db-health";
-import { fallbackOrder, type ProviderName } from "../provider-registry";
-import { providerInCooldown } from "../provider-cooldown";
+import {
+  fallbackOrder,
+  isProviderActive,
+  type ProviderName,
+} from "../provider-registry";
+import { providerCooldownInfo } from "../provider-cooldown";
+import { getRouteOverride } from "../route-override";
 import type { ControllerState } from "../controller";
 
 /**
@@ -33,6 +38,12 @@ export type HealthPayload = {
   };
   /** Sprint 076: Konfigurations- und Cooldown-Zusammenfassung der LLM-Anbieter. */
   providers: ProviderHealthSummary[];
+  /** Sprint 079: Admin-Pin und die Route, die als naechstes bedient. */
+  routing: {
+    pinned: string | null;
+    pinnedBy: string | null;
+    activeRoute: ProviderName | null;
+  };
 };
 
 /** Sprint 076 — Anbieterzusammenfassung ohne Secrets und ohne Netzprobe. */
@@ -40,6 +51,9 @@ export type ProviderHealthSummary = {
   name: ProviderName;
   configured: boolean;
   cooldown: boolean;
+  /** Sprint 079 — Art und Restdauer einer aktiven Sperre (nie Geheimnisse). */
+  cooldownKind?: "auth" | "limit" | "timeout";
+  cooldownSecLeft?: number;
 };
 
 const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
@@ -50,11 +64,51 @@ const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
 };
 
 function providerSummaries(): ProviderHealthSummary[] {
-  return fallbackOrder().map(name => ({
-    name,
-    configured: Boolean(process.env[PROVIDER_KEY_ENV[name]]?.trim()),
-    cooldown: providerInCooldown(name),
-  }));
+  return fallbackOrder().map(name => {
+    const info = providerCooldownInfo(name);
+    return {
+      name,
+      configured: Boolean(process.env[PROVIDER_KEY_ENV[name]]?.trim()),
+      cooldown: info !== null,
+      ...(info
+        ? {
+            cooldownKind: info.kind,
+            cooldownSecLeft: Math.max(0, Math.round((info.untilMs - Date.now()) / 1000)),
+          }
+        : {}),
+    };
+  });
+}
+
+/** Sprint 079 — welche Route wuerde als naechstes bedienen (ohne Netzprobe). */
+function activeRouteName(): ProviderName | null {
+  for (const name of fallbackOrder()) {
+    if (!isProviderActive(name)) continue;
+    if (!Boolean(process.env[PROVIDER_KEY_ENV[name]]?.trim())) continue;
+    if (providerCooldownInfo(name) !== null) continue;
+    return name;
+  }
+  return null;
+}
+
+/** Sprint 079 — Routing-Zustand: Admin-Pin und naechste aktive Route. */
+function routingSummary(): {
+  pinned: string | null;
+  pinnedBy: string | null;
+  activeRoute: ProviderName | null;
+} {
+  const override = (() => {
+    try {
+      return getRouteOverride();
+    } catch {
+      return null;
+    }
+  })();
+  return {
+    pinned: override?.provider ?? null,
+    pinnedBy: override?.by ?? null,
+    activeRoute: activeRouteName(),
+  };
 }
 
 let controllerStateSource: (() => ControllerState | null) | null = null;
@@ -128,6 +182,7 @@ export function getHealthPayload(): HealthPayload {
     uptimeSec: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
     providers: providerSummaries(),
+    routing: routingSummary(),
     ...(cachedDatabaseReport ? { database: cachedDatabaseReport } : {}),
     ...(controllerState
       ? {
