@@ -10,6 +10,8 @@ Der Owner hat am 03.10.2026 beschlossen, dass der Workflow `Auto-Merge (agent/*)
 
 Nicht automatisch gemerged werden (Admin-Disziplin bleibt verbindlich): Drafts, PRs auf andere Ziel-Branches, PRs aus Forks sowie PRs, die `.github/`, die Datei `server/auto-merge-gate.ts` selbst oder dieses Dokument ändern. Der Branch wird nach dem Merge gelöscht.
 
+Ergänzung (Sprint 081, 03.10.2026): Ein Pflichtcheck, dessen Workflow wegen seines `paths:`-Filters bei den geänderten Dateien eines PRs gar nicht hätte triggern können (z. B. `Android mobile smoke` bei reinen Server-Änderungen), gilt als erfüllt. Hätte der Workflow laut Filter laufen müssen, bleibt das Fehlen des Checks blockierend — es wird nie simuliert, sondern nur korrekt eingeordnet.
+
 Bei einem fehlgeschlagenen Check wird die Änderung korrigiert oder der Pull Request als blockiert markiert. Ein grüner Check darf nicht durch das Überspringen regulärer Tests simuliert werden. Credential-Livetests bleiben opt-in und sind kein Ersatz für deterministische Mock-Tests.
 
 ## Pflichtprüfungen

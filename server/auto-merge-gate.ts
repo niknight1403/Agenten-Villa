@@ -10,6 +10,10 @@
  *    Branch-Schutz-Dokumentation aendern (Admin-Disziplin bleibt)
  *  - alle Checks muessen abgeschlossen und gruen sein; ausstehende
  *    Checks blockieren (der naechste workflow_run triggert erneut)
+ *  - Sprint 081: ein Pflichtcheck, dessen Workflow laut Pfadfilter bei
+ *    diesen geaenderten Dateien gar nicht haette triggern koennen, gilt
+ *    als erfullet (Server-only-PRs ohne Android-Smoke werden nicht
+ *    ewig blockiert). Haette er triggern koennen, bleibt er Pflicht.
  *
  * Das Modul ist rein: der Workflow uebergibt die gesammelten Fakten als
  * JSON, hier wird nur entschieden. Der Workflow laedt die Regeln vom
@@ -39,6 +43,41 @@ export const REQUIRED_CHECKS: readonly string[] = [
 
 /** Zulaessige, nicht blockierende Check-Ergebnisse neben success. */
 const NON_BLOCKING_CONCLUSIONS = new Set(["success", "skipped", "neutral"]);
+
+/**
+ * Sprint 081 — Trigger-Pfade der pfadgefilterten Pflichtchecks (Spiegel
+ * der `paths:`-Filter der Workflows). Ein fehlender Check gilt nur dann
+ * als erfuellt, wenn KEINE geaenderte Datei diese Pfade beruehrt; sonst
+ * muesste er laufen und sein Fehlen blockiert weiter.
+ * Endet ein Eintrag mit "/", ist er ein Verzeichnis-Prefix, sonst ein
+ * exakter Dateipfad.
+ */
+export const PATH_FILTERED_CHECKS: Record<string, readonly string[]> = {
+  "Android mobile smoke": [
+    "android/",
+    "client/",
+    "capacitor.config.ts",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".github/workflows/android-smoke.yml",
+  ],
+};
+
+/** Prueft, ob eine geaenderte Datei den Pfadfilter eines Checks beruehrt. */
+export function checkCouldTrigger(
+  checkName: string,
+  changedFiles: readonly string[]
+): boolean {
+  const paths = PATH_FILTERED_CHECKS[checkName];
+  if (!paths) return true; // kein Filter bekannt: Check ist immer Pflicht
+  return changedFiles.some(file =>
+    paths.some(pattern =>
+      pattern.endsWith("/")
+        ? file.startsWith(pattern)
+        : file === pattern
+    )
+  );
+}
 
 /** Pfade, deren Aenderung immer Admin-Disziplin (manueller Merge) verlangt. */
 export function isProtectedPath(filePath: string): boolean {
@@ -92,8 +131,13 @@ export function evaluateMergeGate(input: MergeGateInput): MergeGateDecision {
 
   for (const required of REQUIRED_CHECKS) {
     const conclusion = byName.get(required);
-    if (conclusion === undefined)
+    if (conclusion === undefined) {
+      // Sprint 081 — fehlt der Check, weil sein Workflow laut Pfadfilter
+      // bei diesen Dateien gar nicht triggert, gilt er als erfuellt;
+      // sonst blockiert sein Fehlen weiter (er muesste ja laufen).
+      if (!checkCouldTrigger(required, input.changedFiles)) continue;
       return { merge: false, reason: `Pflichtcheck ${required} fehlt noch` };
+    }
     if (conclusion !== "success")
       return {
         merge: false,
