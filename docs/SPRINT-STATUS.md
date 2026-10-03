@@ -112,6 +112,42 @@ Tageskontingent wird nie vorgetaeuscht.
   2 Health-Routing, +3 Cooldown-Getter-Nutzung via Health/Engine).
   Gesamt 595/599 gruen (4 bewusste Skips), check + build sauber.
 
+## Sprint 080 — Lokale Ollama-Route: Coding-Experte, Agenten-Spezialist, Allrounder (03.10.2026)
+
+Direktive: qwen3.6:27b / qwen3-coder:30b (Coding-Experte), devstral:24b
+(Agenten-Spezialist) und gemma4:12b (ressourcen-effizienter Allrounder)
+als eigene kostenlose Route integrieren. Umgesetzt als 5. Anbieter
+"ollama" in der Multi-Provider-Kette — konfiguriert per OLLAMA_BASE_URL
+(OpenAI-kompatibel, z. B. http://mein-host:11434/v1), ohne Base-URL
+existiert die Route nicht und die Cloud-Kette bleibt unangetastet.
+
+- provider-endpoints.ts: Ollama-Endpunkte (chat/completions, models),
+  Standard-Modellkette qwen3.6:27b → qwen3-coder:30b → devstral:24b →
+  gemma4:12b (OLLAMA_MODELS uebersteuert), eigenes Zeitlimit
+  OLLAMA_TIMEOUT_MS (Default 120 s, max 600 s — lokale 27B-Inferenz
+  braucht Minuten, nicht Sekunden).
+- provider-registry.ts: "ollama" ist 5. Katalogeintrag und steht in der
+  dokumentierten Fallback-Reihenfolge ERST: ist eine eigene Instanz
+  konfiguriert, hat sie Vorrang vor jeder (kostenpflichtigen) Cloud-Route.
+  Status wie gehabt per PROVIDER_STATUS_OLLAMA wartbar.
+- agent-engine.ts: Route ohne Schluessel nutzbar (kein Authorization-Kopf
+  ohne OLLAMA_API_KEY; optionaler Schluessel fuer Reverse-Proxys),
+  route-spezifisches Timeout mit Vorrang vor dem Turn-Limit, 429/402 der
+  lokalen Route faellt ehrlich auf die Cloud-Kette zurueck (Cooldowns,
+  Limit-Erholung und Admin-Pin aus Sprint 079 greifen automatisch).
+- provider-health.ts: ungefaehrlicher GET auf /v1/models des eigenen Hosts;
+  ohne Base-URL ehrlich "not_configured" ohne Netzverkehr.
+- _core/health.ts: Routing-Zusammenfassung zeigt Ollama (configured =
+  OLLAMA_BASE_URL gesetzt). systemRouter: Pin auf "ollama" erlaubt.
+  turn-usage: lokale Route kostet bewusst 0 Mikro-EUR/1k Tokens.
+- Ehrlich: Auf Render gibt es heute keine Ollama-Instanz — die Route wird
+  aktiv, sobald OLLAMA_BASE_URL auf einen erreichbaren Host zeigt (Render-
+  Env ist bewusst ein manueller Owner-Schritt). Bis dahin laeuft alles
+  weiter ueber die Cloud-Kette.
+- Tests: +15 neue (5 Endpunkte/Timeout, 2 Health-Probe, 3 Engine-Route,
+  1 Health-Summary, +4 Bestandstests an 5-Anbieter-Katalog angepasst).
+  Gesamt 606/610 gruen (4 bewusste Skips), check + build sauber.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte

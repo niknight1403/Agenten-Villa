@@ -33,6 +33,7 @@ describe("Admin-Pin (Sprint 079)", () => {
 
   it("listet die pinnbaren Anbieter deterministisch", () => {
     expect(pinnableProviders()).toEqual([
+      "ollama",
       "openrouter",
       "groq",
       "gemini",

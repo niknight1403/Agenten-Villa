@@ -63,7 +63,14 @@ export const agentInputSchema = z
 export const agentResultSchema = z
   .object({
     answer: z.string().min(1),
-    provider: z.enum(["openrouter", "groq", "gemini", "huggingface"]),
+    provider: z.enum([
+      // Sprint 080 — ollama: lokale, kostenlose Route.
+      "ollama",
+      "openrouter",
+      "groq",
+      "gemini",
+      "huggingface",
+    ]),
     model: z.string().min(1),
     attempts: z.number().int().min(0),
     githubActions: z.number().int().min(0).optional(),

@@ -57,6 +57,9 @@ export type ProviderHealthSummary = {
 };
 
 const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
+  // Sprint 080 — Ollama wird per Base-URL konfiguriert (kein Schluessel
+  // noetig); die Eintragung hier bezeichnet "konfiguriert".
+  ollama: "OLLAMA_BASE_URL",
   openrouter: "OPENROUTER_API_KEY",
   groq: "GROQ_API_KEY",
   gemini: "GEMINI_API_KEY",

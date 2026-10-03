@@ -19,6 +19,9 @@ import {
   GROQ_CHAT_URL,
   HUGGINGFACE_CHAT_URL,
   geminiModels,
+  ollamaChatUrl,
+  ollamaModels,
+  ollamaTimeoutMs,
   groqModels,
   hfModel,
   openRouterChatUrl,
@@ -46,7 +49,12 @@ import { missionCacheScope, scopedCacheKey } from "./context-isolation";
 import type { AgentErrorCode } from "./error-codes";
 import { GitHubToolError } from "./github-tools";
 
-export type Provider = "openrouter" | "groq" | "gemini" | "huggingface";
+export type Provider =
+  | "ollama"
+  | "openrouter"
+  | "groq"
+  | "gemini"
+  | "huggingface";
 export type Message = { role: "user" | "assistant"; content: string };
 export type AgentInput = {
   prompt: string;
@@ -221,6 +229,8 @@ type ProviderRoute = {
   key: string;
   url: string;
   models: string[];
+  /** Sprint 080 — route-spezifisches Zeitlimit (Ollama-Inferenz ist langsam). */
+  timeoutMs?: number;
 };
 
 /* Sprint 034 — der Cooldown-Mechanismus lebt in provider-cooldown.ts:
@@ -238,6 +248,20 @@ export function anyModelProviderConfigured(): boolean {
 
 function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
   const routes: ProviderRoute[] = [];
+  // Sprint 080 — lokale Ollama-Route (qwen3.6:27b, qwen3-coder:30b,
+  // devstral:24b, gemma4:12b): kostenlos auf eigener Hardware, mit eigenem
+  // grosszuegigem Zeitlimit, weil lokale 27B-Inferenz Minuten braucht.
+  // Ein optionaler OLLAMA_API_KEY unterstuetzt Reverse-Proxys; ohne
+  // Schluessel wird kein Authorization-Kopf gesendet.
+  const ollamaBase = process.env.OLLAMA_BASE_URL?.trim();
+  if (ollamaBase)
+    routes.push({
+      name: "ollama",
+      key: process.env.OLLAMA_API_KEY?.trim() ?? "",
+      url: ollamaChatUrl(),
+      models: ollamaModels(),
+      timeoutMs: ollamaTimeoutMs(),
+    });
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
   if (openRouterKey)
     routes.push({
@@ -446,7 +470,9 @@ async function runProviderChain(
           model,
           messages,
           tools,
-          options
+          // Sprint 080 — route-spezifisches Zeitlimit (Ollama) hat Vorrang
+          // vor dem allgemeinen Turn-Limit; Cloud-Routen behalten es.
+          { ...options, timeoutMs: route.timeoutMs ?? options.timeoutMs }
         );
         reportProviderOutcome(
           route.name === "openrouter" ? model : `${route.name}:${model}`,
@@ -679,7 +705,9 @@ async function callProvider(
     response = await fetcher(url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${key}`,
+        // Sprint 080 — Ollama lokal braucht keinen Schluessel; ein leerer
+        // Bearer wuerde manche Proxies abweisen.
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

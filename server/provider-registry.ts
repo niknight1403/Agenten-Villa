@@ -12,11 +12,18 @@ import {
   geminiModels,
   groqModels,
   hfModel,
+  ollamaChatUrl,
+  ollamaModels,
   openRouterChatUrl,
 } from "./provider-endpoints";
 import { guardianChain } from "./provider-guardian";
 
-export type ProviderName = "openrouter" | "groq" | "gemini" | "huggingface";
+export type ProviderName =
+  | "ollama"
+  | "openrouter"
+  | "groq"
+  | "gemini"
+  | "huggingface";
 export type ProviderStatus = "active" | "maintenance" | "retired";
 export type ProviderCapability = "chat" | "tools";
 
@@ -46,6 +53,17 @@ function statusFromEnv(name: ProviderName, fallback: ProviderStatus): ProviderSt
 /** Das Providerregister — dokumentierte Faehigkeiten und Status je Anbieter. */
 export function listProviderCatalog(): ProviderCatalogEntry[] {
   return [
+    {
+      // Sprint 080 — lokale, kostenfreie Route; nur nutzbar, wenn
+      // OLLAMA_BASE_URL gesetzt ist (siehe Agent-Engine-Registry).
+      name: "ollama",
+      status: statusFromEnv("ollama", "active"),
+      capabilities: ["chat", "tools"],
+      consentRequired: false,
+      models: ollamaModels,
+      chatUrl: ollamaChatUrl,
+      docsUrl: "https://ollama.com",
+    },
     {
       name: "openrouter",
       status: statusFromEnv("openrouter", "active"),
@@ -96,9 +114,12 @@ export function getProviderCatalogEntry(
  * Sprint 032 — dokumentierte Fallback-Reihenfolge: OpenRouter -> Groq ->
  * Gemini; Hugging Face nur nach ausdruecklicher Einwilligung (der Consent-
  * Filter bleibt im Engine verbindlich und kann durch die Reihenfolge nicht
- * umgangen werden).
+ * umgangen werden). Sprint 080 — Ollama (lokal, kostenlos) steht zuerst:
+ * ist eine eigene Instanz konfiguriert, hat sie Vorrang vor jeder
+ * Cloud-Route; unkonfiguriert existiert sie in der Kette nicht.
  */
 export const DOCUMENTED_FALLBACK_ORDER: readonly ProviderName[] = [
+  "ollama",
   "openrouter",
   "groq",
   "gemini",

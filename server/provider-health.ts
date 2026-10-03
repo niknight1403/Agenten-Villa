@@ -10,6 +10,7 @@
  * Ergebnis (cached) statt erneut zu senden.
  */
 import type { ProviderName } from "./provider-registry";
+import { ollamaModelsUrl } from "./provider-endpoints";
 
 export type ProviderHealthStatus =
   | "valid"
@@ -30,7 +31,8 @@ export const PROVIDER_HEALTH_TIMEOUT_MS = 8_000;
 export const PROVIDER_HEALTH_MIN_INTERVAL_MS = 10_000;
 
 type ProbeConfig = {
-  url: string;
+  /** Statisch oder (Ollama) aus der Umgebung berechnet. */
+  url: string | (() => string);
   key: () => string | undefined;
   headerName: string;
 };
@@ -55,6 +57,14 @@ const PROBES: Record<ProviderName, ProbeConfig> = {
   huggingface: {
     url: "https://router.huggingface.co/v1/models",
     key: () => process.env.HF_TOKEN?.trim(),
+    headerName: "Authorization",
+  },
+  // Sprint 080 — Ollama: OpenAI-kompatible Modelliste des eigenen Hosts;
+  // ohne OLLAMA_BASE_URL gilt die Route als nicht konfiguriert, ein
+  // API-Schluessel ist optional (nur fuer Reverse-Proxys).
+  ollama: {
+    url: () => ollamaModelsUrl(),
+    key: () => process.env.OLLAMA_API_KEY?.trim(),
     headerName: "Authorization",
   },
 };
@@ -95,17 +105,26 @@ export async function checkProviderHealth(
 
   const probe = PROBES[name];
   const key = probe.key();
+  // Sprint 080 — Ollama ist per Base-URL konfiguriert, nicht per Schluessel.
+  const configured =
+    name === "ollama"
+      ? Boolean(process.env.OLLAMA_BASE_URL?.trim())
+      : Boolean(key);
   // Netzfreie Ergebnisse werden nicht gecacht: eine spätere Konfiguration
   // oder Einwilligung wirkt sofort — der Begrenzer schützt nur echte Anfragen.
-  if (!key) return { status: "not_configured", cached: false };
+  if (!configured) return { status: "not_configured", cached: false };
   if (name === "huggingface" && options.consentHuggingFace !== true)
     return { status: "consent_required", cached: false };
 
   let status: ProviderHealthStatus;
   try {
-    const response = await (options.fetcher ?? fetch)(probe.url, {
+    const probeUrl = typeof probe.url === "function" ? probe.url() : probe.url;
+    const response = await (options.fetcher ?? fetch)(probeUrl, {
       method: "GET",
-      headers: { [probe.headerName]: probe.headerName === "Authorization" ? `Bearer ${key}` : key },
+      // Ohne Schluessel (Ollama lokal) kein Authorization-Kopf.
+      headers: key
+        ? { [probe.headerName]: probe.headerName === "Authorization" ? `Bearer ${key}` : key }
+        : undefined,
       signal: AbortSignal.timeout(PROVIDER_HEALTH_TIMEOUT_MS),
     });
     if (response.status === 200) status = "valid";

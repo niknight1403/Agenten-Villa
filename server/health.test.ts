@@ -70,6 +70,21 @@ describe("Health: LLM-Anbieter-Zusammenfassung (Sprint 076)", () => {
   });
 });
 
+describe("Health: Ollama-Zusammenfassung (Sprint 080)", () => {
+  it("meldet die lokale Route ehrlich: unkonfiguriert ohne Base-URL, konfiguriert mit", () => {
+    const withoutBase = getHealthPayload().providers.find(
+      entry => entry.name === "ollama"
+    );
+    expect(withoutBase).toMatchObject({ configured: false, cooldown: false });
+
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    const withBase = getHealthPayload().providers.find(
+      entry => entry.name === "ollama"
+    );
+    expect(withBase).toMatchObject({ configured: true, cooldown: false });
+  });
+});
+
 describe("Health: Routing-Transparenz (Sprint 079)", () => {
   it("zeigt aktive Route und Cooldown-Details ohne Secrets", () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
