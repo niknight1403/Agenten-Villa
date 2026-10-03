@@ -113,9 +113,13 @@ describe("rating and status helpers", () => {
 
 describe("stable error classification", () => {
   it("classifies every agent error code without exposing internal details", () => {
-    expect(AGENT_ERROR_CODES).toHaveLength(9);
+    expect(AGENT_ERROR_CODES).toHaveLength(10);
     // Sprint 033 — TIMEOUT ist Teil des stabilen Katalogs
     expect(AGENT_ERROR_CODES).toContain("TIMEOUT");
+    // Sprint 074 — CONTEXT_TOO_LARGE trennt Kontextlimit von Ablehnung
+    expect(AGENT_ERROR_CODES).toContain("CONTEXT_TOO_LARGE");
+    expect(categoryForError("CONTEXT_TOO_LARGE")).toBe("capacity");
+    expect(publicMessageForError("CONTEXT_TOO_LARGE")).toContain("Kontextfenster");
     // Sprint 041 — INVALID_INPUT ist Teil des stabilen Katalogs
     expect(AGENT_ERROR_CODES).toContain("INVALID_INPUT");
     expect(categoryForError("INVALID_INPUT")).toBe("validation");
