@@ -242,6 +242,56 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
   });
 });
 
+describe("Lokale Ollama-Route (Sprint 080)", () => {
+  it("bedient zuerst die lokale Route, wenn OLLAMA_BASE_URL konfiguriert ist", async () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).resolves.toMatchObject({ provider: "ollama", attempts: 1 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "http://mein-host:11434/v1/chat/completions"
+    );
+    // Ohne OLLAMA_API_KEY wird kein Authorization-Kopf gesendet.
+    const headers = fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers?.Authorization).toBeUndefined();
+  });
+
+  it("faellt bei Kontingent-Fehler der lokalen Route ehrlich auf die Cloud-Kette zurueck", async () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    // Ein einzelnes lokales Modell: nach dessen 429 wechselt die Kette
+    // ehrlich zum naechsten Anbieter, statt weitere lokale Modelle zu versuchen.
+    vi.stubEnv("OLLAMA_MODELS", "qwen3.6:27b");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "limit" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).resolves.toMatchObject({ provider: "openrouter" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("existiert nicht ohne OLLAMA_BASE_URL — Cloud-Kette bleibt unangetastet", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).resolves.toMatchObject({ provider: "openrouter", attempts: 1 });
+    expect(
+      fetcher.mock.calls.every(call => String(call[0]).includes("openrouter.ai"))
+    ).toBe(true);
+  });
+});
+
 describe("Admin-Pin und Limit-Erholung (Sprint 079)", () => {
   it("scheitert ehrlich mit PIN_UNAVAILABLE, wenn der gepinnte Anbieter nicht nutzbar ist", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");

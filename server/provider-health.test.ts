@@ -63,6 +63,29 @@ describe("Provider-Gesundheitscheck (Sprint 036)", () => {
     ).toMatchObject({ "x-goog-api-key": "gemini-key" });
   });
 
+  it("prüft Ollama über die eigene Base-URL ohne verpflichtenden Schlüssel", async () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("[]", { status: 200 })
+    );
+    const result = await checkProviderHealth("ollama", { fetcher });
+    expect(result).toEqual({ status: "valid", cached: false });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "http://mein-host:11434/v1/models"
+    );
+    // Ohne API-Schluessel wird KEIN Authorization-Kopf gesendet.
+    const headers = fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers).toBeUndefined();
+  });
+
+  it("meldet Ollama ohne OLLAMA_BASE_URL ehrlich als nicht konfiguriert", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const result = await checkProviderHealth("ollama", { fetcher });
+    expect(result).toEqual({ status: "not_configured", cached: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("sendet ohne konfigurierten Schlüssel gar keine Anfrage", async () => {
     vi.stubEnv("GROQ_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>();

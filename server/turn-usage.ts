@@ -40,8 +40,9 @@ export type TurnUsageSummary = {
 /** Begrenzt: maximal so viele Samples bleiben im Speicher. */
 export const TURN_USAGE_SAMPLE_LIMIT = 200;
 
-/** Mikro-EUR je 1.000 Tokens; Free-Tier-Anbieter sind bewusst 0. */
+/** Mikro-EUR je 1.000 Tokens; Free-Tier- und lokale Anbieter sind bewusst 0. */
 const EST_COST_MICROS_PER_1K_TOKENS: Record<ProviderName, number> = {
+  ollama: 0, // Sprint 080 — eigene Hardware: kein Token-Preis
   openrouter: 0,
   groq: 0,
   gemini: 0,

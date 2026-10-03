@@ -33,7 +33,7 @@ export const systemRouter = router({
     .input(
       z.object({
         provider: z
-          .enum(["openrouter", "groq", "gemini", "huggingface"])
+          .enum(["ollama", "openrouter", "groq", "gemini", "huggingface"])
           .nullable(),
       })
     )

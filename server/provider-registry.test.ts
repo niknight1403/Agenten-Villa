@@ -41,6 +41,7 @@ describe("Providerregister (Sprint 031)", () => {
   it("documents every provider with capabilities and a status field", () => {
     const catalog = listProviderCatalog();
     expect(catalog.map(entry => entry.name)).toEqual([
+      "ollama",
       "openrouter",
       "groq",
       "gemini",
@@ -51,7 +52,11 @@ describe("Providerregister (Sprint 031)", () => {
       expect(entry.capabilities).toContain("chat");
       expect(entry.capabilities).toContain("tools");
       expect(entry.models().length).toBeGreaterThan(0);
-      expect(entry.chatUrl()).toMatch(/^https:\/\//);
+      // Sprint 080 — Ollama ist optional konfiguriert (http lokal erlaubt);
+      // die Cloud-Anbieter bleiben https-pflichtig.
+      expect(entry.chatUrl()).toMatch(
+        entry.name === "ollama" ? /^(https?:\/\/|$)/ : /^https:\/\//
+      );
       expect(entry.docsUrl).toMatch(/^https:\/\//);
     }
     expect(
@@ -84,7 +89,7 @@ describe("Providerregister (Sprint 031)", () => {
     process.env.PROVIDER_STATUS_GEMINI = "maintenance";
     const caller = appRouter.createCaller(createContext());
     const registry = await caller.agent.providers();
-    expect(registry.entries).toHaveLength(4);
+    expect(registry.entries).toHaveLength(5);
     expect(registry.entries.find(p => p.name === "gemini")).toMatchObject({
       status: "maintenance",
     });
@@ -104,6 +109,7 @@ describe("Fallback-Reihenfolge (Sprint 032)", () => {
     expect(fallbackOrder()).toEqual([
       "gemini",
       "openrouter",
+      "ollama",
       "groq",
       "huggingface",
     ]);
@@ -114,6 +120,7 @@ describe("Fallback-Reihenfolge (Sprint 032)", () => {
     // gemini ist gueltig (einmal, dedupliziert), die Ungueltigen fallen weg
     expect(fallbackOrder()).toEqual([
       "gemini",
+      "ollama",
       "openrouter",
       "groq",
       "huggingface",
@@ -129,10 +136,11 @@ describe("Fallback-Reihenfolge (Sprint 032)", () => {
     const registry = await caller.agent.providers();
     expect(registry.fallbackOrder).toEqual([
       "groq",
+      "ollama",
       "openrouter",
       "gemini",
       "huggingface",
     ]);
-    expect(registry.entries).toHaveLength(4);
+    expect(registry.entries).toHaveLength(5);
   });
 });
