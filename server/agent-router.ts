@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
 import { router, protectedProcedure } from "./_core/trpc";
 import {
+  AgentError,
   anyModelProviderConfigured,
   configuredProviders,
   ELITE_LIMITS,
@@ -447,7 +448,11 @@ async function executePersistedMission(
 
 function mapAgentError(error: unknown): never {
   if (error instanceof TRPCError) throw error;
-  if (error instanceof GitHubToolError)
+  if (error instanceof GitHubToolError) {
+    // Sprint 073 — Diagnose: Code/Status ohne Secrets fuer Betriebsfehler.
+    console.error(
+      `[mission-error] GitHubToolError code=${error.code} status=${error.status ?? "-"}`
+    );
     throw new TRPCError({
       code:
         error.code === "NOT_CONFIGURED"
@@ -455,6 +460,18 @@ function mapAgentError(error: unknown): never {
           : "BAD_GATEWAY",
       message: error.message,
     });
+  }
+  // Sprint 073 — Diagnose: AgentError-Code/-Status ohne Secrets, damit sich
+  // Produktionsfehler (z. B. REJECTED) ohne Rätselraten einordnen lassen.
+  if (error instanceof AgentError) {
+    console.error(
+      `[mission-error] AgentError code=${error.code} status=${error.status ?? "-"} message=${error.message}`
+    );
+  } else if (error instanceof Error) {
+    console.error(`[mission-error] ${error.name}: ${error.message}`);
+  } else {
+    console.error("[mission-error] unknown error type");
+  }
   throw new TRPCError({
     code: "BAD_GATEWAY",
     message: safeAgentError(error),
