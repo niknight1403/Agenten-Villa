@@ -8,6 +8,7 @@ import { countInterruptedMissions, interruptExpiredRuns } from "./elite-mission-
 import { checkDatabaseHealth, type DatabaseHealthReport } from "./db-health";
 import { checkProviderHealth, type ProviderHealthResult } from "./provider-health";
 import { agentMetricsSummary, type AgentMetricsSummary } from "./agent-metrics";
+import { turnUsageSummary, type TurnUsageSummary } from "./turn-usage";
 import { isProviderActive, type ProviderName } from "./provider-registry";
 
 export type ControllerStatus = "RUNNING" | "STOPPED" | "STARTING" | "STOPPING";
@@ -30,6 +31,8 @@ export interface WorkerTickReport {
   providers: Array<{ name: ProviderName; status: ProviderHealthResult["status"]; cached: boolean }>;
   interruptedMissions: number | null;
   metrics: AgentMetricsSummary | null;
+  /** Sprint 077 — Live-Token-/Budget-Aggregat fuer das Widget. */
+  usage: TurnUsageSummary | null;
 }
 
 export interface ControllerState {
@@ -167,7 +170,15 @@ export function createVillaController(deps: VillaControllerDeps = {}) {
       metrics = null;
     }
 
-    return { leaseSweep, database, providers, interruptedMissions, metrics };
+    // 6) Sprint 077 — Live-Token-/Budget-Aggregat (begrenzte Historie).
+    let usage: TurnUsageSummary | null = null;
+    try {
+      usage = turnUsageSummary();
+    } catch {
+      usage = null;
+    }
+
+    return { leaseSweep, database, providers, interruptedMissions, metrics, usage };
   }
 
   const tickWork = deps.tickWork ?? defaultTickWork;

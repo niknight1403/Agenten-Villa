@@ -22,6 +22,31 @@ jetzt sofort und verstaendlich statt spaeter im Betrieb verwirrend.
   Cooldown-Anzeige, Controller-Status, Stoerfreiheit). 553/553 gruen,
   check + build sauber.
 
+## Sprint 077 — Live-Token-Budget & Budget-Widget (03.10.2026)
+
+Phase 3 des Autonomie-Masterplans: Echtzeit-Sichtbarkeit des
+Token-Verbrauchs. Die SSE-Infrastruktur (controller-sse.ts, Sprints
+034/038) war vorhanden — sie lieferte Watchdog-Zustaende, aber keine
+Nutzungsdaten.
+
+- turn-usage.ts (neu): extrahiert das usage-Objekt OpenAI-kompatibler
+  Completion-Antworten (prompt/completion/total; total wird aus der
+  Summe errechnet, wenn der Anbieter ihn nicht liefert), erfasst pro
+  erfolgreichen Turn ein begrenztes Sample (max. 200, wie Telemetrie)
+  und aggregiert je Anbieter. Kostenmodell: Free-Tier-Anbieter bleiben
+  ehrlich 0,00 EUR — keine fiktiven Betraege; die Preistabelle ist fuer
+  bezahlte Modelle offen.
+- agent-engine.ts: usage-Extraktion im Completion-Parsing; Erfassung im
+  Erfolgspfad der Providerroute (auch Werkzeugrunden erfasst).
+- controller.ts: jeder Watchdog-Tick-Report enthaelt jetzt das
+  Live-Usage-Aggregat und pusht es per SSE an alle Clients.
+- client: neues TokenBudgetWidget (Live via /api/controller/stream,
+  Gesamt-Kacheln Turns/Prompt/Antwort/Total/Kosten + Anbieter-Tabelle)
+  auf der Controller-Seite; Anzeige-Logik deterministisch in
+  lib/usage-format.ts (de-DE-Formatierung, 0-EUR-Ehrlichkeit).
+- Tests: +13 (7 Server-Nutzung, 4 Anzeige-Logik, 2 End-to-End an der
+  Engine). 566/566 gruen, check + build sauber.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte

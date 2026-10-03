@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { TokenBudgetWidget } from "@/components/TokenBudgetWidget";
 import { flowErrorMessage } from "@/lib/queryFlow";
 import { toast } from "sonner";
 
@@ -466,7 +467,7 @@ export default function Controller() {
           </div>
         </section>
 
-        <WatchdogPanel />
+        <WatchdogPanel />\n      <TokenBudgetWidget />
 
         <section className="mt-5 rounded-3xl border border-slate-800 bg-slate-900 p-7">
           <div className="flex items-center gap-3">
