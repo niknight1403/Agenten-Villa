@@ -1,0 +1,39 @@
+# Sprint 078 — Auto-Merge fuer agent/*-PRs (Beschluss des Owners vom
+# 03.10.2026; dokumentierte Ausnahme in docs/BRANCH-PROTECTION.md).
+# Triggert, sobald einer der Pflichtworkflows fuer einen PR erfolgreich
+# abgeschlossen ist; die Entscheidung trifft das getestete Regelmodul
+# server/auto-merge-gate.ts — geladen vom Default-Branch, so dass ein PR
+# seine eigene Freigabe nicht veraendern kann.
+name: Auto-Merge (agent/*)
+
+on:
+  workflow_run:
+    workflows: ["CI", "PR Agent (Gemini)", "Android mobile smoke"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Pro Head-Branch hoechstens eine Entscheidung nachruecken lassen —
+  # die drei Trigger-Workflows laufen sonst parallel.
+  group: auto-merge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    # Nur Erfolge, nur Pull-Request-Runs, nur im selben Repository (keine Forks).
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.repository == github.event.workflow_run.repository.full_name
+    runs-on: ubuntu-latest
+    steps:
+      # Bewusst OHNE ref: die Regeln kommen vom Default-Branch.
+      - uses: actions/checkout@v7
+      - name: Merge gruenen agent-PR nach Regelmodul
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash .github/scripts/auto-merge.sh "${{ github.event.workflow_run.head_branch }}"

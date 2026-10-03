@@ -47,6 +47,33 @@ Nutzungsdaten.
 - Tests: +13 (7 Server-Nutzung, 4 Anzeige-Logik, 2 End-to-End an der
   Engine). 566/566 gruen, check + build sauber.
 
+## Sprint 078 — Auto-Merge-Workflow fuer agent/*-PRs (03.10.2026)
+
+Phase 4 des Autonomie-Masterplans. Owner-Beschluss vom 03.10.2026 (per
+Bestaetigen-Knopf): Auto-Merge wird aktiviert und als dokumentierte
+Ausnahme in BRANCH-PROTECTION.md verankert.
+
+- server/auto-merge-gate.ts (neu): reines, getestetes Regelmodul. Merged
+  nur offene, nicht-Draft agent/*-PRs auf main, deren Pflichtchecks
+  (CI, PR Agent (Gemini), Android mobile smoke) alle gruen sind; noch
+  laufende oder gescheiterte Checks blockieren. Geschuetzte Pfade
+  (.github/, docs/BRANCH-PROTECTION.md, das Regelmodul selbst)
+  verlangen weiter Admin-Disziplin. skipped/neutral bei zusaetzlichen
+  Checks blockieren nicht.
+- .github/workflows/auto-merge.yml (neu): triggert auf abgeschlossene
+  Pflichtworkflows (workflow_run), pro Head-Branch serialisiert
+  (concurrency). Laedt die Regeln bewusst vom Default-Branch — ein PR
+  kann seine eigene Freigabe nicht umbiegen.
+- .github/scripts/auto-merge.sh (neu): sammelt PR-Fakten via gh (State,
+  Draft, Basis, geaenderte Dateien, Check-Rollup), fragt das Regelmodul
+  (npx tsx, kein Repo-Build noetig) und fuehrt den Squash-Merge mit
+  Race-Toleranz aus.
+- docs/BRANCH-PROTECTION.md: Ausnahme mit Regeln und Grenzen
+  dokumentiert.
+- Tests: +10 deterministische Gate-Faelle. 576/576 gruen, check + build
+  sauber. Hinweis: dieser PR aendert selbst .github/ — das Gate
+  blockiert ihn korrekt, der Merge erfolgt einmalig manuell.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte
