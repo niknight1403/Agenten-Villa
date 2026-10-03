@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { flowErrorMessage } from "@/lib/queryFlow";
 import { toast } from "sonner";
 
 function formatNumber(value: number | undefined) {
@@ -249,6 +250,25 @@ export default function Controller() {
             onClick={() => startLogin()}
           >
             Anmelden
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  // Sprint 069 — kein Flow endet blockiert: Status-Fehler zeigt eine
+  // lesbare Karte mit Retry statt einer still deaktivierten Seite.
+  if (statusQuery.isError) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 grid place-items-center p-6">
+        <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
+          <h1 className="text-2xl font-semibold">Controller-Status nicht verfügbar</h1>
+          <p className="mt-3 text-sm text-slate-400">{flowErrorMessage(statusQuery.error)}</p>
+          <button
+            className="mt-6 rounded-xl bg-blue-500 px-5 py-3 font-medium text-white hover:bg-blue-400"
+            onClick={() => statusQuery.refetch()}
+          >
+            Erneut laden
           </button>
         </section>
       </main>

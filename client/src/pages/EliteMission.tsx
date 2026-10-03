@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import { QueryState } from "@/components/QueryState";
+import { flowErrorMessage } from "@/lib/queryFlow";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -223,9 +225,16 @@ export default function EliteMission() {
             </p>
             {villaId && (
               <div className="mt-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm">
-                <p className="font-semibold text-cyan-200">{selectedVilla ? `Villa ${selectedVilla.name} · Superagent` : "Projekt-Villa wird geladen …"}</p>
+                <p className="font-semibold text-cyan-200">{selectedVilla ? `Villa ${selectedVilla.name} · Superagent` : villasQuery.isError ? "Villa nicht verfügbar" : "Projekt-Villa wird geladen …"}</p>
                 {selectedVilla?.projectBrief && <p className="mt-1 text-slate-300">{selectedVilla.projectBrief}</p>}
-                {villasQuery.isSuccess && !selectedVilla && <p className="mt-1 text-rose-300">Diese Villa gehört nicht zu deinem Konto oder wurde entfernt.</p>}
+                {villasQuery.isError ? (
+                  <p className="mt-1 text-rose-300">
+                    {flowErrorMessage(villasQuery.error)}{" "}
+                    <button type="button" className="message-retry" onClick={() => villasQuery.refetch()}>Erneut laden</button>
+                  </p>
+                ) : (
+                  villasQuery.isSuccess && !selectedVilla && <p className="mt-1 text-rose-300">Diese Villa gehört nicht zu deinem Konto oder wurde entfernt.</p>
+                )}
               </div>
             )}
           </div>
@@ -392,8 +401,15 @@ export default function EliteMission() {
             <h2 id="recent-missions-title" className="text-lg font-semibold">Letzte Missionen</h2>
             <button type="button" onClick={() => runsQuery.refetch()} disabled={runsQuery.isFetching} className="text-sm text-cyan-300 disabled:opacity-50">Aktualisieren</button>
           </div>
-          {runsQuery.isPending && <p className="mt-4 text-sm text-slate-400">Missionsstatus wird geladen …</p>}
-          {runsQuery.error && <p role="alert" className="mt-4 text-sm text-rose-300">Missionsstatus ist nicht verfügbar.</p>}
+          <QueryState
+            label="Missionsstatus"
+            isPending={runsQuery.isPending}
+            isFetching={runsQuery.isFetching}
+            isError={runsQuery.isError}
+            error={runsQuery.error}
+            enabled={isAuthenticated && isAdmin}
+            onRetry={() => runsQuery.refetch()}
+          >
           {runsQuery.data?.length === 0 && <p className="mt-4 text-sm text-slate-400">Noch keine gespeicherte Mission.</p>}
           <ul className="mt-4 space-y-2">
             {runsQuery.data?.map(run => <li key={run.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-sm">
@@ -401,6 +417,7 @@ export default function EliteMission() {
               {run.status === "interrupted" && <button type="button" disabled={!ready || missionMutation.isPending || restartMutation.isPending} onClick={() => restartRun(run.id)} className="rounded-lg border border-amber-400/50 px-3 py-2 text-amber-200 disabled:opacity-50">Nach Prüfung erneut starten</button>}
             </li>)}
           </ul>
+          </QueryState>
           <p className="mt-4 text-xs leading-5 text-amber-200/90">Ein Neustart beginnt den Auftrag von vorn. Vorherige GitHub-Aktionen können schon ausgeführt worden sein; kontrolliere Branches und Draft-PRs vor der Bestätigung.</p>
         </section>
 

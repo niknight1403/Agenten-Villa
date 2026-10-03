@@ -26,7 +26,11 @@ function escapeSelector(selector: string): string {
 
 /** Liefert den ersten CSS-Block für einen Selektor. */
 function rule(selector: string): string {
-  const match = css.match(new RegExp(`${escapeSelector(selector)}\\s*\\{([^}]*)\\}`));
+  // Selektor muss am Zeilenanfang stehen — zusammengesetzte Selektoren
+  // wie ".query-state[data-phase=error] .message-retry" fangen hier nicht.
+  const match = css.match(
+    new RegExp(`(?:^|[{}\\n])\\s*${escapeSelector(selector)}\\s*\\{([^}]*)\\}`)
+  );
   if (!match) throw new Error(`CSS-Regel fehlt: ${selector}`);
   return match[1];
 }

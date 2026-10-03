@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { QueryState } from "@/components/QueryState";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -27,8 +28,15 @@ export default function DemoAdmin() {
       <a href="/core/elite" className="text-sm text-cyan-300">← Elite Mission Control</a>
       <h1 className="mt-5 text-3xl font-semibold">Demoanfragen</h1>
       <p className="mt-2 text-sm text-slate-400">Nur Administratoren sehen die letzten 100 Anfragen. Diese Seite versendet keine Nachrichten. Kontaktwidersprüche dürfen nicht reaktiviert werden.</p>
-      {requests.isPending && <p className="mt-8">Anfragen werden geladen …</p>}
-      {requests.error && <p role="alert" className="mt-8 text-rose-300">{requests.error.message}</p>}
+      <QueryState
+        label="Anfragen"
+        isPending={requests.isPending}
+        isFetching={requests.isFetching}
+        isError={requests.isError}
+        error={requests.error}
+        enabled={Boolean(isAuthenticated && isAdmin)}
+        onRetry={() => requests.refetch()}
+      >
       {requests.data?.length === 0 && <p className="mt-8 text-slate-300">Noch keine Demoanfragen.</p>}
       <div className="mt-8 space-y-4">
         {requests.data?.map(item => <article key={item.id} className="rounded-2xl border border-white/10 bg-slate-900 p-5">
@@ -44,6 +52,7 @@ export default function DemoAdmin() {
             )}</div>}
         </article>)}
       </div>
+      </QueryState>
     </div>
   </main>;
 }
