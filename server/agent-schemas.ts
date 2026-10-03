@@ -14,7 +14,21 @@ import { forgeOptionsSchema } from "../shared/forge";
 export const AGENT_INPUT_LIMITS = {
   promptChars: 4_000,
   historyMessages: 8,
+  // Modell-Kontextbudget: so viele Zeichen je Verlaufsnachricht baut die
+  // Engine tatsächlich in den Prompt an das (kostenlose) Modell ein
+  // (agent-engine.ts: makeMessages kuerzt hiermit, Elite nutzt sein eigenes,
+  // groesseres Budget). Bewusst klein gehalten, kostet keine zusaetzlichen
+  // Token/Kosten in der Free-Tier-Kette.
   historyChars: 1_000,
+  // Validierungsobergrenze je Verlaufsnachricht — unabhaengig vom obigen
+  // Kontextbudget. Eine normale Konversation enthaelt oft vorherige
+  // Assistenten-Antworten, die laenger als das Kontextbudget sind; die
+  // Engine kuerzt sie dort ohnehin sicher. Die Eingabevalidierung darf das
+  // nicht vorher hart ablehnen (das blockierte zuvor jede Fortsetzung einer
+  // Konversation mit "Ungültiger Agenten-Auftrag (history.N.content): Too
+  // big ..."), bleibt aber als Obergrenze gegen missbräuchlich große
+  // Payloads bestehen.
+  historyMessageMaxChars: 20_000,
   specialtyChars: 60,
   systemOverrideChars: 4_000,
 } as const;
@@ -24,7 +38,7 @@ export const LIMITS_SCHEMA = AGENT_INPUT_LIMITS;
 /** Kontext: einzelne Verlaufsnachricht mit Rolle und begrenztem Inhalt. */
 export const agentMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1).max(LIMITS_SCHEMA.historyChars),
+  content: z.string().min(1).max(LIMITS_SCHEMA.historyMessageMaxChars),
 });
 
 /** Kontext: begrenzter Verlauf, Reihenfolge bleibt erhalten. */

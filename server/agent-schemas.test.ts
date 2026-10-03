@@ -70,6 +70,30 @@ describe("Agentenauftragsschema (Sprint 041)", () => {
     expect(parseAgentInput({ ...baseInput, prompt: "  Plan  " }).prompt).toBe("Plan");
   });
 
+  it("lehnt eine lange vorherige Assistenten-Antwort nicht hart ab (Regression)", () => {
+    // Eine echte Konversation enthaelt oft Antworten, die laenger sind als
+    // das Modell-Kontextbudget (historyChars = 1_000) — die Engine kuerzt
+    // sie dort sicher (agent-engine.ts: makeMessages). Die Validierung darf
+    // das nicht vorher ablehnen, sonst blockiert jede Fortsetzung mit
+    // "Ungültiger Agenten-Auftrag (history.N.content): Too big ...".
+    const longReply = "x".repeat(3_500);
+    expect(agentMessageSchema.safeParse({ role: "assistant", content: longReply }).success).toBe(true);
+    const parsed = parseAgentInput({
+      ...baseInput,
+      history: [{ role: "assistant", content: longReply }],
+    });
+    expect(parsed.history[0]?.content).toHaveLength(3_500);
+  });
+
+  it("lehnt eine missbräuchlich übergroße Verlaufsnachricht weiterhin ab", () => {
+    expect(
+      agentMessageSchema.safeParse({
+        role: "assistant",
+        content: "x".repeat(LIMITS_SCHEMA.historyMessageMaxChars + 1),
+      }).success
+    ).toBe(false);
+  });
+
   it("begrenzt Verlauf (Kontext) auf Rolle, Länge und Anzahl", () => {
     expect(agentMessageSchema.safeParse({ role: "system", content: "x" }).success).toBe(false);
     expect(agentMessageSchema.safeParse({ role: "user", content: "" }).success).toBe(false);

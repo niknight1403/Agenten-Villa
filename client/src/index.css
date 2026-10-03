@@ -712,6 +712,71 @@ body:has(.villa-app) {
 .message-author { margin-bottom: 6px; color: #7fe8ff; font-size: 12px; font-weight: 600; }
 .message-bubble p { margin: 0; color: #e7e9f4; font-size: 14px; line-height: 1.65; }
 
+/* Markdown-Rendering der Chat-Antworten (MessageMarkdown): strukturierte
+   Antworten statt Textwand — Überschriften, Listen, Tabellen, Code, Zitate. */
+.message-markdown { color: #e7e9f4; font-size: 14px; line-height: 1.65; }
+.message-markdown > *:first-child { margin-top: 0; }
+.message-markdown > *:last-child { margin-bottom: 0; }
+.message-markdown p { margin: 0 0 8px; }
+.message-markdown p:last-child { margin-bottom: 0; }
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3,
+.message-markdown h4 { margin: 14px 0 6px; color: #eef1fb; font-weight: 650; line-height: 1.35; }
+.message-markdown h1 { font-size: 17px; }
+.message-markdown h2 { font-size: 16px; }
+.message-markdown h3 { font-size: 15px; }
+.message-markdown h4 { font-size: 14px; }
+.message-markdown h1:first-child,
+.message-markdown h2:first-child,
+.message-markdown h3:first-child,
+.message-markdown h4:first-child { margin-top: 0; }
+.message-markdown ul,
+.message-markdown ol { margin: 6px 0 10px; padding-left: 20px; }
+.message-markdown li { margin: 3px 0; }
+.message-markdown li > ul,
+.message-markdown li > ol { margin: 3px 0 0; }
+.message-markdown a { color: #8fd6ff; text-decoration: underline; text-underline-offset: 2px; }
+.message-markdown a:hover { color: #b7e7ff; }
+.message-markdown strong { color: #f4f6ff; font-weight: 650; }
+.message-markdown blockquote {
+  margin: 8px 0;
+  padding: 2px 12px;
+  border-left: 3px solid #6b5bd0;
+  color: #b9c2dd;
+  background: rgb(107 91 208 / 8%);
+  border-radius: 0 10px 10px 0;
+}
+.message-markdown code {
+  padding: 1px 5px;
+  border: 1px solid rgb(112 152 255 / 18%);
+  border-radius: 6px;
+  background: rgb(8 12 28 / 65%);
+  color: #a5e8ff;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+.message-markdown pre {
+  margin: 8px 0;
+  padding: 11px 13px;
+  border: 1px solid rgb(112 152 255 / 18%);
+  border-radius: 12px;
+  background: rgb(8 12 28 / 72%);
+  overflow-x: auto;
+}
+.message-markdown pre code { padding: 0; border: none; background: none; color: #cfe6ff; font-size: 12.5px; }
+.message-markdown table {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.message-markdown th,
+.message-markdown td { padding: 6px 10px; border: 1px solid #273254; text-align: left; vertical-align: top; }
+.message-markdown th { color: #aebadb; background: rgb(107 91 208 / 14%); font-weight: 600; }
+.message-markdown tr:nth-child(even) td { background: rgb(255 255 255 / 2%); }
+.message-markdown hr { margin: 12px 0; border: none; border-top: 1px solid #273254; }
+
 .mobile-tabbar { display: none; }
 .search-strip {
   display: flex;
@@ -815,6 +880,7 @@ body:has(.villa-app) {
   .message-list { padding: 19px 17px 15px; gap: 12px; }
   .message-bubble { padding: 12px 13px; }
   .message-bubble p { font-size: 14px; line-height: 1.6; }
+  .message-markdown { font-size: 14px; line-height: 1.6; }
   .villa-library { padding: 27px 21px; }
   .mobile-tabbar { flex: 0 0 auto; min-height: calc(56px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; align-items: center; justify-content: space-around; padding: 4px 12px env(safe-area-inset-bottom); border-top: 1px solid #202a49; background: #0e1429; }
   .mobile-tabbar button { width: 44px; height: 42px; display: grid; place-items: center; color: #7381a3; border: 0; border-radius: 13px; background: transparent; }

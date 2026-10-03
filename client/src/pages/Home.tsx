@@ -6,6 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useDashboardTheme } from "@/contexts/DashboardThemeContext";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import MessageMarkdown from "@/components/MessageMarkdown";
 import { trpc } from "@/lib/trpc";
 import { APP_VERSION, APP_BUILD } from "@shared/const";
 import {
@@ -941,7 +942,7 @@ export default function Home() {
                             : `${activeVilla?.name ?? "Villa"} · Superagent`}
                         </div>
                       )}
-                      <p>{message.text}</p>
+                      <MessageMarkdown text={message.text} />
                       {message.role === "assistant" && message.meta && (
                         <div className="message-meta">{message.meta}</div>
                       )}
