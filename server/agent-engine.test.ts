@@ -224,6 +224,96 @@ describe("Cooldown-Mechanismus (Sprint 034)", () => {
   });
 });
 
+describe("Timeout-Selbstheilung (Sprint 075)", () => {
+  it("sperrt einen haengenden Anbieter kurzzeitig und nimmt ihn aus der Kette", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    // Erster Aufruf: OpenRouter haengt (Timeout auf jedem Versuch), Groq antwortet
+    const first = vi
+      .fn<typeof fetch>()
+      .mockImplementation((url) =>
+        String(url).includes("groq")
+          ? Promise.resolve(reply(200, "groq-model"))
+          : Promise.reject(new DOMException("Timed out", "TimeoutError"))
+      );
+    await expect(
+      runAgentTurn(input, false, { fetcher: first })
+    ).resolves.toMatchObject({ provider: "groq" });
+
+    // Zweiter Aufruf: OpenRouter steht im kurzen Timeout-Cooldown und
+    // wird uebersprungen — Groq wird direkt angefragt.
+    const second = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(reply(200, "groq-model"));
+    await runAgentTurn(input, false, { fetcher: second });
+    const urls = second.mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain(
+      "https://openrouter.ai/api/v1/chat/completions"
+    );
+    expect(urls[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("sperrt auch einen unerreichbaren Anbieter kurzzeitig (UNAVAILABLE)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const first = vi
+      .fn<typeof fetch>()
+      .mockImplementation((url) =>
+        String(url).includes("groq")
+          ? Promise.resolve(reply(200, "groq-model"))
+          : Promise.reject(new TypeError("fetch failed"))
+      );
+    await expect(
+      runAgentTurn(input, false, { fetcher: first })
+    ).resolves.toMatchObject({ provider: "groq" });
+
+    const second = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(reply(200, "groq-model"));
+    await runAgentTurn(input, false, { fetcher: second });
+    const urls = second.mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain(
+      "https://openrouter.ai/api/v1/chat/completions"
+    );
+  });
+
+  it("bleibt fail-closed: ohne Alternative wird der Timeout-gesperrte Anbieter ehrlich versucht", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const first = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new DOMException("Timed out", "TimeoutError"));
+    await expect(runAgentTurn(input, false, { fetcher: first })).rejects.toMatchObject({
+      code: "TIMEOUT",
+    });
+    // Kein anderer Anbieter konfiguriert: trotz Timeout-Cooldown wird
+    // OpenRouter erneut ehrlich versucht und antwortet diesmal.
+    const second = vi.fn<typeof fetch>().mockResolvedValue(reply(200));
+    await expect(
+      runAgentTurn(input, false, { fetcher: second })
+    ).resolves.toMatchObject({ provider: "openrouter" });
+  });
+
+  it("protokolliert den Anbieterwechsel strukturiert und ohne Schluessel", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-key");
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"))
+      .mockResolvedValueOnce(reply(200, "groq-model"));
+    await expect(
+      runAgentTurn(input, false, { fetcher })
+    ).resolves.toMatchObject({ provider: "groq" });
+    const failoverLine = log.mock.calls
+      .map(call => call.map(part => String(part)).join(" "))
+      .find(text => text.includes("Anbieterwechsel"));
+    expect(failoverLine).toContain("openrouter -> groq");
+    expect(failoverLine).toContain("TIMEOUT");
+    expect(failoverLine).not.toContain("test-key");
+    expect(failoverLine).not.toContain("groq-key");
+  });
+});
+
 describe("Router-Telemetrie (Sprint 038)", () => {
   it("erfasst Latenz, Erfolg und Versuche eines Direkterfolgs", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");

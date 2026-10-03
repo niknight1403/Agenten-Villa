@@ -337,6 +337,10 @@ async function callWithProviderChain(
     // Sprint 034 — Kontingentfehler der Route beobachten (siehe unten).
     let routeLimitRetryAfter: number | undefined;
     let routeSawLimit = false;
+    // Sprint 075 — Timeouts/Unerreichbarkeit der Route beobachten: eine
+    // Route, die ausschliesslich Ausfaelle geliefert hat, wird nach dem
+    // Routenende kurzzeitig gesperrt (Timeout-Selbstheilung, siehe unten).
+    let routeSawOutage = false;
     for (const model of route.models) {
       attempts += 1;
       if (attempts > 1) options.onEvent?.(`Anbieter ${route.name}: Modell ${model} wird angefragt`);
@@ -401,6 +405,10 @@ async function callWithProviderChain(
           markProviderFailure(route.name, "auth");
           break;
         }
+        // Sprint 075 — TIMEOUT und UNAVAILABLE zaehlen als Ausfall der
+        // Route und qualifizieren sie fuer die kurze Timeout-Sperre.
+        if (error.code === "TIMEOUT" || error.code === "UNAVAILABLE")
+          routeSawOutage = true;
         // Sprint 033 — LIMIT (429/402), UNAVAILABLE, TIMEOUT und
         // INVALID_RESPONSE: naechstes Modell probieren.
       }
@@ -408,11 +416,29 @@ async function callWithProviderChain(
       // den Anbieter zeitlich begrenzt sperren (Retry-After, sonst Default).
       if (routeSawLimit)
         markProviderFailure(route.name, "limit", routeLimitRetryAfter);
+      // Sprint 075 — Timeout-Selbstheilung: ein haengender oder
+      // unerreichbarer Primaer-Anbieter wird fuer zwei Minuten aus der
+      // Kette genommen, damit er nicht jede Anfrage um seine volle
+      // Timeout-Latenz verzoegert. Fail-closed bleibt erhalten — ohne
+      // Alternative wird der gesperrte Anbieter weiterhin ehrlich
+      // versucht (siehe providerRegistry). Eine laengere Limit- oder
+      // Auth-Sperre wird durch markProviderFailure nie verkuerzt.
+      if (routeSawOutage) markProviderFailure(route.name, "timeout");
       // Sprint 038 — der Wechsel zu einem anderen Anbieter wird mit dem
       // Fehlercode des gescheiterten Anbieters begruendet.
       if (r + 1 < registry.length && lastError instanceof AgentError) {
         telemetryFallbackFrom = route.name;
         telemetryFallbackReason = lastError.code;
+        // Sprint 075 — strukturierter, sicherer Failover-Log: Anbieter,
+        // Fehlercode und HTTP-Status genuegen zur Diagnose; Modellschluessel
+        // und Anfrageinhalte erscheinen bewusst nie im Log.
+        console.log(
+          `[agent-router] Anbieterwechsel: ${route.name} -> ${
+            registry[r + 1]!.name
+          } (Grund: ${lastError.code}${
+            lastError.status ? `, HTTP ${lastError.status}` : ""
+          })`
+        );
       }
     }
   }
