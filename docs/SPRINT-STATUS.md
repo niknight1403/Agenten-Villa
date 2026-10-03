@@ -1,6 +1,27 @@
 # Sprintstatus Agenten-Villa
 
 
+## Sprint 076 — Strenge Produktions-Env-Validierung & Health 2.0 (03.10.2026)
+
+Phase 2 des Autonomie-Masterplans: unvollstaendige Konfiguration scheitert
+jetzt sofort und verstaendlich statt spaeter im Betrieb verwirrend.
+
+- env-validation.ts (neu): Pflichtvariablen in Produktion (DATABASE_URL,
+  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) werden beim Start geprueft; bei
+  Fehlen bricht der Prozess mit einer Liste aller fehlenden Variablen samt
+  Zweck ab. LLM-Schluessel bleiben bewusst optional (Multi-Provider-Kette
+  meldet MISSING_KEY bereits praezise zur Laufzeit).
+- index.ts: Validierung vor dem Serverstart; Entwicklungsmodus bleibt
+  toleriert.
+- health.ts: /api/health liefert jetzt zusätzlich (a) die Live-Summary der
+  LLM-Anbieter (je konfiguriert/cooldown, ohne Secrets, ohne Netzprobe)
+  und (b) den Live-Status des 24/7-Watchdog-Controllers (Status, aktive
+  Worker, Tick-Zähler, letzter Tick) — beides nicht-blockierend, der
+  Render-Health-Check bleibt fuer Kaltstarts sofort antwortbar.
+- Tests: +9 deterministische Faelle (Validierung, Anbieter-Summary,
+  Cooldown-Anzeige, Controller-Status, Stoerfreiheit). 553/553 gruen,
+  check + build sauber.
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte

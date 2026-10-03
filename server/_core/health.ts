@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Express } from "express";
 import type { DatabaseHealthReport } from "../db-health";
+import { fallbackOrder, type ProviderName } from "../provider-registry";
+import { providerInCooldown } from "../provider-cooldown";
+import type { ControllerState } from "../controller";
 
 /**
  * Minimaler, oeffentlicher Health-Endpoint fuer Render-Checks und Smoke-Tests.
@@ -21,7 +24,56 @@ export type HealthPayload = {
   timestamp: string;
   /** Sprint 011: DB-Verfuegbarkeit (gecacht, nie blockierend). */
   database?: DatabaseHealthReport;
+  /** Sprint 076: Live-Status des 24/7-Watchdog-Controllers (nie blockierend). */
+  controller?: {
+    status: ControllerState["status"];
+    activeWorkers: number;
+    tickCount: number;
+    lastTickAt: string | null;
+  };
+  /** Sprint 076: Konfigurations- und Cooldown-Zusammenfassung der LLM-Anbieter. */
+  providers: ProviderHealthSummary[];
 };
+
+/** Sprint 076 — Anbieterzusammenfassung ohne Secrets und ohne Netzprobe. */
+export type ProviderHealthSummary = {
+  name: ProviderName;
+  configured: boolean;
+  cooldown: boolean;
+};
+
+const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
+  openrouter: "OPENROUTER_API_KEY",
+  groq: "GROQ_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  huggingface: "HF_TOKEN",
+};
+
+function providerSummaries(): ProviderHealthSummary[] {
+  return fallbackOrder().map(name => ({
+    name,
+    configured: Boolean(process.env[PROVIDER_KEY_ENV[name]]?.trim()),
+    cooldown: providerInCooldown(name),
+  }));
+}
+
+let controllerStateSource: (() => ControllerState | null) | null = null;
+
+/**
+ * Sprint 076 — der Einstiegspunkt setzt hier seinen Live-Getter fuer den
+ * Controller-Zustand; der Health-Endpoint liest ihn nur noch ab und bleibt
+ * dadurch entkoppelt und nie blockierend.
+ */
+export function setControllerStateSource(
+  source: (() => ControllerState | null) | null
+): void {
+  controllerStateSource = source;
+}
+
+/** Nur fuer Tests: Controller-Quelle zuruecksetzen. */
+export function resetControllerStateSourceForTests(): void {
+  controllerStateSource = null;
+}
 
 let cachedVersion: string | null = null;
 
@@ -62,13 +114,31 @@ export function getDatabaseHealthReport(): DatabaseHealthReport | null {
 }
 
 export function getHealthPayload(): HealthPayload {
+  const controllerState = (() => {
+    try {
+      return controllerStateSource?.() ?? null;
+    } catch {
+      return null;
+    }
+  })();
   return {
     ok: true,
     version: appVersion(),
     mode: process.env.NODE_ENV ?? "development",
     uptimeSec: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
+    providers: providerSummaries(),
     ...(cachedDatabaseReport ? { database: cachedDatabaseReport } : {}),
+    ...(controllerState
+      ? {
+          controller: {
+            status: controllerState.status,
+            activeWorkers: controllerState.activeWorkers,
+            tickCount: controllerState.tickCount,
+            lastTickAt: controllerState.lastTickAt,
+          },
+        }
+      : {}),
   };
 }
 
