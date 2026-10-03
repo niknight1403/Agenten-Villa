@@ -129,6 +129,7 @@ export const LIMITS = {
   maxCalls: 2,
   githubActionsPerTurn: 3,
   githubToolRounds: 3,
+  toolContextChars: 16_000,
 } as const;
 
 export const ELITE_LIMITS = {
@@ -141,6 +142,7 @@ export const ELITE_LIMITS = {
   githubActionsPerMission: 24,
   githubToolRounds: 12,
   completionNudges: 2,
+  toolContextChars: 48_000,
 } as const;
 
 const SYSTEM =
@@ -181,6 +183,9 @@ function providerOutcomeOf(error: unknown): ProviderOutcome {
     if (error.code === "LIMIT") return "limit";
     if (error.code === "AUTH") return "auth";
     if (error.code === "REJECTED") return "rejected";
+    // Sprint 074 — ein zu grosses Kontextfenster ist kein Anbieterausfall:
+    // die Route bleibt gesund, nur diese eine Anfrage war zu umfangreich.
+    if (error.code === "CONTEXT_TOO_LARGE") return "rejected";
   }
   return "unavailable";
 }
@@ -288,6 +293,9 @@ function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
  * Anbieter; ein ungueltiger Schluessel (AUTH) spart den ganzen Anbieter aus;
  * inhaltliche Ablehnungen (REJECTED) sind terminal, damit keine Ablehnung
  * durch wiederholtes Vorsprechen bei einem anderen Anbieter umgangen wird.
+ * Kontextlimit-Fehler (CONTEXT_TOO_LARGE, Sprint 074) sind dagegen technisch:
+ * das nächste Modell bzw. Anbieter wird probiert, weil dort oft ein groesseres
+ * Kontextfenster verfuegbar ist — das ist kein Umgehen einer Ablehnung.
  * Vor jedem Anbieterwechsel fragt beforeFallback (Stopp-/Elite-Lease-Schutz).
  */
 async function callWithProviderChain(
@@ -408,12 +416,22 @@ async function callWithProviderChain(
       }
     }
   }
-  const terminalError =
+  // Sprint 074 — ist die Kette nur am Kontextfenster gescheitert, sagt die
+  // Meldung das ehrlich statt "wird automatisch versucht" zu behaupten.
+  const baseError =
     lastError ??
     new AgentError(
       "UNAVAILABLE",
       "Kein Modellanbieter konnte die Anfrage beantworten."
     );
+  const terminalError =
+    baseError instanceof AgentError && baseError.code === "CONTEXT_TOO_LARGE"
+      ? new AgentError(
+          "CONTEXT_TOO_LARGE",
+          "Die Anfrage überschreitet das Kontextfenster aller verfügbaren Modelle. Bitte die Mission in kleinere Aufträge aufteilen.",
+          baseError.status
+        )
+      : baseError;
   recordRouterTelemetry({
     success: false,
     provider: registry[registry.length - 1]!.name,
@@ -472,6 +490,47 @@ function makeMessages(
     ...(elite && input.forge ? [{ role: "user" as const, content: forgeContext(input.forge) }] : []),
     { role: "user", content: input.prompt.trim().slice(0, promptLimit) },
   ];
+}
+
+/**
+ * Sprint 074 — liest den Fehlerkörper einer abgelehnten Anbieterantwort
+ * (max. 2 KB — die Fehlermeldung des Anbieters, enthaelt keine Secrets),
+ * um echte Kontextlimit-Fehler von inhaltlichen Ablehnungen zu trennen.
+ * Lesefehler liefern einen leeren String, nie eine Ausnahme.
+ */
+async function readProviderErrorBody(response: Response): Promise<string> {
+  try {
+    return (await response.text()).slice(0, 2_000);
+  } catch {
+    return "";
+  }
+}
+
+/** Erkennt die bekannten Formulierungen für "Kontextfenster überschritten"
+ * bei OpenAI-kompatiblen Anbietern (OpenRouter, Groq, Gemini-Proxy). */
+function isContextLengthRejection(body: string): boolean {
+  if (!body) return false;
+  let code = "";
+  let type = "";
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { code?: unknown; type?: unknown };
+    };
+    code = String(parsed.error?.code ?? "").toLowerCase();
+    type = String(parsed.error?.type ?? "").toLowerCase();
+  } catch {
+    // Nicht-JSON-Antworten werden unten weiterhin über den Text erkannt.
+  }
+  if (code === "context_length_exceeded" || type === "context_length_exceeded")
+    return true;
+  const text = body.toLowerCase();
+  return (
+    text.includes("context_length_exceeded") ||
+    text.includes("context length") ||
+    text.includes("maximum context") ||
+    text.includes("too many tokens") ||
+    text.includes("reduce the length")
+  );
 }
 
 async function callProvider(
@@ -545,12 +604,25 @@ async function callProvider(
       "Der Modellanbieter ist vorübergehend nicht verfügbar.",
       response.status
     );
-  if (!response.ok)
+  if (!response.ok) {
+    // Sprint 074 — 400/413 kann eine inhaltliche Ablehnung sein (bleibt
+    // REJECTED/terminal) oder nur "zu viele Tokens fuer dieses Modell" —
+    // rein technisch und mit einem anderen Modell oft sofort loesbar.
+    if (response.status === 400 || response.status === 413) {
+      const detail = await readProviderErrorBody(response);
+      if (isContextLengthRejection(detail))
+        throw new AgentError(
+          "CONTEXT_TOO_LARGE",
+          "Die Anfrage überschreitet das Kontextfenster dieses Modells. Es wird automatisch ein anderes Modell versucht.",
+          response.status
+        );
+    }
     throw new AgentError(
       "REJECTED",
       "Der Modellanbieter hat die Anfrage abgelehnt.",
       response.status
     );
+  }
   let data: Completion;
   try {
     data = (await response.json()) as Completion;
@@ -663,7 +735,39 @@ type GitHubLoopProfile = {
   maxTokens: number;
   timeoutMs: number;
   completionNudges: number;
+  /** Sprint 074 — Obergrenze für akkumulierte Werkzeugergebnisse je Runde. */
+  toolContextChars: number;
 };
+
+/**
+ * Sprint 074 — Werkzeugkontext begrenzen: jede Runde haengt weitere
+ * Werkzeugergebnisse an die Nachrichten an. Ohne Begrenzung waechst der
+ * Kontext ueber viele Runden unbegrenzt, bis das Modell die Anfrage mit
+ * einem Kontextlimit-Fehler ablehnt. Diese Kompression kuerzt die aeltesten
+ * Werkzeugergebnisse zuerst; System- und Nutzeranteile bleiben unberuehrt,
+ * und jedes tool_call_id bleibt einer (gekuerzten) Antwort zugeordnet,
+ * damit das API-Format gueltig bleibt. Veraendert wird nur, wenn das
+ * Budget tatsaechlich ueberschritten wird.
+ */
+function trimToolContext(messages: ApiMessage[], budgetChars: number): void {
+  const toolIndexes: number[] = [];
+  messages.forEach((m, i) => {
+    if (m.role === "tool") toolIndexes.push(i);
+  });
+  let total = toolIndexes.reduce(
+    (sum, i) => sum + (messages[i].content?.length ?? 0),
+    0
+  );
+  if (total <= budgetChars) return;
+  const KEEP = 1_200;
+  for (let k = 0; k < toolIndexes.length && total > budgetChars; k += 1) {
+    const i = toolIndexes[k];
+    const content = messages[i].content ?? "";
+    if (content.length <= KEEP) continue;
+    total -= content.length - KEEP;
+    messages[i].content = `${content.slice(0, KEEP)}\n… (automatisch gekürzt, um das Kontextfenster des Modells einzuhalten)`;
+  }
+}
 
 async function runGitHubToolLoop(
   input: AgentInput,
@@ -864,6 +968,10 @@ async function runGitHubToolLoop(
       });
     }
 
+    // Sprint 074 — vor der nächsten Modellrunde den akkumulierten
+    // Werkzeugkontext auf das Profilbudget begrenzen (aelteste zuerst).
+    trimToolContext(messages, profile.toolContextChars);
+
     if (round === profile.maxRounds) {
       // Sprint 046 — Ergebnisvalidierung auch beim Budgetabbruch.
       return parseToolLoopResult({
@@ -904,6 +1012,7 @@ export async function runAgentTurnWithGitHub(
     maxTokens: LIMITS.outputTokens,
     timeoutMs: LIMITS.timeoutMs,
     completionNudges: 0,
+    toolContextChars: LIMITS.toolContextChars,
   });
 }
 
@@ -919,6 +1028,7 @@ export async function runAutonomousProjectWithGitHub(
     maxTokens: eliteOutputTokens(),
     timeoutMs: ELITE_LIMITS.timeoutMs,
     completionNudges: ELITE_LIMITS.completionNudges,
+    toolContextChars: ELITE_LIMITS.toolContextChars,
   });
   if (!input.forge) return result;
   let verification = assessForgeChecks(null, result.branch ?? "");

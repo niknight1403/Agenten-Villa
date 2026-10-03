@@ -565,3 +565,81 @@ describe("multi-provider failover chain", () => {
     expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 });
+
+describe("Kontextlimit-Fehler (Sprint 074)", () => {
+  const contextTooLargeReply = () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          code: "context_length_exceeded",
+          message: "This model's maximum context length is 4096 tokens.",
+        },
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+
+  it("behandelt context_length_exceeded als technischen Fehler und wechselt Anbieter/Modell", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(contextTooLargeReply())
+      .mockResolvedValueOnce(reply(200, "groq-model-live"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "groq",
+      model: "groq-model-live",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("bleibt bei echten inhaltlichen Ablehnungen terminal (kein Vorschub)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "content policy" } }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({
+      code: "REJECTED",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("endet mit CONTEXT_TOO_LARGE statt REJECTED, wenn jedes Modell das Kontext überschreitet", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => contextTooLargeReply());
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({
+      code: "CONTEXT_TOO_LARGE",
+    });
+  });
+
+  it("kürzt akkumulierte Werkzeugergebnisse auf das Kontextbudget der Runde", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const bigContent = "x".repeat(12_000);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(toolReply("ctx-1", "github_read_file", { path: "big1.ts" }))
+      .mockResolvedValueOnce(toolReply("ctx-2", "github_read_file", { path: "big2.ts" }))
+      .mockResolvedValueOnce(reply(200, "free-tool-model"));
+    const executeTool = vi.fn(async () => ({ ok: true, content: bigContent }));
+    await runAgentTurnWithGitHub(workshopInput, executeTool, {
+      fetcher,
+      authorization: { administrator: true },
+    });
+    // Der dritte Modellaufruf (2. Runde) muss den ältesten Tool-Inhalt
+    // auf das Budget (16.000 Zeichen über zwei Werkzeugergebnisse) gekürzt haben.
+    const thirdPayload = JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body));
+    const firstTool = thirdPayload.messages.find(
+      (message: { role: string; tool_call_id?: string }) =>
+        message.role === "tool" && message.tool_call_id === "ctx-1"
+    );
+    expect(firstTool).toBeTruthy();
+    expect(firstTool.content.length).toBeLessThanOrEqual(1_400);
+    expect(firstTool.content).toContain("automatisch gekürzt");
+  });
+});
