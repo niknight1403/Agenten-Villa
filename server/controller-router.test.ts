@@ -29,6 +29,9 @@ const state: ControllerState = {
   stoppedAt: null,
   activeWorkers: 0,
   savedAt: null,
+  tickCount: 0,
+  lastTickAt: null,
+  lastReport: null,
 };
 
 afterEach(() => {

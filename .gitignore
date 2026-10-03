@@ -114,3 +114,6 @@ client/public/__manus__/version.json
 .project-config.json
 .neon
 node_modules/
+
+# Runtime-Zustand des 24/7-Watchdogs (controller-state.json)
+data/

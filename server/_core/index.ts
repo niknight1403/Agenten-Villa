@@ -19,6 +19,8 @@ import { securityHeaders } from "./security-headers";
 import { nativeCors } from "./nativeCors";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
+import { villaController } from "../controller";
+import { controllerSseRouter } from "../controller-sse";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -103,6 +105,8 @@ async function startServer() {
   app.use("/api/trpc", demoSubmitRateLimit);
   registerHealthRoute(app);
   registerStorageProxy(app);
+  // 24/7-Watchdog: Live-Status der Worker-Loops per SSE.
+  app.use("/api/controller", controllerSseRouter);
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
   registerNativeGoogleAuthRoutes(app);
@@ -136,6 +140,8 @@ async function startServer() {
     logStartupDiagnostics();
     // Autonomer Provider-Waechter: haelt die kostenlosen Routen funktionsfaehig.
     startProviderGuardian();
+    // 24/7-Watchdog: letzte Loop-Status beim Start wieder aufnehmen.
+    void villaController.init().catch(() => { /* Startup bleibt nie daran haengen */ });
   });
 }
 

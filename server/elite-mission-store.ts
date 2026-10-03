@@ -84,6 +84,25 @@ export async function reserveMission(input: {
   return { run: existing, created: false };
 }
 
+/**
+ * Sprint — 24/7-Watchdog: zählt unterbrochene Missionen. Reine Anzeige:
+ * ein Neustart bleibt an die ausdrückliche Administrator-Freigabe gebunden
+ * (Sprint 045/047) und wird vom Watchdog nie automatisch ausgelöst.
+ */
+export async function countInterruptedMissions(): Promise<number | null> {
+  try {
+    const db = await requiredDb();
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(eliteMissionRuns)
+      .where(eq(eliteMissionRuns.status, "interrupted"));
+    return rows[0]?.count ?? 0;
+  } catch (error) {
+    // Der Watchdog-Tick darf an einer fehlenden Datenbank nicht scheitern.
+    return null;
+  }
+}
+
 export async function listMissionRuns(userId: number): Promise<EliteMissionRun[]> {
   await interruptExpiredRuns();
   const db = await requiredDb();

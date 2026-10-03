@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   ArrowLeft,
   Bot,
   CheckCircle2,
@@ -19,6 +20,172 @@ import { toast } from "sonner";
 
 function formatNumber(value: number | undefined) {
   return typeof value === "number" ? value.toLocaleString("de-DE") : "—";
+}
+
+type WatchdogTick = {
+  at: string;
+  tick: number;
+  leaseSweep: "ok" | "error" | "skipped";
+  database: { status: string; checkedAt: string } | null;
+  providers: Array<{ name: string; status: string; cached: boolean }>;
+  interruptedMissions: number | null;
+  metrics: {
+    totals: { completed: number; partial: number; failed: number };
+    averageDurationMs: number;
+    samples: number;
+  } | null;
+};
+
+/**
+ * 24/7-Watchdog: zeigt die echten Loop-Ticks des Controllers live über
+ * SSE (/api/controller/stream) — Lease-Sweep, DB-Sonde, Provider-Status
+ * und die Anzahl unterbrochener Missionen (nur Anzeige, kein Auto-Restart).
+ */
+function WatchdogPanel() {
+  const [watchStatus, setWatchStatus] = useState<string | null>(null);
+  const [tick, setTick] = useState<WatchdogTick | null>(null);
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    const source = new EventSource("/api/controller/stream");
+    source.onopen = () => setLive(true);
+    source.onmessage = event => {
+      try {
+        const data = JSON.parse(event.data) as
+          | { type: "state"; state: { status?: string } }
+          | { type: "tick"; report: WatchdogTick };
+        if (data.type === "state") setWatchStatus(data.state?.status ?? null);
+        if (data.type === "tick") setTick(data.report);
+      } catch {
+        /* unvollständige Nachrichten ignorieren */
+      }
+    };
+    source.onerror = () => setLive(false);
+    return () => source.close();
+  }, []);
+
+  const lastTickAt = tick ? new Date(tick.at) : null;
+  const runTotal = tick?.metrics?.samples ?? 0;
+  const successRate =
+    tick?.metrics && runTotal > 0
+      ? Math.round((tick.metrics.totals.completed / runTotal) * 100)
+      : null;
+
+  return (
+    <section className="mt-5 rounded-3xl border border-slate-800 bg-slate-900 p-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Activity className={live ? "text-emerald-400" : "text-slate-500"} size={22} />
+          <div>
+            <h2 className="text-lg font-semibold">24/7-Watchdog</h2>
+            <p className="text-xs text-slate-500">
+              Lease-Sweep, DB-Sonde und Provider-Status — ein begrenzter Tick pro Minute
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${live ? "bg-emerald-400 shadow-[0_0_12px_#34d399]" : "bg-slate-600"}`}
+          />
+          <span className="text-slate-400">
+            {live ? "Livestream verbunden" : "Verbinde …"}
+          </span>
+          {watchStatus ? (
+            <span
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${watchStatus === "RUNNING" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}
+            >
+              Loop {watchStatus}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <dl className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-2xl bg-slate-800/70 p-4">
+          <dt className="text-xs text-slate-400">Ticks insgesamt</dt>
+          <dd className="mt-1 text-2xl font-bold">{formatNumber(tick?.tick)}</dd>
+        </div>
+        <div className="rounded-2xl bg-slate-800/70 p-4">
+          <dt className="text-xs text-slate-400">Letzter Tick</dt>
+          <dd className="mt-1 text-2xl font-bold">
+            {lastTickAt ? lastTickAt.toLocaleTimeString("de-DE") : "—"}
+          </dd>
+        </div>
+        <div className="rounded-2xl bg-slate-800/70 p-4">
+          <dt className="text-xs text-slate-400">Datenbank</dt>
+          <dd
+            className={`mt-1 text-2xl font-bold ${
+              tick?.database?.status === "verbunden"
+                ? "text-emerald-300"
+                : tick?.database
+                  ? "text-rose-300"
+                  : "text-slate-400"
+            }`}
+          >
+            {tick?.database?.status ?? "—"}
+          </dd>
+        </div>
+        <div className="rounded-2xl bg-slate-800/70 p-4">
+          <dt className="text-xs text-slate-400">
+            Unterbrochene Missionen
+          </dt>
+          <dd
+            className={`mt-1 text-2xl font-bold ${
+              (tick?.interruptedMissions ?? 0) > 0 ? "text-amber-300" : ""
+            }`}
+          >
+            {formatNumber(tick?.interruptedMissions ?? undefined)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-slate-400">Provider:</span>
+        {tick?.providers.length ? (
+          tick.providers.map(provider => (
+            <span
+              key={provider.name}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                provider.status === "valid"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : provider.status === "consent_required"
+                    ? "bg-slate-700/60 text-slate-300"
+                    : "bg-rose-500/15 text-rose-300"
+              }`}
+            >
+              {provider.name} · {provider.status}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-slate-500">
+            Status-Sonden laufen alle 5 Ticks
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
+        <span>
+          Lease-Sweep:{" "}
+          <span
+            className={
+              tick?.leaseSweep === "error" ? "text-rose-300" : "text-emerald-300"
+            }
+          >
+            {tick?.leaseSweep ?? "—"}
+          </span>
+        </span>
+        <span>
+          Elite-Läufe erfasst: {formatNumber(runTotal)}
+        </span>
+        <span>
+          Erfolgsquote: {successRate === null ? "—" : `${successRate} %`}
+        </span>
+        <span className="text-slate-600">
+          Mission-Neustarts bleiben freigabepflichtig (HITL)
+        </span>
+      </div>
+    </section>
+  );
 }
 
 export default function Controller() {
@@ -269,6 +436,8 @@ export default function Controller() {
             </div>
           </div>
         </section>
+
+        <WatchdogPanel />
 
         <section className="mt-5 rounded-3xl border border-slate-800 bg-slate-900 p-7">
           <div className="flex items-center gap-3">

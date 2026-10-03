@@ -59,6 +59,7 @@ import { requireApproval } from "./approval-gates";
 import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./roles";
 import { recordAuditEntry, listAuditEntries, auditLogSize } from "./audit-log";
 import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
+import { villaController } from "./controller";
 
 // The assistant is ready out of the box so a signed-in user can chat
 // immediately. Administrators can still stop/start it via the controller.
@@ -549,6 +550,14 @@ export const agentRouter = router({
       // Sprint 047 — Freigabepunkt: Anhalten nur mit ausdrücklicher Quittung.
       requireApproval("controller-stop", input.state !== "STOPPED" || input.acknowledgeStop === true);
       controlState = input.state;
+      // Sprint — 24/7-Watchdog: der Loop folgt dem Mastervillage-Zustand.
+      // Watchdog-Fehler blockieren die genehmigte Betriebsentscheidung nie.
+      if (process.env.NODE_ENV !== "test") {
+        void (input.state === "RUNNING"
+          ? villaController.start()
+          : villaController.stop()
+        ).catch(() => { /* nur Diagnose-Loop, nie betriebskritisch */ });
+      }
       // Sprint 052 — Audit-Log: kritische Änderungen besitzen Zeit, Nutzer und Aktion.
       recordAuditEntry({
         userId: ctx.user.id,
