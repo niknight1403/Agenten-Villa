@@ -26,7 +26,7 @@ set -euo pipefail
 DOMAIN="${OLLAMA_DOMAIN:?Fehler: OLLAMA_DOMAIN ist nicht gesetzt (z. B. export OLLAMA_DOMAIN=ollama.cybersarah-ki.com)}"
 TOKEN="${OLLAMA_TOKEN:?Fehler: OLLAMA_TOKEN ist nicht gesetzt (z. B. export OLLAMA_TOKEN=\$(openssl rand -hex 32))}"
 CERTBOT_EMAIL="${OLLAMA_CERTBOT_EMAIL:?Fehler: OLLAMA_CERTBOT_EMAIL ist nicht gesetzt}"
-MODELS_INSTALL="${OLLAMA_MODELS_INSTALL:-gemma4:12b devstral:24b qwen3.6:27b}"
+MODELS_INSTALL="${OLLAMA_MODELS_INSTALL-gemma4:12b devstral:24b qwen3.6:27b}"
 
 echo "== [1/4] Ollama installieren (falls noch nicht vorhanden) =="
 if ! command -v ollama >/dev/null 2>&1; then
