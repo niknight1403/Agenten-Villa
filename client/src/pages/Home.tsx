@@ -8,6 +8,7 @@ import { useDashboardTheme } from "@/contexts/DashboardThemeContext";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import MessageMarkdown from "@/components/MessageMarkdown";
 import { trpc } from "@/lib/trpc";
+import { markLastUserMessageFailed, markTailLocalOnly, removeFailedExchangeAt, syncNotice } from "@/lib/chatSync";
 import { APP_VERSION, APP_BUILD } from "@shared/const";
 import {
   Archive,
@@ -52,6 +53,9 @@ type ChatMessage = {
   meta?: string;
   messageId?: number;
   rating?: -1 | 1 | null;
+  // Sprint 067 — Synchronisationskonflikte: gescheiterte Sendungen bleiben
+  // wiederholbar, nur-lokale Züge bleiben nachvollziehbar markiert.
+  syncState?: "failed" | "local-only";
 };
 type Villa = {
   id: number;
@@ -349,6 +353,9 @@ export default function Home() {
           toast.error(
             "Der Verlauf konnte nicht gespeichert werden. Die Datenbank ist gerade nicht erreichbar."
           );
+          // Sprint 067 — Konflikt transparent machen: der Zug bleibt
+          // lesbar, ist aber beim nächsten Serverabgleich weg.
+          setMessages(previous => markTailLocalOnly(previous, 2));
         }
       }
     } catch (error) {
@@ -357,10 +364,23 @@ export default function Home() {
           ? error.message
           : "Die Anfrage konnte nicht verarbeitet werden.";
       setMessages(previous => [
-        ...previous,
-        { role: "assistant", text: message },
+        // Sprint 067 — der gescheiterte Zug bleibt sichtbar und
+        // wiederholbar: Nutzer-Nachricht wird „failed“ markiert, die
+        // Fehlerantwort gehört zum selben Zug.
+        ...markLastUserMessageFailed(previous, prompt),
+        { role: "assistant", text: message, syncState: "failed" },
       ]);
     }
+  }
+
+  /** Sprint 067 — Erneut senden: entfernt genau den gescheiterten Zug an dieser Position. */
+  async function retryFailedSend(index: number) {
+    if (chatMutation.isPending) return;
+    const failed = messages[index];
+    if (!failed || failed.syncState !== "failed") return;
+    const text = failed.text;
+    setMessages(previous => removeFailedExchangeAt(previous, index));
+    await sendMessage(text);
   }
 
   async function rateMessage(messageId: number, rating: -1 | 1) {
@@ -943,6 +963,21 @@ export default function Home() {
                         </div>
                       )}
                       <MessageMarkdown text={message.text} />
+                      {message.syncState && syncNotice(message) && (
+                        <div className="message-syncnotice" data-sync={message.syncState}>
+                          {syncNotice(message)}
+                          {message.role === "user" && message.syncState === "failed" && (
+                            <button
+                              type="button"
+                              className="message-retry"
+                              disabled={chatMutation.isPending}
+                              onClick={() => retryFailedSend(index)}
+                            >
+                              Erneut senden
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {message.role === "assistant" && message.meta && (
                         <div className="message-meta">{message.meta}</div>
                       )}

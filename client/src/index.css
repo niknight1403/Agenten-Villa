@@ -1169,6 +1169,33 @@ body:has(.villa-app) {
 .retry-link:hover { border-color: #6b5bd0; }
 
 /* Nachrichten-Metadaten und Bewertung */
+.message-syncnotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  font-size: 12px;
+  color: rgb(251 191 36 / 92%);
+}
+.message-syncnotice[data-sync="local-only"] {
+  color: rgb(148 163 184 / 95%);
+}
+.message-retry {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid rgb(251 191 36 / 45%);
+  border-radius: 9px;
+  background: rgb(251 191 36 / 12%);
+  color: rgb(253 224 71);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.message-retry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .message-meta {
   margin-top: 6px;
   color: #8a97bd;
