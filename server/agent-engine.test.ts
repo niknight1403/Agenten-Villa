@@ -545,12 +545,38 @@ describe("multi-provider failover chain", () => {
     expect(fetcher.mock.calls[2]?.[0]).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
   });
 
-  it("treats a content rejection as terminal and does not shop around providers", async () => {
+  it("treats a clear content rejection as terminal and does not shop around providers", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "test-key");
     vi.stubEnv("GROQ_API_KEY", "groq-test-key");
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(reply(400));
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: "violates our content policy" } }), { status: 400 })
+    );
     await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({ code: "REJECTED" });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("klassifiziert 400 'Invalid Auth key' (Gemini) als AUTH und faellt auf den naechsten Anbieter zurueck", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GEMINI_API_KEY", "gemini-toter-key");
+    const geminiAuthReject = () =>
+      new Response(JSON.stringify({ error: { code: 400, message: "Invalid Auth key.", status: "INVALID_ARGUMENT" } }), { status: 400 });
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+      String(url).includes("generativelanguage") ? geminiAuthReject() : reply(429));
+    await expect(runAgentTurn(input, false, { fetcher })).rejects.toMatchObject({ code: "AUTH" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("behandelt unbekannte betriebliche 400-Fehler als behebbar und probiert den naechsten Anbieter", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    vi.stubEnv("GROQ_API_KEY", "groq-test-key");
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "No endpoints found for this model" } }), { status: 400 }))
+      .mockResolvedValueOnce(reply(200, "groq-model-live"));
+    await expect(runAgentTurn(input, false, { fetcher })).resolves.toMatchObject({
+      provider: "groq",
+      model: "groq-model-live",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it("runs a GitHub tool loop through Groq when the OpenRouter quota is gone", async () => {

@@ -533,6 +533,50 @@ function isContextLengthRejection(body: string): boolean {
   );
 }
 
+/** Sprint 075 — erkennt "Schluessel ungueltig"-Fehler. Googles OpenAI-
+ * kompatibler Endpunkt antwortet auf ungueltige Keys mit HTTP 400
+ * ("Invalid Auth key"), nicht mit 401/403. Ohne diese Unterscheidung
+ * wurde ein toter Key als inhaltliche Ablehnung (terminal) fehlklassifiziert
+ * und die gesamte Mission abgebrochen, obwohl der naechste Anbieter
+ * helfen koennte. */
+function isAuthRejection(body: string): boolean {
+  if (!body) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes("invalid auth key") ||
+    text.includes("invalid api key") ||
+    text.includes("invalid_api_key") ||
+    text.includes("api key not valid") ||
+    text.includes("api key invalid") ||
+    text.includes("unauthorized") ||
+    text.includes("unauthenticated")
+  );
+}
+
+/** Sprint 075 — erkennt echte inhaltliche Ablehnungen (Content Policy,
+ * Moderation, Sicherheit). Nur diese sind terminal (REJECTED); alle anderen
+ * 400/413-Fehler sind betrieblich und fuehren zum naechsten Modell/Anbieter.
+ * Nicht erkannte Fehler werden geloggt (ohne Secrets) und nicht stumm
+ * als Ablehnung behandelt. */
+function looksLikeContentRefusal(body: string): boolean {
+  if (!body) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes("content policy") ||
+    text.includes("content_policy") ||
+    text.includes("content moderation") ||
+    text.includes("content filter") ||
+    text.includes("moderation") ||
+    text.includes("safety system") ||
+    text.includes("prohibited content") ||
+    text.includes("violates") ||
+    text.includes("not allowed") ||
+    text.includes("inappropriate") ||
+    text.includes("flagged") ||
+    text.includes("refuse")
+  );
+}
+
 async function callProvider(
   fetcher: typeof fetch,
   url: string,
@@ -616,6 +660,35 @@ async function callProvider(
           "Die Anfrage überschreitet das Kontextfenster dieses Modells. Es wird automatisch ein anderes Modell versucht.",
           response.status
         );
+      // Sprint 075 — ungueltiger Schluessel (z. B. Gemini antwortet hierauf
+      // mit 400 "Invalid Auth key"): Anbieter ueberspringen, weitergeht die
+      // Kette. Das ist derselbe Zustand wie 401/403, nur anderer Statuscode.
+      if (isAuthRejection(detail)) {
+        console.error("[provider] Schluessel abgelehnt (400/413): Auth-Fehler erkannt");
+        throw new AgentError(
+          "AUTH",
+          "Der Anbieterschlüssel ist ungültig oder nicht berechtigt.",
+          response.status
+        );
+      }
+      // Sprint 075 — nur klar erkennbare inhaltliche Ablehnungen sind
+      // terminal. Alle anderen 400/413-Antworten sind betriebliche Fehler
+      // (z. B. "Modell nicht gefunden"): naechstes Modell/Anbieter probieren
+      // und den (secretfreien) Fehlertext fuer die Diagnose loggen.
+      if (looksLikeContentRefusal(detail)) {
+        console.error(`[provider] Inhaltliche Ablehnung (${response.status}): ${detail.slice(0, 500)}`);
+        throw new AgentError(
+          "REJECTED",
+          "Der Modellanbieter hat die Anfrage inhaltlich abgelehnt.",
+          response.status
+        );
+      }
+      console.error(`[provider] Betrieblicher ${response.status}-Fehler, Kette wird fortgesetzt: ${detail.slice(0, 500)}`);
+      throw new AgentError(
+        "UNAVAILABLE",
+        "Der Modellanbieter konnte die Anfrage nicht verarbeiten.",
+        response.status
+      );
     }
     throw new AgentError(
       "REJECTED",
