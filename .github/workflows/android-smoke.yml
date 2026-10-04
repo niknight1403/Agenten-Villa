@@ -51,7 +51,7 @@ jobs:
           heap-size: 512M
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/android-smoke.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: android-smoke-screen
@@ -61,7 +61,7 @@ jobs:
             villa-ocr.txt
           if-no-files-found: ignore
       - name: Upload tested debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: success()
         with:
           name: agenten-villa-pr-debug-apk
