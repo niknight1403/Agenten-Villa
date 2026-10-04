@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Agenten-Villa — Ollama-Bootstrap fuer Oracle Cloud Always Free (ARM, 4 OCPU / 24 GB RAM)
-# Sprint 082. Idempotent: kann gefahrlos mehrfach ausgefuehrt werden.
+# Agenten-Villa — Ollama-Bootstrap fuer Linux-Server (Ubuntu/Debian, x86_64 oder ARM)
+# Sprint 082/083. Idempotent: kann gefahrlos mehrfach ausgefuehrt werden.
+# Getestet gedacht fuer: Oracle Cloud Always Free (ARM) und Hetzner-VPS (CyberSarah-pro).
+# RAM-Realismus: Modelle klein zuerst ziehen; 27b/30b nur bei >= 24 GB RAM.
 #
 # Pflicht-Umgebungsvariablen (vor dem Aufruf setzen):
 #   OLLAMA_DOMAIN            z. B. ollama.cybersarah-ki.com (DNS-Record vorher anlegen!)
@@ -24,7 +26,7 @@ set -euo pipefail
 DOMAIN="${OLLAMA_DOMAIN:?Fehler: OLLAMA_DOMAIN ist nicht gesetzt (z. B. export OLLAMA_DOMAIN=ollama.cybersarah-ki.com)}"
 TOKEN="${OLLAMA_TOKEN:?Fehler: OLLAMA_TOKEN ist nicht gesetzt (z. B. export OLLAMA_TOKEN=\$(openssl rand -hex 32))}"
 CERTBOT_EMAIL="${OLLAMA_CERTBOT_EMAIL:?Fehler: OLLAMA_CERTBOT_EMAIL ist nicht gesetzt}"
-MODELS_INSTALL="${OLLAMA_MODELS_INSTALL:-gemma4:12b devstral:24b qwen3.6:27b}"
+MODELS_INSTALL="${OLLAMA_MODELS_INSTALL-gemma4:12b devstral:24b qwen3.6:27b}"
 
 echo "== [1/4] Ollama installieren (falls noch nicht vorhanden) =="
 if ! command -v ollama >/dev/null 2>&1; then
