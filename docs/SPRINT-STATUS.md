@@ -1,5 +1,24 @@
 # Sprintstatus Agenten-Villa
 
+## Pipeline-Reparatur Auto-Merge (05.10.2026)
+
+Der Auto-Merge-Workflow schlug bei PR #80 (Sprint 085) mit
+"jq: error: Cannot index string with string \"headRefName\"" fehl. Ursache:
+jq --rawfile bindet Dateiinhalte als STRING, das Skript indizierte aber
+Felder direkt. Der Pfad war seit Sprint 078 latent kaputt — bisherige
+Merges liefen manuell (Owner-Beschluss), daher fiel es erst jetzt auf.
+
+- Fix: ($pr | fromjson) vor dem Feldzugriff im Fakten-Bau
+  (.github/scripts/auto-merge.sh). Regelmodul server/auto-merge-gate.ts,
+  Merge-Regeln und BRANCH-PROTECTION.md bleiben unveraendert —
+  reiner Bug-Fix, regelkonservierend.
+- Validierung: jq-Programm lokal gegen Beispielfakten geprueft (Fakten
+  identisch zum alten Ziel-Format), Gate-Tests unveraendert gruen.
+- Merge des Gate-Fix-PRs per Owner-Vollmacht (Autonomieauftrag 20 Sprints,
+  05.10.2026): Gate-PRs beruehren .github/ und koennen nicht per
+  Auto-Merge gemerged werden; der Owner-Auftrag deckt diese
+  Pipeline-Reparatur.
+
 
 ## Sprint 076 — Strenge Produktions-Env-Validierung & Health 2.0 (03.10.2026)
 
