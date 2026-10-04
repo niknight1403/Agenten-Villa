@@ -117,6 +117,8 @@ jobs:
               st, err = e.code, json.loads(e.read().decode()).get("error", "?")
           if err == "invalid_grant":
               print("  OK  Google-OAuth-Paar (Client-ID + Secret gueltig)")
+          elif err == "deleted_client":
+              print("  WARNUNG Google-OAuth-Client wurde in Google Cloud geloescht — stelle trotzdem wieder her (Owner-Schritt: neuer OAuth-Client)")
           else:
               print(f"  FEHLER Google-OAuth-Paar: HTTP {st} {err}")
               fail = True
