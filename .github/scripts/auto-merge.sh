@@ -33,7 +33,7 @@ gh pr diff "$NUMBER" --repo "$REPO" --name-only > "$WORK/files.txt"
 jq -n \
   --rawfile pr "$WORK/pr.json" \
   --rawfile files "$WORK/files.txt" \
-  '{
+  '($pr | fromjson) as $pr | {
     branch: $pr.headRefName,
     state: $pr.state,
     isDraft: $pr.isDraft,
