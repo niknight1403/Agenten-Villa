@@ -19,6 +19,17 @@ Merges liefen manuell (Owner-Beschluss), daher fiel es erst jetzt auf.
   Auto-Merge gemerged werden; der Owner-Auftrag deckt diese
   Pipeline-Reparatur.
 
+Zusaetzlich gefunden und im selben PR repariert: Der Dependabot-Squash-Merge
+von PR #65 (Commit a35ec0f, Sprint-084-Backlog-Arbeit) hinterliess
+Konflikt-Marker in .github/workflows/ci.yml, android-smoke.yml und
+google-signin-probe.yml — push-Event-Runs auf main scheiterten seitdem
+an ungueltigem YAML (pull_request-Runs liefen weiter, weil die Sprint-085-
+Branch-Version sauber war). Aufloesung: jeweils die neueren Action-Versionen
+behalten (checkout@v7, pnpm/action-setup@v6, setup-node@v7) — genau der
+Zielstand der Dependabot-Bumps. Voll-Scan des main-Trees: keine weiteren
+Marker-Dateien. Render-Produktionsbuild war nie betroffen (baut aus
+Repo-Quellen, nicht aus Workflow-Dateien).
+
 
 ## Sprint 076 — Strenge Produktions-Env-Validierung & Health 2.0 (03.10.2026)
 
