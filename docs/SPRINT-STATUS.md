@@ -309,7 +309,18 @@ verzoegerte jede Anfrage um seine volle Timeout-Latenz.
 | 068     | Grün    | Touch-Zielgrößen (Roadmap 067): alle interaktiven Ziele erreichen jetzt mindestens 44x44px effektive Trefferfläche — Icon-Buttons 40px visuell + unsichtbare ::after-Hit-Area (+4px je Seite, Überlappungsfreiheit durch angehobene Header-Lücke 8px), Bewertungs-Buttons 32px + 6px Expansion (Lücke 8→12px), Chat-einklappen-Button (vorher nacktes 18px-Icon) auf 44x44, Runde-Hinzufügen-Taste 42→44, Mic/Send mobil 43→44, Retry-Button (Sprint 067) 32→44. Neue statische CSS-Regression (touchTargets.test.ts, 8 Tests) pinnt alle Invarianten gegen unbemerktes Schrumpfen — Sprint 061 hatte nur manuell geprüft. |
 | 069     | Grün    | Fehler- und Ladezustände (Roadmap 068): Kein Flow endet mehr leer oder blockiert — neue reine Phasenlogik queryFlow.ts (loading/error/ready; deaktivierte Abfragen sind bewusst „ready“, kein Endlos-Spinner vor Login) + QueryState-Komponente mit sichtbarem Ladehinweis und Fehlerkarte mit „Erneut laden“. Integriert an vier stillen Stellen: Elite-Mission-Villenkarte (Fehler statt stiller „wird geladen …“-Leere), Missionsliste und Demoanfragen (Fehler mit Retry statt reinem Text), Controller (Status-Fehler zeigt eigene Retry-Karte statt still deaktivierter Seite), Chat-Verlauf (Ladefehler mit Retry statt verschwundener Historie). 9 neue Logik-Tests (506 grün); Touch-Target-Regression gegen versehentliche Zusatzselektoren gehärtet. |
 | 070     | Grün    | Mobile Accessibility (Roadmap 069): Globaler Tastatur-Fokus-Ring für ALLE interaktiven Elemente (:where(button, a, select, textarea, [tabindex]):focus-visible, Cyan #37dcc6 mit >= 3:1 gegen den Hintergrund — vorher nur Sende-/Google-Buttons und Links). Bestandsaufnahme bestätigt: alle Icon-Buttons tragen bereits aria-label, aria-live-Regionen existieren im Chat, prefers-reduced-motion deckt (seit 063) alle Animationen ab, alle 8 Kern-Textpaare erreichen WCAG AA (4.75–16.9:1). Neue statische Regression a11y.test.ts (12 Tests) pinnt Kontrastpaare, Fokus-Ring und Icon-Label-Invariante gegen unbemerkte Regressionen. |
-| 071–100 | Geplant | Naechste Sprints aus der Roadmap nach Review durch den Eigentümer (Mobile-Review, Persistenz, weitere Verbesserungen). | Naechste Sprints aus der Roadmap. |
+| 076–084 | Grün    | Sprints 076–084 vollstaendig umgesetzt, gemerged und verifiziert (Prod-Env-Validierung, Token-Budget, Auto-Merge, Free-Tier-Erholung, Ollama-Route, Gate-Skip, Oracle-Kit, Ollama-VPS, PR-Backlog-Abbau). |
+| 085–100 | Geplant | Naechste Sprints aus der Roadmap (End-to-End-Smoke-Suite, Router-Lasttest, Fehler-Injection, etc.). |
+
+## Sprint 084 — PR-Backlog-Abbau (05.10.2026)
+
+Systematischer Abbau des gesamten offenen PR-Backlogs gemäß Autonomieauftrag.
+
+- (a) Sprint-PRs #77 (Sprint 082, Ollama-Oracle-Kit) und #78 (Sprint 083, Ollama-VPS) verifiziert (CI grün, PR-Agent 429 Quota-Fail) und per Owner-Vollmacht squash-gemerged (#78 rebased).
+- (b) Alt-PRs #69 (400-Klassifikation), #30 (Health-Docs) und #31 (HF-Checkbox-Fix) analysiert: alle drei veraltet/obsolet bzw. mit Merge-Konflikten oder Risiko des Überschreibens neuerer CI/UX-Stände; mit klaren Begründungskommentaren geschlossen.
+- (c) Dependabot-PRs #62–#67 (#62 checkout v7, #63 upload-artifact v7, #64 setup-java v6, #65 action-setup v6, #66 setup-node v7, #67 lucide-react/wouter minor/patch) geprüft: CI-Status auf allen grün; per Owner-PAT squash-gemerged (#65 rebased).
+- (d) PR #29 (Server-Deploy cybersarah-ki.com) geprüft: durch Render-Free-Hosting und Sprint-083-VPS-Caddy-Setup superseded; mit Kommentar geschlossen.
+- Ergebnis: PR-Backlog vollständig bereinigt (0 offene PRs).
 
 ## Grüner Validierungsweg
 
