@@ -31,54 +31,105 @@ jobs:
           set -euo pipefail
           SVC="srv-dar9h6id0e5s73c0c050"
 
-          echo "== [1/4] Plausibilitaet der Secrets gegen die letzten Live-Werte =="
-          fail=0
-          check() { # name value prefix hard|soft
-            if [ "${2:0:${#3}}" = "$3" ]; then
-              echo "  OK  $1"
-            elif [ "$4" = "hard" ]; then
-              echo "  FEHLER $1: Praefix weicht ab (${2:0:6}...) statt $3"
-              fail=1
-            else
-              echo "  WARNUNG $1: Praefix weicht ab (${2:0:6}...) — verwende trotzdem"
-            fi
-          }
-          check GOOGLE_CLIENT_ID "$G_ID" "656137332727" hard
-          check JWT_SECRET "$JWT" "3d737fb7dcac" hard
-          check GOOGLE_CLIENT_SECRET "$G_SECRET" "GOCSPX-HUXcT" hard
-          check HF_TOKEN "$HF" "hf_rhTISBlhz" soft
-          check GEMINI_API_KEY "$GEMINI" "AQ.Ab8RN6LSb" soft
-          check OPENROUTER_API_KEY "$OPENROUTER" "sk-or-v1-621" soft
-          if [ "${DB_URL#*ep-sparkling-bar-b21v2p2h-pooler}" != "$DB_URL" ]; then
-            echo "  OK  DATABASE_URL (Neon agenten_villa-Pooler)"
-          else
-            echo "  FEHLER DATABASE_URL: anderer Host als der bekannte agenten_villa-Pooler"
-            fail=1
-          fi
-          GH_PICK="$GH_TOKEN_A"
-          if [ "${GH_TOKEN_A:0:12}" != "ghp_EMT6oAEN" ] && [ "${GH_TOKEN_B:0:12}" = "ghp_EMT6oAEN" ]; then
-            GH_PICK="$GH_TOKEN_B"
-            echo "  INFO  GITHUB_TOKEN: TOKENGIT passt zum Live-Praefix"
-          elif [ "${GH_TOKEN_A:0:12}" = "ghp_EMT6oAEN" ]; then
-            echo "  OK  GITHUB_TOKEN (SERVER_GITHUB_TOKEN)"
-          else
-            echo "  WARNUNG GITHUB_TOKEN: kein Praefix-Treffer — verwende SERVER_GITHUB_TOKEN"
-          fi
-          [ "$fail" = "0" ] || { echo "Abbruch: harte Pruefungen fehlgeschlagen"; exit 1; }
-
-          echo "== [2/4] Vollstaendige Env-Liste an Render schreiben (PUT ersetzt alles) =="
-          export RENDER_API_KEY DB_URL OPENROUTER GH_PICK GEMINI HF G_SECRET G_ID MAIL JWT OLLAMA
+          echo "== [1/4] Plausibilitaet und Live-Validierung =="
+          export SVC RENDER_API_KEY DB_URL OPENROUTER GH_TOKEN_A GH_TOKEN_B GEMINI HF G_SECRET G_ID MAIL JWT OLLAMA
           python3 - <<'PYEOF'
-          import json, os, urllib.request
+          import json, os, urllib.request, urllib.error
 
-          svc = "srv-dar9h6id0e5s73c0c050"
+          fail = False
+
+          def pfx(name, val, expect, hard=True):
+              global fail
+              if val and val.startswith(expect):
+                  print(f"  OK  {name}")
+              elif hard:
+                  print(f"  FEHLER {name}: Praefix weicht ab")
+                  fail = True
+              else:
+                  print(f"  WARNUNG {name}: Praefix weicht ab — pruefe live")
+
+          pfx("GOOGLE_CLIENT_ID", os.environ["G_ID"], "656137332727")
+          pfx("JWT_SECRET", os.environ["JWT"], "3d737fb7dcac")
+          pfx("GOOGLE_CLIENT_SECRET", os.environ["G_SECRET"], "GOCSPX-")
+          pfx("HF_TOKEN", os.environ["HF"], "hf_rhTISBlhz", hard=False)
+          pfx("GEMINI_API_KEY", os.environ["GEMINI"], "AQ.Ab8RN6LSb", hard=False)
+          db = os.environ["DB_URL"]
+          if "ep-sparkling-bar-b21v2p2h-pooler" in db:
+              print("  OK  DATABASE_URL (Neon agenten_villa-Pooler)")
+          else:
+              print("  FEHLER DATABASE_URL: anderer Host als der bekannte agenten_villa-Pooler")
+              fail = True
+
+          # GITHUB_TOKEN: SERVER_GITHUB_TOKEN bevorzugen, sonst TOKENGIT, sonst leer
+          a, b = os.environ.get("GH_TOKEN_A", ""), os.environ.get("GH_TOKEN_B", "")
+          gh = a or b
+          gh_ok = False
+          if gh:
+              req = urllib.request.Request(
+                  "https://api.github.com/repos/niknight1403/Agenten-Villa",
+                  headers={"Authorization": f"Bearer {gh}", "User-Agent": "villa-restore"},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      json.load(r)
+                  gh_ok = True
+                  print("  OK  GITHUB_TOKEN mit Villa-Repo-Zugriff")
+              except Exception as e:
+                  print(f"  WARNUNG GITHUB_TOKEN ohne Zugriff ({e}) — lasse Variable weg")
+          else:
+              print("  WARNUNG GITHUB_TOKEN fehlt — lasse Variable weg")
+
+          # OPENROUTER-Key live pruefen
+          ork = os.environ.get("OPENROUTER", "")
+          or_ok = False
+          if ork:
+              req = urllib.request.Request(
+                  "https://openrouter.ai/api/v1/key",
+                  headers={"Authorization": f"Bearer {ork}"},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      json.load(r)
+                  or_ok = True
+                  print("  OK  OPENROUTER_API_KEY aktiv")
+              except Exception as e:
+                  print(f"  WARNUNG OPENROUTER_API_KEY nicht aktiv ({e}) — lasse Variable weg")
+          else:
+              print("  WARNUNG OPENROUTER_API_KEY leer — lasse Variable weg")
+
+          # Google-OAuth-Paar live pruefen: falsches Paar => invalid_client,
+          # gueltiges Paar + Muellcode => invalid_grant
+          st, err = 0, ""
+          req = urllib.request.Request(
+              "https://oauth2.googleapis.com/token",
+              data=json.dumps({
+                  "client_id": os.environ["G_ID"],
+                  "client_secret": os.environ["G_SECRET"],
+                  "grant_type": "authorization_code",
+                  "code": "solas-probe-invalid-code",
+              }).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              urllib.request.urlopen(req, timeout=20)
+          except urllib.error.HTTPError as e:
+              st, err = e.code, json.loads(e.read().decode()).get("error", "?")
+          if err == "invalid_grant":
+              print("  OK  Google-OAuth-Paar (Client-ID + Secret gueltig)")
+          else:
+              print(f"  FEHLER Google-OAuth-Paar: HTTP {st} {err}")
+              fail = True
+
+          if fail:
+              raise SystemExit(1)
+
+          # Env-Payload: GITHUB_TOKEN/OPENROUTER nur wenn aktiv
           payload = [
-              {"key": "DATABASE_URL", "value": os.environ["DB_URL"]},
+              {"key": "DATABASE_URL", "value": db},
               {"key": "GITHUB_REPOSITORY", "value": "niknight1403/Agenten-Villa"},
-              {"key": "GITHUB_TOKEN", "value": os.environ["GH_PICK"]},
               {"key": "PUBLIC_BASE_URL", "value": "https://agenten-villa.onrender.com"},
               {"key": "NODE_ENV", "value": "production"},
-              {"key": "OPENROUTER_API_KEY", "value": os.environ["OPENROUTER"]},
               {"key": "GEMINI_API_KEY", "value": os.environ["GEMINI"]},
               {"key": "HF_TOKEN", "value": os.environ["HF"]},
               {"key": "GOOGLE_CLIENT_ID", "value": os.environ["G_ID"]},
@@ -89,7 +140,13 @@ jobs:
               {"key": "OLLAMA_API_KEY", "value": os.environ["OLLAMA"]},
               {"key": "OLLAMA_MODELS", "value": "qwen2.5-coder:1.5b,tinyllama"},
           ]
+          if gh_ok:
+              payload.append({"key": "GITHUB_TOKEN", "value": gh})
+          if or_ok:
+              payload.append({"key": "OPENROUTER_API_KEY", "value": ork})
+
           key = os.environ["RENDER_API_KEY"]
+          svc = os.environ["SVC"]
           req = urllib.request.Request(
               f"https://api.render.com/v1/services/{svc}/env-vars",
               data=json.dumps(payload).encode(),
@@ -104,20 +161,25 @@ jobs:
           )
           with urllib.request.urlopen(req, timeout=30) as r:
               keys = sorted((e.get("envVar") or e).get("key", "?") for e in json.load(r))
-          print("Gesetzt:", len(keys), "Variablen")
-          expected = sorted(["AGENT_ADMIN_EMAIL","DATABASE_URL","GEMINI_API_KEY","GITHUB_REPOSITORY","GITHUB_TOKEN","HF_TOKEN","JWT_SECRET","NODE_ENV","OLLAMA_API_KEY","OLLAMA_BASE_URL","OLLAMA_MODELS","OPENROUTER_API_KEY","PUBLIC_BASE_URL","GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET"])
+          expected = sorted(p["key"] for p in payload)
           assert keys == expected, "Abweichung: " + str(sorted(set(keys) ^ set(expected)))
+          print(f"== [2/4] Gesetzt: {len(keys)} Variablen ==")
           print("Env-Liste vollstaendig und korrekt.")
+
+          req = urllib.request.Request(
+              f"https://api.render.com/v1/services/{svc}/deploys",
+              data=json.dumps({"clearCache": "do_not_clear"}).encode(),
+              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              dep = json.load(r)
+          print(f"== [3/4] Deploy angestossen: {dep.get('id')} ==")
+          open("/tmp/dep_id", "w").write(dep.get("id", ""))
           PYEOF
 
-          echo "== [3/4] Deploy anstossen =="
-          DEP=$(curl -sf -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
-            -d '{"clearCache":"do_not_clear"}' \
-            "https://api.render.com/v1/services/$SVC/deploys")
-          DEP_ID=$(echo "$DEP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
-          echo "Deploy: $DEP_ID"
-
           echo "== [4/4] Auf live warten =="
+          DEP_ID=$(cat /tmp/dep_id)
           for i in $(seq 1 16); do
             sleep 30
             S=$(curl -sf -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services/$SVC/deploys/$DEP_ID" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))")
