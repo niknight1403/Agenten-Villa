@@ -1,0 +1,130 @@
+name: render-restore
+
+# Einmaliger Restore: schreibt die vollstaendige Render-Env-Liste des
+# Agenten-Villa-Produktionsservices aus den Actions-Secrets zurueck.
+# Hintergrund: Ein API-PUT auf /env-vars hat am 04.10.2026 die komplette
+# Variablenliste ersetzt statt zu erweitern. Werte verlassen hier nie die
+# GitHub-Runner (PUT geht direkt an Render).
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Render-Env wiederherstellen
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_URL: ${{ secrets.DATABASE_URL }}
+          OPENROUTER: ${{ secrets.OPENROUTER_API_KEY }}
+          GH_TOKEN_A: ${{ secrets.SERVER_GITHUB_TOKEN }}
+          GH_TOKEN_B: ${{ secrets.TOKENGIT }}
+          GEMINI: ${{ secrets.GEMINI_API_KEY }}
+          HF: ${{ secrets.VILLA_HF_TOKEN }}
+          G_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          G_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MAIL: ${{ secrets.AGENT_ADMIN_EMAIL }}
+          JWT: ${{ secrets.JWT_SECRET }}
+          OLLAMA: ${{ secrets.VILLA_OLLAMA_TOKEN }}
+        run: |
+          set -euo pipefail
+          SVC="srv-dar9h6id0e5s73c0c050"
+
+          echo "== [1/4] Plausibilitaet der Secrets gegen die letzten Live-Werte =="
+          fail=0
+          check() { # name value prefix hard|soft
+            if [ "${2:0:${#3}}" = "$3" ]; then
+              echo "  OK  $1"
+            elif [ "$4" = "hard" ]; then
+              echo "  FEHLER $1: Praefix weicht ab (${2:0:6}...) statt $3"
+              fail=1
+            else
+              echo "  WARNUNG $1: Praefix weicht ab (${2:0:6}...) — verwende trotzdem"
+            fi
+          }
+          check GOOGLE_CLIENT_ID "$G_ID" "656137332727" hard
+          check JWT_SECRET "$JWT" "3d737fb7dcac" hard
+          check GOOGLE_CLIENT_SECRET "$G_SECRET" "GOCSPX-HUXcT" hard
+          check HF_TOKEN "$HF" "hf_rhTISBlhz" soft
+          check GEMINI_API_KEY "$GEMINI" "AQ.Ab8RN6LSb" soft
+          check OPENROUTER_API_KEY "$OPENROUTER" "sk-or-v1-621" soft
+          if [ "${DB_URL#*ep-sparkling-bar-b21v2p2h-pooler}" != "$DB_URL" ]; then
+            echo "  OK  DATABASE_URL (Neon agenten_villa-Pooler)"
+          else
+            echo "  FEHLER DATABASE_URL: anderer Host als der bekannte agenten_villa-Pooler"
+            fail=1
+          fi
+          GH_PICK="$GH_TOKEN_A"
+          if [ "${GH_TOKEN_A:0:12}" != "ghp_EMT6oAEN" ] && [ "${GH_TOKEN_B:0:12}" = "ghp_EMT6oAEN" ]; then
+            GH_PICK="$GH_TOKEN_B"
+            echo "  INFO  GITHUB_TOKEN: TOKENGIT passt zum Live-Praefix"
+          elif [ "${GH_TOKEN_A:0:12}" = "ghp_EMT6oAEN" ]; then
+            echo "  OK  GITHUB_TOKEN (SERVER_GITHUB_TOKEN)"
+          else
+            echo "  WARNUNG GITHUB_TOKEN: kein Praefix-Treffer — verwende SERVER_GITHUB_TOKEN"
+          fi
+          [ "$fail" = "0" ] || { echo "Abbruch: harte Pruefungen fehlgeschlagen"; exit 1; }
+
+          echo "== [2/4] Vollstaendige Env-Liste an Render schreiben (PUT ersetzt alles) =="
+          export RENDER_API_KEY DB_URL OPENROUTER GH_PICK GEMINI HF G_SECRET G_ID MAIL JWT OLLAMA
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          svc = "srv-dar9h6id0e5s73c0c050"
+          payload = [
+              {"key": "DATABASE_URL", "value": os.environ["DB_URL"]},
+              {"key": "GITHUB_REPOSITORY", "value": "niknight1403/Agenten-Villa"},
+              {"key": "GITHUB_TOKEN", "value": os.environ["GH_PICK"]},
+              {"key": "PUBLIC_BASE_URL", "value": "https://agenten-villa.onrender.com"},
+              {"key": "NODE_ENV", "value": "production"},
+              {"key": "OPENROUTER_API_KEY", "value": os.environ["OPENROUTER"]},
+              {"key": "GEMINI_API_KEY", "value": os.environ["GEMINI"]},
+              {"key": "HF_TOKEN", "value": os.environ["HF"]},
+              {"key": "GOOGLE_CLIENT_ID", "value": os.environ["G_ID"]},
+              {"key": "GOOGLE_CLIENT_SECRET", "value": os.environ["G_SECRET"]},
+              {"key": "AGENT_ADMIN_EMAIL", "value": os.environ["MAIL"]},
+              {"key": "JWT_SECRET", "value": os.environ["JWT"]},
+              {"key": "OLLAMA_BASE_URL", "value": "https://ollama.cybersarah-ki.com/v1"},
+              {"key": "OLLAMA_API_KEY", "value": os.environ["OLLAMA"]},
+              {"key": "OLLAMA_MODELS", "value": "qwen2.5-coder:1.5b,tinyllama"},
+          ]
+          key = os.environ["RENDER_API_KEY"]
+          req = urllib.request.Request(
+              f"https://api.render.com/v1/services/{svc}/env-vars",
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+              method="PUT",
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              json.load(r)
+          req = urllib.request.Request(
+              f"https://api.render.com/v1/services/{svc}/env-vars?limit=100",
+              headers={"Authorization": f"Bearer {key}"},
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              keys = sorted((e.get("envVar") or e).get("key", "?") for e in json.load(r))
+          print("Gesetzt:", len(keys), "Variablen")
+          expected = sorted(["AGENT_ADMIN_EMAIL","DATABASE_URL","GEMINI_API_KEY","GITHUB_REPOSITORY","GITHUB_TOKEN","HF_TOKEN","JWT_SECRET","NODE_ENV","OLLAMA_API_KEY","OLLAMA_BASE_URL","OLLAMA_MODELS","OPENROUTER_API_KEY","PUBLIC_BASE_URL","GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET"])
+          assert keys == expected, "Abweichung: " + str(sorted(set(keys) ^ set(expected)))
+          print("Env-Liste vollstaendig und korrekt.")
+          PYEOF
+
+          echo "== [3/4] Deploy anstossen =="
+          DEP=$(curl -sf -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/$SVC/deploys")
+          DEP_ID=$(echo "$DEP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+          echo "Deploy: $DEP_ID"
+
+          echo "== [4/4] Auf live warten =="
+          for i in $(seq 1 16); do
+            sleep 30
+            S=$(curl -sf -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services/$SVC/deploys/$DEP_ID" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))")
+            echo "[$((i*30))s] $S"
+            case "$S" in
+              live) echo "ERFOLG: Deploy ist live."; exit 0;;
+              build_failed|update_failed|canceled|deactivated) echo "FEHLER: Deploy-Status $S"; exit 1;;
+            esac
+          done
+          echo "ZEITUEBERSCHREITUNG beim Warten auf live (Deploy laeuft evtl. noch weiter)"
