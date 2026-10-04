@@ -169,6 +169,29 @@ nach grünem Review ewig offen stehen ("Pflichtcheck fehlt noch").
   selbst kann nicht automatisch gemerged werden (Owner-Beschluss).
 - Tests: +4 neue; 610/614 gruen (4 bewusste Skips), check + build sauber.
 
+## Sprint 082 — Ollama-Setup-Kit: Oracle Cloud Always Free (03.10.2026)
+
+Owner-Entscheid (03.10.2026): Die lokale Ollama-Route (Sprint 080) soll
+NICHT auf dem Hetzner-VPS laufen (steht fuer Phase 6 auf der Dekommissions-
+Liste), sondern dauerhaft kostenlos auf Oracle Cloud Always Free
+(Ampere A1 ARM, 4 OCPU / 24 GB RAM, 200 GB Block-Storage — die einzige
+wirklich kostenlose 24/7-Option fuer 12b-27b-Modelle).
+
+- ops/ollama/setup-oracle-free.sh: idempotenter Bootstrap (Ollama arm64
+  als systemd-Dienst auf 127.0.0.1:11434, OLLAMA_MAX_LOADED_MODELS=1,
+  Modell-Pulls klein zuerst, nginx-TLS-Proxy mit Bearer-Token-Schutz via
+  Let's Encrypt, iptables-443-Fix fuer Oracle-Images). qwen3-coder:30b nur
+  per OLLAMA_INCLUDE_30B=true (19 GB auf 24 GB RAM grenzwertig).
+- ops/ollama/nginx-ollama.conf: Template mit __DOMAIN__/__TOKEN__-
+  Platzhaltern — Token existiert nur auf der VM, niemals im Repo.
+- docs/OLLAMA-ORACLE-FREE.md: Schritt-fuer-Schritt (Konto, VM-Shape,
+  Security-List, DNS, Bootstrap, Render-Env, Betriebsgrenzen) plus
+  ehrliche RAM- und Geschwindigkeits-Einordnung (CPU-Inferenz: Minuten).
+- Ehrlich: VM-Anlage, Oracle-Konto und DNS bleiben Owner-Schritte;
+  Render-Env wird gesetzt, sobald die VM steht. Faellt die VM aus,
+  faellt die Villa ehrlich auf die Cloud-Kette zurueck (Sprint 079/080).
+- Kein App-Code angefasst; Skript-Syntax geprueft (bash -n).
+
 ## Sprint 075 — Timeout-Selbstheilung & Failover-Logging (03.10.2026)
 
 Die Fallback-Kette (Sprint 031-038) kannte Cooldowns nur fuer erschöpfte
