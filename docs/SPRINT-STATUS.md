@@ -30,6 +30,17 @@ Zielstand der Dependabot-Bumps. Voll-Scan des main-Trees: keine weiteren
 Marker-Dateien. Render-Produktionsbuild war nie betroffen (baut aus
 Repo-Quellen, nicht aus Workflow-Dateien).
 
+### Auto-Merge-Bug 2 (06.10.2026): Job- vs. Workflow-Namen
+
+Nach Bug 1 zeigte sich ein zweiter Sprint-078-Restfehler: Das Gate vergleicht
+Pflichtchecks gegen WORKFLOW-Namen (CI, PR Agent (Gemini), Android mobile
+smoke), das Skript lieferte aber CHECK-RUN-/Job-Namen (Check, Test, Build,
+KI-Review durch PR-Agent, emulator) — die Namen treffen sich nie, Auto-Merge
+haette niemals mergen koennen ("Pflichtcheck CI fehlt noch"). Fix: Fakten-Bau
+mappt jetzt (.workflowName // .name). Gate-Modul und REQUIRED_CHECKS
+unveraendert. Gegen echte Rollup-Daten verifiziert: Gate entscheidet
+merge=true fuer PR #80.
+
 
 ## Sprint 076 — Strenge Produktions-Env-Validierung & Health 2.0 (03.10.2026)
 
