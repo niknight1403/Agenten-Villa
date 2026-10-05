@@ -40,8 +40,8 @@ jq -n \
     base: $pr.baseRefName,
     changedFiles: ($files | split("\n") | map(select(length > 0))),
     checks: ($pr.statusCheckRollup // [] | map({
-      name: (.workflowName // .name),
-      conclusion: (.conclusion // null)
+      name: (.workflowName // .name // .context),
+      conclusion: (.conclusion // .state // null)
     }))
   }' > "$WORK/facts.json"
 
