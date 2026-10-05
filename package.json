@@ -15,6 +15,7 @@
     "validate": "pnpm check && pnpm test && pnpm build && git diff --check",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:e2e": "vitest run tests/e2e",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "seed:villa": "tsx scripts/seed-villa.ts"
   },

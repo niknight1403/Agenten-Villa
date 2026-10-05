@@ -362,7 +362,24 @@ verzoegerte jede Anfrage um seine volle Timeout-Latenz.
 | 069     | Grün    | Fehler- und Ladezustände (Roadmap 068): Kein Flow endet mehr leer oder blockiert — neue reine Phasenlogik queryFlow.ts (loading/error/ready; deaktivierte Abfragen sind bewusst „ready“, kein Endlos-Spinner vor Login) + QueryState-Komponente mit sichtbarem Ladehinweis und Fehlerkarte mit „Erneut laden“. Integriert an vier stillen Stellen: Elite-Mission-Villenkarte (Fehler statt stiller „wird geladen …“-Leere), Missionsliste und Demoanfragen (Fehler mit Retry statt reinem Text), Controller (Status-Fehler zeigt eigene Retry-Karte statt still deaktivierter Seite), Chat-Verlauf (Ladefehler mit Retry statt verschwundener Historie). 9 neue Logik-Tests (506 grün); Touch-Target-Regression gegen versehentliche Zusatzselektoren gehärtet. |
 | 070     | Grün    | Mobile Accessibility (Roadmap 069): Globaler Tastatur-Fokus-Ring für ALLE interaktiven Elemente (:where(button, a, select, textarea, [tabindex]):focus-visible, Cyan #37dcc6 mit >= 3:1 gegen den Hintergrund — vorher nur Sende-/Google-Buttons und Links). Bestandsaufnahme bestätigt: alle Icon-Buttons tragen bereits aria-label, aria-live-Regionen existieren im Chat, prefers-reduced-motion deckt (seit 063) alle Animationen ab, alle 8 Kern-Textpaare erreichen WCAG AA (4.75–16.9:1). Neue statische Regression a11y.test.ts (12 Tests) pinnt Kontrastpaare, Fokus-Ring und Icon-Label-Invariante gegen unbemerkte Regressionen. |
 | 076–084 | Grün    | Sprints 076–084 vollstaendig umgesetzt, gemerged und verifiziert (Prod-Env-Validierung, Token-Budget, Auto-Merge, Free-Tier-Erholung, Ollama-Route, Gate-Skip, Oracle-Kit, Ollama-VPS, PR-Backlog-Abbau). |
-| 085–100 | Geplant | Naechste Sprints aus der Roadmap (End-to-End-Smoke-Suite, Router-Lasttest, Fehler-Injection, etc.). |
+| 085     | Grün    | End-to-End-Smoke-Suite: 10 deterministische E2E-Tests in tests/e2e/smoke.test.ts prüfen gegen lokal gebooteten Server (Mock-Umgebung, dynamischer Port) den Kernpfad (Health, Routing-Status, Villa-Anlegen inkl. Validierung, Lauf-Start idempotent, Lauf-Stopp, Laufbericht, Isolation). Ausführbar per pnpm test:e2e; 10/10 grün in 1,6 s. |
+| 086–100 | Geplant | Naechste Sprints aus der Roadmap (Router-Lasttest, Fehler-Injection, Build-Reproduzierbarkeit, etc.). |
+
+## Sprint 085 — End-to-End-Smoke-Suite (05.10.2026)
+
+Deterministische E2E-Smoke-Tests in `tests/e2e/smoke.test.ts`, die gegen einen lokal gebooteten Express-Server auf dynamischem Port mit Mock-Umgebung (kein echter Provider, keine echte DB) den Kernpfad prüfen:
+- (1) Health ok (`/api/health` liefert HTTP 200, Version, Uptime, Timestamp, Providers).
+- (2) Routing-Status öffentlich lesbar (`/api/health` liefert `routing` mit `pinned`, `pinnedBy`, `activeRoute` ohne Authentifizierung).
+- (3) Villa anlegen (`villa.create` über HTTP tRPC mit Trimming, Standard-Kapazität 8 und Specialty).
+- (4) Villa-Validierung (leerer Name wird mit BAD_REQUEST abgelehnt).
+- (5) Kapazitäts-Validierung (Werte < 1 oder > 25 werden abgelehnt).
+- (6) Lauf starten (`run.start` über HTTP tRPC startet Testlauf für eigene Villa im Status `running` und Phase `preparation`).
+- (7) Lauf-Start idempotenz (`run.start` gibt bei aktivem Lauf den bestehenden Lauf zurück).
+- (8) Lauf stoppen (`run.finish` schaltet Lauf-Status auf `succeeded` mit `endedAt` und Ergebnis-Payload).
+- (9) Laufbericht abrufen (`run.report` liefert vollständige Zusammenfassung mit Status, Dauer und Event-Statistik).
+- (10) Nutzer-Isolierung (`villa.list` und `run.list` beschränken Ergebnisse streng auf den angemeldeten Nutzer).
+
+Ausführung als pnpm-Skript `pnpm test:e2e` und in `vitest.config.ts` eingebunden (10/10 Tests grün in 1,6 s).
 
 ## Sprint 084 — PR-Backlog-Abbau (05.10.2026)
 
