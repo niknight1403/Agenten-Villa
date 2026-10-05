@@ -1205,6 +1205,25 @@ export const agentRouter = router({
   }),
 });
 
+/**
+ * Sprint 086 — Router SLO-Grenzwerte (Service Level Objectives).
+ * Definiert Latenz-, Ausfall- und Stabilitäts-Grenzwerte unter paralleler Mock-Last.
+ */
+export const ROUTER_SLO_LIMITS = {
+  /** Maximale Nebenläufigkeit (parallele Turns) im Lasttest. */
+  maxConcurrentTurns: 50,
+  /** P95 Latenz-Grenzwert in ms für 50 parallele Turns mit Fake-Latenzen. */
+  p95LatencyMaxMs: 1500,
+  /** Maximale Latenz in ms (P100 / Worst-Case) unter Last inkl. Failover/Retry. */
+  maxLatencyMs: 3000,
+  /** Maximal erlaubte unkontrollierte Fehlerrate in % (0% = alle Anfragen kontrolliert verarbeitet). */
+  maxUncontrolledErrorRatePercent: 0,
+  /** Obergrenze für Telemetrie-Samples im Speicher. */
+  maxTelemetrySamples: 200,
+  /** Cooldown-Erfolgsrate unter Last (% erfolgreicher Failover-Umschaltungen bei Provider-Fehlern). */
+  minFailoverSuccessRatePercent: 100,
+} as const;
+
 export const agentControlLimits = {
   windowMs: WINDOW_MS,
   maxTurnsPerWindow: MAX_TURNS_PER_WINDOW,

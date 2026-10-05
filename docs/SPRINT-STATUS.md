@@ -363,7 +363,26 @@ verzoegerte jede Anfrage um seine volle Timeout-Latenz.
 | 070     | Grün    | Mobile Accessibility (Roadmap 069): Globaler Tastatur-Fokus-Ring für ALLE interaktiven Elemente (:where(button, a, select, textarea, [tabindex]):focus-visible, Cyan #37dcc6 mit >= 3:1 gegen den Hintergrund — vorher nur Sende-/Google-Buttons und Links). Bestandsaufnahme bestätigt: alle Icon-Buttons tragen bereits aria-label, aria-live-Regionen existieren im Chat, prefers-reduced-motion deckt (seit 063) alle Animationen ab, alle 8 Kern-Textpaare erreichen WCAG AA (4.75–16.9:1). Neue statische Regression a11y.test.ts (12 Tests) pinnt Kontrastpaare, Fokus-Ring und Icon-Label-Invariante gegen unbemerkte Regressionen. |
 | 076–084 | Grün    | Sprints 076–084 vollstaendig umgesetzt, gemerged und verifiziert (Prod-Env-Validierung, Token-Budget, Auto-Merge, Free-Tier-Erholung, Ollama-Route, Gate-Skip, Oracle-Kit, Ollama-VPS, PR-Backlog-Abbau). |
 | 085     | Grün    | End-to-End-Smoke-Suite: 10 deterministische E2E-Tests in tests/e2e/smoke.test.ts prüfen gegen lokal gebooteten Server (Mock-Umgebung, dynamischer Port) den Kernpfad (Health, Routing-Status, Villa-Anlegen inkl. Validierung, Lauf-Start idempotent, Lauf-Stopp, Laufbericht, Isolation). Ausführbar per pnpm test:e2e; 10/10 grün in 1,6 s. |
-| 086–100 | Geplant | Naechste Sprints aus der Roadmap (Router-Lasttest, Fehler-Injection, Build-Reproduzierbarkeit, etc.). |
+| 086     | Grün    | Router-Lasttest mit Mock-Providern: Provider-Kette unter paralleler Mock-Last (50 Turns mit Fake-Latenzen), SLO-Grenzwerte als Constants im Logic-Modul (ROUTER_SLO_LIMITS), Cooldown/Failover unter Last stabil, keine Timer-/Listener-Leaks. 8/8 Stresstests grün in 1,2 s. |
+| 087–100 | Geplant | Naechste Sprints aus der Roadmap (Fehler-Injection, Build-Reproduzierbarkeit, etc.). |
+
+## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
+
+Router-SLO-Spezifikation und deterministischer Stresstest der Provider-Kette unter paralleler Mock-Last:
+- **Logic-Modul (server/agent-router.ts)**:
+  - `ROUTER_SLO_LIMITS` als explizit exportierte Konstanten definiert:
+    - `maxConcurrentTurns`: 50 parallele Turns
+    - `p95LatencyMaxMs`: 1500 ms (P95-Grenzwert)
+    - `maxLatencyMs`: 3000 ms (P100 / Max-Grenzwert)
+    - `maxUncontrolledErrorRatePercent`: 0 % (0 unkontrollierte Abstürze)
+    - `maxTelemetrySamples`: 200 Samples
+    - `minFailoverSuccessRatePercent`: 100 %
+- **Test-Suite (server/router-stress.test.ts)**:
+  - (1) Exportierte SLO-Grenzwerte im Logic-Modul verifiziert (`ROUTER_SLO_LIMITS`).
+  - (2) 50 parallele Turns unter deterministischer Fake-Latenz (10–30 ms per Turn): P95-Latenz ~25 ms (SLO < 1500 ms), Max-Latenz ~30 ms (SLO < 3000 ms), 100 % Erfolgsquote.
+  - (3) Cooldown/Failover unter Last: Bei 429 Rate-Limit auf OpenRouter schaltet der Router sofort in den Cooldown; 50/50 parallele Folge-Turns laufen direkt über den Groq-Fallback mit 100 % Erfolgsquote und überspringen gesperrte Provider ohne unnötige HTTP-Anfragen.
+  - (4) Dichtigkeits- und Leak-Prüfung: Keine neuen `process`-Listener (`uncaughtException`, `unhandledRejection`), `liveProgress`-Map und Cooldowns bereinigt, Telemetrie-Speicher strikt auf 200 Samples gedeckelt.
+- **Ergebnis**: 8/8 Router-Stresstests grün in ~1.2 s (`pnpm test server/router-stress.test.ts`), vollständige Testsuite (628 Tests in 77 Testdateien) grün.
 
 ## Sprint 085 — End-to-End-Smoke-Suite (05.10.2026)
 
