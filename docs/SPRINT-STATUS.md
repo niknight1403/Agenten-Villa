@@ -41,6 +41,17 @@ mappt jetzt (.workflowName // .name). Gate-Modul und REQUIRED_CHECKS
 unveraendert. Gegen echte Rollup-Daten verifiziert: Gate entscheidet
 merge=true fuer PR #80.
 
+### Auto-Merge-Bug 3 (06.10.2026): StatusContexte als pending gelesen
+
+Nach Bug 2 blockierte das Gate dauerhaft mit "Checks laufen noch: , ,":
+statusCheckRollup enthaelt neben CheckRuns auch StatusContext-Eintraege
+(Vercel, CodeRabbit) — mit context/state statt name/conclusion. Das
+Fakten-Mapping erzeugte daraus {name:null, conclusion:null}, was das Gate
+als laufende Checks wertete (conclusion===null => pending). Jeder PR mit
+Status-Apps haette fuer immer geblockt. Fix: (.workflowName // .name //
+.context) und (.conclusion // .state // null). Gate-Modul unveraendert;
+gegen echtes Rollup von PR #80 verifiziert (merge=true).
+
 
 ## Sprint 076 — Strenge Produktions-Env-Validierung & Health 2.0 (03.10.2026)
 
