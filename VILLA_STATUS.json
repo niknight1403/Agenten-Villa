@@ -1,0 +1,18 @@
+{
+  "ts": "2026-10-06T02:06:54.194Z",
+  "villa": {
+    "id": 2,
+    "name": "Agenten Villa",
+    "status": "PAUSED"
+  },
+  "tasks": {
+    "FAILED": 12
+  },
+  "running": false,
+  "patches": {
+    "appliedThisCycle": [],
+    "failedThisCycle": [],
+    "pendingArtefacts": 0
+  },
+  "lastTestResult": "n/a"
+}
