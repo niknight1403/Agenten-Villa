@@ -1,10 +1,14 @@
 #!/usr/bin/env tsx
 /**
- * Build-Manifest-Generator für Build-Reproduzierbarkeit (Sprint 087).
+ * Build-Manifest-Generator für Build-Reproduzierbarkeit (Sprint 087/088).
  *
  * Erzeugt ein deterministisches JSON-Manifest mit SHA-256-Hashes aller
  * Web-Build-Artefakte (dist/). Die Dateiliste wird sortiert, so dass
  * identische Builds identische Manifeste liefern.
+ *
+ * Das Manifest selbst (`build-manifest.json`) wird bei der Erfassung ignoriert,
+ * um Zirkulärabhängigkeiten und Zeitstempel-Abweichungen bei Folge-Builds
+ * zu vermeiden.
  *
  * Analog AGENTS.md-Regel: Web-Payload (`assets/public/**` und
  * `assets/capacitor.config.json`) hashen, nicht die ganze APK.
@@ -34,12 +38,15 @@ export interface BuildManifest {
 
 /**
  * Sammle rekursiv alle Dateien unter `dir` (sortiert).
+ * Eigenes Manifest (`build-manifest.json`) wird ignoriert, damit
+ * wiederholte Manifest-Generierungen deterministisch bleiben.
  */
 export function collectFiles(dir: string): string[] {
   const results: string[] = [];
   function walk(current: string) {
     const entries = readdirSync(current).sort();
     for (const entry of entries) {
+      if (entry === "build-manifest.json") continue;
       const fullPath = join(current, entry);
       const stat = statSync(fullPath);
       if (stat.isDirectory()) {
