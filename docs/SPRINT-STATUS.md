@@ -380,7 +380,7 @@ verzoegerte jede Anfrage um seine volle Timeout-Latenz.
 | 085     | Grün    | End-to-End-Smoke-Suite: 10 deterministische E2E-Tests in tests/e2e/smoke.test.ts prüfen gegen lokal gebooteten Server (Mock-Umgebung, dynamischer Port) den Kernpfad (Health, Routing-Status, Villa-Anlegen inkl. Validierung, Lauf-Start idempotent, Lauf-Stopp, Laufbericht, Isolation). Ausführbar per pnpm test:e2e; 10/10 grün in 1,6 s. |
 | 086     | Grün    | Router-Lasttest mit Mock-Providern: Provider-Kette unter paralleler Mock-Last (50 Turns mit Fake-Latenzen), SLO-Grenzwerte als Constants im Logic-Modul (ROUTER_SLO_LIMITS), Cooldown/Failover unter Last stabil, keine Timer-/Listener-Leaks. 8/8 Stresstests grün in 1,2 s. |
 | 087     | Grün    | Fehler-Injection: Harness (server/fault-injection.ts) mit Sprint-008-Fehlerklassen + PersistenceError, Anbindung an callWithProviderChain und DB-Probes; 22 Regressionstests, Fehlerklassen sauber getrennt. Nachgeliefert aus geschlossenem #91. |
-| 088     | Grün    | Build-Reproduzierbarkeit: scripts/build-manifest.ts (SHA-256-Manifest über dist/, sortiert, Aggregat-Hash), pnpm build:manifest, 10 deterministische Tests. |
+| 088     | Grün    | Build-Reproduzierbarkeit: PR #92 (scripts/build-manifest.ts, pnpm build:manifest, 11 Tests). Repro-Nachweis via Doppel-Build verifiziert: 100 % identische Artefakt-Hashes (Aggregat-Hash 2cd39f7a...). Doku in docs/TESTING.md. |
 | 089–100 | Geplant | Naechste Sprints aus der Roadmap (Release-Checkliste, Rollback, Reviews etc.). |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
@@ -403,22 +403,21 @@ Router-SLO-Spezifikation und deterministischer Stresstest der Provider-Kette unt
 
 ## Sprint 088 — Build-Reproduzierbarkeit (06.10.2026)
 
-Deterministischer Build-Manifest-Generator für wiederholbar identische Artefakt-Hashes.
+Deterministischer Build-Manifest-Generator und Nachweis wiederholbar identischer Artefakt-Hashes.
 
-- **Skript (scripts/build-manifest.ts)**: Erzeugt nach `pnpm build` ein JSON-Manifest mit SHA-256-Hashes aller Dateien in `dist/`. Dateiliste wird sortiert (Determinismus), Aggregat-Hash über alle Einzeldatei-Hashes gebildet. Analog AGENTS.md-Regel: Web-Payload hashen, nicht die ganze APK.
-- **Exportierte Funktionen**: `collectFiles`, `hashFile`, `generateManifest`, `writeManifest` — modular nutzbar und isoliert testbar.
-- **pnpm-Skript**: `pnpm build:manifest` ruft `tsx scripts/build-manifest.ts` auf (Standard: `dist/` → `dist/build-manifest.json`).
-- **Test-Suite (tests/build-manifest.test.ts)**: 10 deterministische Tests:
-  - (1) `collectFiles` sammelt Dateien rekursiv.
-  - (2) `collectFiles` liefert sortierte Ergebnisse.
-  - (3) `generateManifest` erzeugt korrekte Manifest-Felder.
-  - (4) Determinismus: identische Inhalte → identischer Aggregat-Hash.
-  - (5) Unterschiedliche Inhalte → unterschiedlicher Aggregat-Hash.
-  - (6) Dateipfade sind relativ zum dist-Verzeichnis.
-  - (7) Jeder Manifest-Eintrag hat path, sha256 und size.
-  - (8) Leeres Verzeichnis → 0 Dateien, gültiger Aggregat-Hash.
-  - (9) `hashFile`: gleicher Inhalt → gleicher Hash.
-  - (10) `hashFile`: unterschiedlicher Inhalt → unterschiedlicher Hash.
+- **Lieferumfang (PR #92)**:
+  - `scripts/build-manifest.ts`: Erzeugt nach `pnpm build` ein JSON-Manifest mit SHA-256-Hashes aller Dateien in `dist/`. Dateiliste wird sortiert (Determinismus), Aggregat-Hash über alle Einzeldatei-Hashes gebildet. Analog AGENTS.md-Regel: Web-Payload hashen, nicht die ganze APK.
+  - Exportierte Funktionen: `collectFiles`, `hashFile`, `generateManifest`, `writeManifest` — modular nutzbar und isoliert testbar.
+  - pnpm-Skript: `pnpm build:manifest` ruft `tsx scripts/build-manifest.ts` auf (Standard: `dist/` → `dist/build-manifest.json`).
+- **Repro-Nachweis (Doppel-Build)**:
+  - Zweimalige Ausführung von `pnpm build && pnpm build:manifest` auf `main` durchgeführt und verifiziert.
+  - **Ergebnis**: Beide Läufe erzeugen 100 % identische Artefakte und identische Aggregat-Hashes (`2cd39f7a186c679a1cd01c4a165430b778ea5891616bb3c94073e7e4185752f5`, 11 Dateien, 1.692.020 Bytes total).
+- **Anpassung / Fix**:
+  - `scripts/build-manifest.ts` erfasste beim zweiten Lauf anfänglich das im ersten Lauf erzeugte `dist/build-manifest.json` selbst, dessen Zeitstempel (`generatedAt`) den Aggregat-Hash veränderte.
+  - Fix: `collectFiles` schließt `build-manifest.json` beim Einlesen explizit aus, sodass nur die tatsächlichen Build-Erzeugnisse gehasht werden.
+- **Test-Suite (tests/build-manifest.test.ts)**: 11 deterministische Tests (inkl. Regressionstest für Manifest-Ausschluss), alle grün.
+- **Dokumentation**: Repro-Nachweis, Vorgehen und Befehle in `docs/TESTING.md` (Abschnitt "Build-Reproduzierbarkeit") hinterlegt.
+
 
 ## Sprint 085 — End-to-End-Smoke-Suite (05.10.2026)
 

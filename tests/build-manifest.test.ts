@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { generateManifest, collectFiles, hashFile, type BuildManifest } from "../scripts/build-manifest";
 
-describe("Build-Manifest (Sprint 087 — Build-Reproduzierbarkeit)", () => {
+describe("Build-Manifest (Sprint 088 — Build-Reproduzierbarkeit)", () => {
   let fixtureDir: string;
 
   beforeEach(() => {
@@ -37,6 +37,16 @@ describe("Build-Manifest (Sprint 087 — Build-Reproduzierbarkeit)", () => {
       const files = collectFiles(fixtureDir);
       const relPaths = files.map((f) => f.replace(fixtureDir + "/", "").replace(/\\/g, "/"));
       expect(relPaths).toEqual([...relPaths].sort());
+    });
+
+    it("ignoriert build-manifest.json selbst bei der Erfassung", () => {
+      writeFileSync(join(fixtureDir, "index.html"), "<html></html>");
+      writeFileSync(join(fixtureDir, "build-manifest.json"), '{"generatedAt":"timestamp"}');
+
+      const files = collectFiles(fixtureDir);
+      const relPaths = files.map((f) => f.replace(fixtureDir + "/", "").replace(/\\/g, "/"));
+      expect(relPaths).not.toContain("build-manifest.json");
+      expect(relPaths).toHaveLength(1);
     });
   });
 
