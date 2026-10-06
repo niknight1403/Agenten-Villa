@@ -1,15 +1,14 @@
 {
-  "ts": "2026-10-06T12:38:09.251Z",
+  "ts": "2026-10-06T12:48:09.625Z",
   "villa": {
     "id": 2,
     "name": "Agenten Villa",
-    "status": "RUNNING"
+    "status": "PAUSED"
   },
   "tasks": {
-    "FAILED": 8,
-    "RUNNING": 4
+    "FAILED": 12
   },
-  "running": true,
+  "running": false,
   "patches": {
     "appliedThisCycle": [],
     "failedThisCycle": [],
