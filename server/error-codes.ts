@@ -58,3 +58,15 @@ export function categoryForError(code: AgentErrorCode) {
 export function publicMessageForError(code: AgentErrorCode) {
   return PUBLIC_ERROR_MESSAGES[categoryForError(code)];
 }
+
+export class AgentError extends Error {
+  constructor(
+    public readonly code: AgentErrorCode,
+    message: string,
+    public readonly status?: number,
+    public readonly retryAfterSeconds?: number
+  ) {
+    super(message);
+    this.name = "AgentError";
+  }
+}

@@ -1,5 +1,18 @@
 # Sprintstatus Agenten-Villa
 
+## Sprint 086 — Fehler-Injection (05.10.2026)
+
+Einrichtung eines Fehler-Injection-Harness zur deterministischen Simulation von Timeout-, Rate-Limit- und Persistenzfehlern in Router-, Engine- und Store-Fehlerpfaden unter Wiederverwendung der Sprint-008-Fehlerklassen.
+
+- **Was**: Kleiner, konfigurierbarer Fehler-Injection-Harness (`server/fault-injection.ts`) zur gezielten Provokation von Provider-, Router- und Datenbankausfällen.
+- **Warum**: Verifizierung der Robustheit von Multi-Provider-Failover, Rate-Limit-Handling (`retryAfterSeconds`), DB-Probes und Fehlermapping ohne unkontrollierte Abstürze oder Secret-Leaks.
+- **Umsetzung**:
+  - `FaultInjectionRegistry` und Scoped Helper `withFaults` zur Regelverwaltung (Anzahl-Grenzen, Verzögerungen, Fehlercodes).
+  - Spezialisierte Fehlerklassen für alle Sprint-008-Codes (`ProviderTimeoutError`, `ProviderRateLimitError`, `ProviderAuthError`, `ProviderUnavailableError`, `ProviderRejectedError`, `ProviderContextTooLargeError`, `ProviderStoppedError`, `ProviderInvalidResponseError`, `ProviderInvalidInputError`, `ProviderMissingKeyError`, `ProviderPinUnavailableError`) sowie `PersistenceError` für Datenbankfehler.
+  - Nahtlose Anbindung an `callWithProviderChain` in `server/agent-engine.ts` und DB-Health-Probes.
+  - Zirkuläre Importe vermieden durch Zentralisierung von `AgentError` in `server/error-codes.ts`.
+- **Tests**: 22 neue Regressionstests in `server/fault-injection.test.ts` (Gesamtzahl von 624 auf 646 Tests / 75 Testdateien gestiegen). Mindestens 1 dedizierter Regressionstest pro Fehlerklasse (15/15 Klassen abgedeckt).
+
 ## Pipeline-Reparatur Auto-Merge (05.10.2026)
 
 Der Auto-Merge-Workflow schlug bei PR #80 (Sprint 085) mit
