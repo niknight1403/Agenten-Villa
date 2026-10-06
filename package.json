@@ -18,7 +18,8 @@
     "test:e2e": "vitest run tests/e2e",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "seed:villa": "tsx scripts/seed-villa.ts",
-    "build:manifest": "tsx scripts/build-manifest.ts"
+    "build:manifest": "tsx scripts/build-manifest.ts",
+    "release:check": "bash scripts/release-check.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

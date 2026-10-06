@@ -401,6 +401,23 @@ Router-SLO-Spezifikation und deterministischer Stresstest der Provider-Kette unt
   - (4) Dichtigkeits- und Leak-Prüfung: Keine neuen `process`-Listener (`uncaughtException`, `unhandledRejection`), `liveProgress`-Map und Cooldowns bereinigt, Telemetrie-Speicher strikt auf 200 Samples gedeckelt.
 - **Ergebnis**: 8/8 Router-Stresstests grün in ~1.2 s (`pnpm test server/router-stress.test.ts`), vollständige Testsuite (628 Tests in 77 Testdateien) grün.
 
+## Sprint 089 — Release-Checkliste & Release-Skript (07.10.2026)
+
+Vollständige Release-Dokumentation in `docs/RELEASE.md` und automatisches Release-Prüfskript `scripts/release-check.sh`.
+
+- **Release-Dokumentation (`docs/RELEASE.md`)**:
+  - **Versionsschema**: SemVer (`MAJOR.MINOR.PATCH`), Single Source of Truth in `package.json`, dynamische Auslesung über `/api/health`, Release-Tags `release-NNN` und `vX.Y.Z`.
+  - **Migrations-Schritte**: Drizzle ORM Schema (`drizzle/schema.ts`), Migrationen `0000_...sql` bis `0015_...sql`, Ausführung via `pnpm db:push` oder GitHub Workflow `.github/workflows/db-migrate.yml`. Post-Deploy DB-Verifikation über `/api/health`.
+  - **Rollback-Weg**: Git-Rollback via Revert-Commit/Tag, Render-Deployment-Rollback via Dashboard/API, abwärtskompatibles Schema-Design, Router-State Rollback via Admin-Clear.
+  - **Monitoring-Checks**: Öffentlicher Endpoint `/api/health` (Version, Uptime, DB, Watchdog-Controller, Provider, Routing), geschützte Metriken & Telemetrie (`agentMetricsSummary`, `routerTelemetrySummary`, `turnUsageSummary`).
+  - **Render-Deploy-Flow & Recovery-Route**: Automatischer Push-Deploy auf `main`, Recovery-Workflow `.github/workflows/render-restore.yml`.
+  - **Strikte Env-Bulk-PUT-Regel**: Render-Umgebungsvariablen dürfen NIE per partiellem Bulk-PUT erweitert werden (PUT überschreibt die gesamte Liste). Regel: Erst Liste lesen, mergen, dann komplett zurückschreiben.
+- **Release-Check-Skript (`scripts/release-check.sh`)**:
+  - Ausführbares Bash-Skript (`chmod +x`), das nacheinander `pnpm check`, `pnpm test` und `pnpm build` ausführt.
+  - Generiert eine übersichtliche Konsolen-Zusammenfassung und beendet sich mit Exit-Code 0 nur wenn alle 3 Schritte erfolgreich waren (sonst Exit-Code 1).
+  - Registriert in `package.json` als `pnpm release:check`.
+- **Test-Suite (`tests/release-check.test.ts`)**: 3 deterministische Tests für Existenz, Executable-Bit, Skriptinhalt und Registrierung in `package.json`.
+
 ## Sprint 088 — Build-Reproduzierbarkeit (06.10.2026)
 
 Deterministischer Build-Manifest-Generator und Nachweis wiederholbar identischer Artefakt-Hashes.
