@@ -384,6 +384,25 @@ Router-SLO-Spezifikation und deterministischer Stresstest der Provider-Kette unt
   - (4) Dichtigkeits- und Leak-Prüfung: Keine neuen `process`-Listener (`uncaughtException`, `unhandledRejection`), `liveProgress`-Map und Cooldowns bereinigt, Telemetrie-Speicher strikt auf 200 Samples gedeckelt.
 - **Ergebnis**: 8/8 Router-Stresstests grün in ~1.2 s (`pnpm test server/router-stress.test.ts`), vollständige Testsuite (628 Tests in 77 Testdateien) grün.
 
+## Sprint 087 — Build-Reproduzierbarkeit (06.10.2026)
+
+Deterministischer Build-Manifest-Generator für wiederholbar identische Artefakt-Hashes.
+
+- **Skript (scripts/build-manifest.ts)**: Erzeugt nach `pnpm build` ein JSON-Manifest mit SHA-256-Hashes aller Dateien in `dist/`. Dateiliste wird sortiert (Determinismus), Aggregat-Hash über alle Einzeldatei-Hashes gebildet. Analog AGENTS.md-Regel: Web-Payload hashen, nicht die ganze APK.
+- **Exportierte Funktionen**: `collectFiles`, `hashFile`, `generateManifest`, `writeManifest` — modular nutzbar und isoliert testbar.
+- **pnpm-Skript**: `pnpm build:manifest` ruft `tsx scripts/build-manifest.ts` auf (Standard: `dist/` → `dist/build-manifest.json`).
+- **Test-Suite (tests/build-manifest.test.ts)**: 10 deterministische Tests:
+  - (1) `collectFiles` sammelt Dateien rekursiv.
+  - (2) `collectFiles` liefert sortierte Ergebnisse.
+  - (3) `generateManifest` erzeugt korrekte Manifest-Felder.
+  - (4) Determinismus: identische Inhalte → identischer Aggregat-Hash.
+  - (5) Unterschiedliche Inhalte → unterschiedlicher Aggregat-Hash.
+  - (6) Dateipfade sind relativ zum dist-Verzeichnis.
+  - (7) Jeder Manifest-Eintrag hat path, sha256 und size.
+  - (8) Leeres Verzeichnis → 0 Dateien, gültiger Aggregat-Hash.
+  - (9) `hashFile`: gleicher Inhalt → gleicher Hash.
+  - (10) `hashFile`: unterschiedlicher Inhalt → unterschiedlicher Hash.
+
 ## Sprint 085 — End-to-End-Smoke-Suite (05.10.2026)
 
 Deterministische E2E-Smoke-Tests in `tests/e2e/smoke.test.ts`, die gegen einen lokal gebooteten Express-Server auf dynamischem Port mit Mock-Umgebung (kein echter Provider, keine echte DB) den Kernpfad prüfen:
