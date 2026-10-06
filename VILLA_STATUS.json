@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-06T13:08:23.301Z",
+  "ts": "2026-10-06T13:18:58.378Z",
   "villa": {
     "id": 2,
     "name": "Agenten Villa",
@@ -7,8 +7,8 @@
   },
   "tasks": {
     "DONE": 2,
-    "FAILED": 2,
-    "PENDING": 8
+    "FAILED": 7,
+    "RUNNING": 3
   },
   "running": true,
   "patches": {
@@ -26,6 +26,16 @@
     {
       "id": 19,
       "title": "Kernfunktion implementieren",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    },
+    {
+      "id": 20,
+      "title": "Schnittstellen & Integration",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    },
+    {
+      "id": 21,
+      "title": "Code-Review & Qualitaet",
       "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
     }
   ],
