@@ -1,14 +1,16 @@
 {
-  "ts": "2026-10-06T12:08:03.433Z",
+  "ts": "2026-10-06T12:18:06.174Z",
   "villa": {
     "id": 2,
     "name": "Agenten Villa",
-    "status": "PAUSED"
+    "status": "RUNNING"
   },
   "tasks": {
-    "FAILED": 12
+    "FAILED": 3,
+    "RUNNING": 4,
+    "PENDING": 5
   },
-  "running": false,
+  "running": true,
   "patches": {
     "appliedThisCycle": [],
     "failedThisCycle": [],
@@ -19,25 +21,36 @@
     {
       "id": 16,
       "title": "Anforderungen & Erfolgskriterien",
-      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
     },
     {
       "id": 17,
       "title": "Markt- und Technikrecherche",
-      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
     },
     {
       "id": 18,
       "title": "Architektur & Datenmodell",
-      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
-    },
-    {
-      "id": 19,
-      "title": "Kernfunktion implementieren",
-      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt Agenten-Villa (React 19 + Vite Client, Express + tRPC Server, Drizzle/Postgres, pnpm, Vitest, 5000 lazy Agentenplaetze, Provider-Router mit openrouter/free) als Superagenten-Schwarm analysieren, perfektionieren, optimieren und verbessern, bis alles autonom fun\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
     }
   ],
   "lastAudit": [
+    {
+      "tool": "memory_search",
+      "result": "- Abschlusspruefung: ## Zusammenfassung\n\nDeine Nachricht: \"Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt"
+    },
+    {
+      "tool": "memory_search",
+      "result": "- Analyse: OPTIMIZE: Entscheidung: OPTIMIZE\n\nZusammenfassung: Keine Angabe (Offline-Planer).\n\nBegruendung: Ohne angebundenes Sprachmodell wurde regelbasiert entschieden.\n\nBehalten: —\nErsetzen: —\nRisik"
+    },
+    {
+      "tool": "memory_search",
+      "result": "Keine Treffer."
+    },
+    {
+      "tool": "retry_failed",
+      "result": "12 gescheiterte Aufgabe(n) erneut gestartet"
+    },
     {
       "tool": "retry_failed",
       "result": "12 gescheiterte Aufgabe(n) erneut gestartet"
