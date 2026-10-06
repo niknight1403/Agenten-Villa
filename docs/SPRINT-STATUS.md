@@ -1,5 +1,20 @@
 # Sprintstatus Agenten-Villa
 
+## Sprint 087 — Fehler-Injection (nachgeliefert 07.10.2026)
+
+> Nummern-Korrektur: Der erste Versuch lief als PR #91 fälschlich als "Sprint 086" betitelt und wurde vom Owner als vermeintliches Duplikat von #89 (Router-Lasttest) geschlossen. Der Inhalt war nie in main. Nachlieferung als korrekt nummerierter Sprint 087 per Cherry-Pick des CI-grünen Commits d8237e6; auf aktuellem main laufen 656 Tests grün.
+
+Einrichtung eines Fehler-Injection-Harness zur deterministischen Simulation von Timeout-, Rate-Limit- und Persistenzfehlern in Router-, Engine- und Store-Fehlerpfaden unter Wiederverwendung der Sprint-008-Fehlerklassen.
+
+- **Was**: Kleiner, konfigurierbarer Fehler-Injection-Harness (`server/fault-injection.ts`) zur gezielten Provokation von Provider-, Router- und Datenbankausfällen.
+- **Warum**: Verifizierung der Robustheit von Multi-Provider-Failover, Rate-Limit-Handling (`retryAfterSeconds`), DB-Probes und Fehlermapping ohne unkontrollierte Abstürze oder Secret-Leaks.
+- **Umsetzung**:
+  - `FaultInjectionRegistry` und Scoped Helper `withFaults` zur Regelverwaltung (Anzahl-Grenzen, Verzögerungen, Fehlercodes).
+  - Spezialisierte Fehlerklassen für alle Sprint-008-Codes (`ProviderTimeoutError`, `ProviderRateLimitError`, `ProviderAuthError`, `ProviderUnavailableError`, `ProviderRejectedError`, `ProviderContextTooLargeError`, `ProviderStoppedError`, `ProviderInvalidResponseError`, `ProviderInvalidInputError`, `ProviderMissingKeyError`, `ProviderPinUnavailableError`) sowie `PersistenceError` für Datenbankfehler.
+  - Nahtlose Anbindung an `callWithProviderChain` in `server/agent-engine.ts` und DB-Health-Probes.
+  - Zirkuläre Importe vermieden durch Zentralisierung von `AgentError` in `server/error-codes.ts`.
+- **Tests**: 22 neue Regressionstests in `server/fault-injection.test.ts` (Gesamtzahl von 624 auf 646 Tests / 75 Testdateien gestiegen). Mindestens 1 dedizierter Regressionstest pro Fehlerklasse (15/15 Klassen abgedeckt).
+
 ## Pipeline-Reparatur Auto-Merge (05.10.2026)
 
 Der Auto-Merge-Workflow schlug bei PR #80 (Sprint 085) mit
@@ -364,7 +379,9 @@ verzoegerte jede Anfrage um seine volle Timeout-Latenz.
 | 076–084 | Grün    | Sprints 076–084 vollstaendig umgesetzt, gemerged und verifiziert (Prod-Env-Validierung, Token-Budget, Auto-Merge, Free-Tier-Erholung, Ollama-Route, Gate-Skip, Oracle-Kit, Ollama-VPS, PR-Backlog-Abbau). |
 | 085     | Grün    | End-to-End-Smoke-Suite: 10 deterministische E2E-Tests in tests/e2e/smoke.test.ts prüfen gegen lokal gebooteten Server (Mock-Umgebung, dynamischer Port) den Kernpfad (Health, Routing-Status, Villa-Anlegen inkl. Validierung, Lauf-Start idempotent, Lauf-Stopp, Laufbericht, Isolation). Ausführbar per pnpm test:e2e; 10/10 grün in 1,6 s. |
 | 086     | Grün    | Router-Lasttest mit Mock-Providern: Provider-Kette unter paralleler Mock-Last (50 Turns mit Fake-Latenzen), SLO-Grenzwerte als Constants im Logic-Modul (ROUTER_SLO_LIMITS), Cooldown/Failover unter Last stabil, keine Timer-/Listener-Leaks. 8/8 Stresstests grün in 1,2 s. |
-| 087–100 | Geplant | Naechste Sprints aus der Roadmap (Fehler-Injection, Build-Reproduzierbarkeit, etc.). |
+| 087     | Grün    | Fehler-Injection: Harness (server/fault-injection.ts) mit Sprint-008-Fehlerklassen + PersistenceError, Anbindung an callWithProviderChain und DB-Probes; 22 Regressionstests, Fehlerklassen sauber getrennt. Nachgeliefert aus geschlossenem #91. |
+| 088     | Grün    | Build-Reproduzierbarkeit: scripts/build-manifest.ts (SHA-256-Manifest über dist/, sortiert, Aggregat-Hash), pnpm build:manifest, 10 deterministische Tests. |
+| 089–100 | Geplant | Naechste Sprints aus der Roadmap (Release-Checkliste, Rollback, Reviews etc.). |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
 
@@ -384,7 +401,7 @@ Router-SLO-Spezifikation und deterministischer Stresstest der Provider-Kette unt
   - (4) Dichtigkeits- und Leak-Prüfung: Keine neuen `process`-Listener (`uncaughtException`, `unhandledRejection`), `liveProgress`-Map und Cooldowns bereinigt, Telemetrie-Speicher strikt auf 200 Samples gedeckelt.
 - **Ergebnis**: 8/8 Router-Stresstests grün in ~1.2 s (`pnpm test server/router-stress.test.ts`), vollständige Testsuite (628 Tests in 77 Testdateien) grün.
 
-## Sprint 087 — Build-Reproduzierbarkeit (06.10.2026)
+## Sprint 088 — Build-Reproduzierbarkeit (06.10.2026)
 
 Deterministischer Build-Manifest-Generator für wiederholbar identische Artefakt-Hashes.
 

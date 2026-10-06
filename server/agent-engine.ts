@@ -46,7 +46,8 @@ import {
 } from "./agent-schemas";
 import { authorizeGitHubTool } from "./tool-permissions";
 import { missionCacheScope, scopedCacheKey } from "./context-isolation";
-import type { AgentErrorCode } from "./error-codes";
+import { AgentError, type AgentErrorCode } from "./error-codes";
+import { faultRegistry } from "./fault-injection";
 import { GitHubToolError } from "./github-tools";
 
 export type Provider =
@@ -94,22 +95,7 @@ type ApiMessage = {
   tool_calls?: ToolCall[];
 };
 
-export class AgentError extends Error {
-  constructor(
-    public readonly code: AgentErrorCode,
-    message: string,
-    public readonly status?: number,
-    /**
-     * Sprint 033 — Rate-Limit-Erkennung: bei 429/402 mit Retry-After-
-     * Kopf dokumentiert der Anbieter, wann das Kontingent wieder nutzbar
-     * ist. Gespeichert in Sekunden, nie geraten.
-     */
-    public readonly retryAfterSeconds?: number
-  ) {
-    super(message);
-    this.name = "AgentError";
-  }
-}
+export { AgentError } from "./error-codes";
 
 /**
  * Sprint 033 — Retry-After einer Anbieterantwort. Akzeptiert Sekunden
@@ -343,6 +329,9 @@ async function callWithProviderChain(
   model: string;
   attempts: number;
 }> {
+  if (faultRegistry.isActive()) {
+    await faultRegistry.evaluateFault("provider");
+  }
   const registry = providerRegistry(options.allowHuggingFace ?? false);
   if (registry.length === 0)
     throw new AgentError(
