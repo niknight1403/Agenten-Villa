@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-06T11:58:01.604Z",
+  "ts": "2026-10-06T12:08:03.433Z",
   "villa": {
     "id": 2,
     "name": "Agenten Villa",
@@ -14,5 +14,33 @@
     "failedThisCycle": [],
     "pendingArtefacts": 0
   },
-  "lastTestResult": "n/a"
+  "lastTestResult": "n/a",
+  "failedTaskResults": [
+    {
+      "id": 16,
+      "title": "Anforderungen & Erfolgskriterien",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    },
+    {
+      "id": 17,
+      "title": "Markt- und Technikrecherche",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    },
+    {
+      "id": 18,
+      "title": "Architektur & Datenmodell",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    },
+    {
+      "id": 19,
+      "title": "Kernfunktion implementieren",
+      "result": "## Zusammenfassung\n\nDeine Nachricht: \"Villa-Idee: Mission: Das GitHub-Projekt VillaForge (Repo Agentforge2) autonom auf den Kopf stellen und optimieren, bis alles gruen ist. Das Projekt: ein Node-Hub (server/, node:sqlite, keine npm-Abhaengigkeiten, 140+ Tests) plus Android-App (Kotlin/Compose, APK-Bau via CI). Vorgehen: 1. Projekt voll\"\n\nIch habe sie aufgenommen. Ein Sprachmodell ist gerade nicht"
+    }
+  ],
+  "lastAudit": [
+    {
+      "tool": "retry_failed",
+      "result": "12 gescheiterte Aufgabe(n) erneut gestartet"
+    }
+  ]
 }
