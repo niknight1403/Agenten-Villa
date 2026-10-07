@@ -484,3 +484,19 @@ Redirect-URI registriert UND ein gueltiges Client-Secret. App + APK wurden
 auf AgentVilla umgestellt (capacitor.config.ts, versionCode 4 / Build 4).
 Der Render-Server benoetigt GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET auf
 AgentVilla (manueller Dashboard-Schritt).
+
+## Sprint 088 — Release-Checkliste (07.10.2026)
+
+Umfassende Release-Checkliste mit verifizierbaren Querverweisen auf bestehende Mechanismen.
+
+- **Lieferumfang**: `docs/RELEASE-CHECKLISTE.md` (115 Zeilen) mit folgenden Abschnitten:
+  1. Versionierung (package.json, Commit-SHA-basierter APK-Build)
+  2. APK-Release-Ablauf (workflow_dispatch, Keystore-Fingerprint, Web-Payload-Hash)
+  3. Datenbankmigration (drizzle, pnpm db:push, nie rückwärts ohne getesteten Weg)
+  4. Rollback (Checkpoint-Regeln aus BRANCH-PROTECTION.md)
+  5. Monitoring (Health-Endpunkt 2.0, Controller-SSE, Provider-Guardian)
+  6. Auto-Merge-Gate-Regeln
+  7. Qualitäts-Gate (pnpm check/test/build/diff --check)
+  8. Sicherheitsgrenzen (kein limit-bypass, kein Passwort-Login, Admin-Allowlist)
+- **Querverweise**: AGENTS.md (Release-Ablauf, Provider-Guardian, Controller), docs/BRANCH-PROTECTION.md (Rollback, Auto-Merge), docs/APK.md (Keystore), server/_core/health.ts, server/controller-sse.ts, server/provider-guardian.ts, scripts/build-manifest.ts.
+- **Tests**: keine neuen Tests (rein dokumentierender Sprint). Bestehende 646 Tests unverändert grün.
