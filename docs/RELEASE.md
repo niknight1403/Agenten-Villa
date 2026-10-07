@@ -11,7 +11,7 @@ Das Projekt folgt den Prinzipien von **Semantic Versioning (SemVer 2.0.0)**:
 $$ \text{MAJOR} . \text{MINOR} . \text{PATCH} $$
 
 * **MAJOR**: Inkompatible API-Änderungen oder tiefgreifende Architekturwechsel.
-* **MINOR**: Abwärtskompatible neue Features, Sprint-Releases, neue Provider-Integrationen or Schema-Erweiterungen.
+* **MINOR**: Abwärtskompatible neue Features, Sprint-Releases, neue Provider-Integrationen oder Schema-Erweiterungen.
 * **PATCH**: Abwärtskompatible Bugfixes, Refactorings, Security-Patches und Performance-Optimierungen.
 
 ### Versionierungspunkte im Code
@@ -51,7 +51,7 @@ $$ \text{MAJOR} . \text{MINOR} . \text{PATCH} $$
    pnpm release:check
    ```
 2. Sicherstellen, dass TypeScript (`pnpm check`), Tests (`pnpm test`) und Build (`pnpm build`) grün sind.
-3. Datenbank-Erreichbarkeit und Schema-Konsistenz vorab prüfen.
+3. Datenbank-Erreichbarkeit und Schema-Konsistency vorab prüfen.
 
 ### Post-Deploy-Verifikation
 1. Aufruf von `GET https://agenten-villa.onrender.com/api/health`.
@@ -61,29 +61,79 @@ $$ \text{MAJOR} . \text{MINOR} . \text{PATCH} $$
 
 ## 3. Rollback-Weg
 
-Sollte ein Deployment in Produktion Fehler aufweisen, stehen folgende Wiederherstellungspfade bereit:
+Sollte ein Deployment in Produktion Fehler aufweisen oder Invarianten verletzen, stehen folgende verifizierte Wiederherstellungspfade bereit:
 
-### A. Git Code Rollback
-1. Identifikation des letzten stabilen Tag-Stands (z. B. `release-088` oder Commit-SHA).
-2. Erstellen eines Hotfix-/Rollback-Branches oder Revert-Commits:
+### A. Checkpoint-Tags & Git Code Rollback
+1. **Checkpoint-Tags auf main**: Jeder stabile Sprint-Stand wird auf `main` mit einem Git-Tag der Form `release-NNN` versehen (z. B. `release-089`).
+2. **Rollback-Verifikationsskript**:
+   ```bash
+   ./scripts/rollback-verify.sh <checkpoint-tag-oder-commit>
+   # Beispiel: ./scripts/rollback-verify.sh release-089
+   ```
+   Das Skript prüft:
+   - Ist das Ziel ein gültiger Commit und Ahne (Ancestor) von `main`?
+   - Sind Health-Invarianten (ok=true, valides SemVer, DB-Status verbunden, activeRoute gesetzt, Provider betriebsbereit) erfüllt?
+   - Führen `pnpm check`, `pnpm test` und `pnpm build` fehlerfrei durch?
+3. **Ausführung des Reverts**:
    ```bash
    git revert <bad-commit-sha>
    git push origin main
    ```
-3. Push auf `main` triggert automatisch ein neues Render-Build des stabilen Stands.
+   Der Push auf `main` triggert automatisch den Render Build & Deploy Prozess.
 
-### B. Render Deploy Rollback
+### B. Deterministische Invarianten-Prüfung (`server/rollback-check.ts`)
+Die Logik in `server/rollback-check.ts` stellt sicher, dass vor einem Rollback alle kritischen Systeminvarianten programmatisch validiert werden:
+* **Checkpoint-Sicherheit**: Ein Rollback-Ziel muss älter als der aktuelle Stand, aber nicht älter als der älteste unterstützte Checkpoint sein (`isSafeRollbackTarget`).
+* **Router-Config-Persistenz**: Die Route-Override-Dateien (z. B. `data/route-override.json`) müssen lesbar sein, valides JSON enthalten und einen gültigen Override-Wert besitzen (`verifyRouterConfigPersistence`).
+* **Abwärtskompatibilität von Migrationen**: Drizzle-Schema-Migrationen müssen abwärtskompatibel geplant sein (`verifyMigrationsBackwardCompatible`).
+
+### C. Lokaler/Artefakt-Checkpoint & Restore (`scripts/rollback-checkpoint.ts`)
+Für das Erstellen und Wiederherstellen von Konfigurations- und Artefakt-Checkpoints steht das CLI-Tool bereit:
+```bash
+# Checkpoint erstellen
+npx tsx scripts/rollback-checkpoint.ts create --source ./data --out ./checkpoints/chk-089 --label "pre-deploy-090"
+
+# Checkpoint integritätsprüfen (SHA-256 Hashes & Manifest)
+npx tsx scripts/rollback-checkpoint.ts verify --checkpoint ./checkpoints/chk-089
+
+# Checkpoint wiederherstellen (idempotent)
+npx tsx scripts/rollback-checkpoint.ts restore --checkpoint ./checkpoints/chk-089 --target ./data
+```
+
+### D. Render Deploy Rollback
 1. Über die Render API oder das Render-Dashboard den letzten erfolgreichen Deploy auswählen.
-2. Trigger Redeploy (`POST /v1/services/srv-dar9h6id0e5s73c0c050/deploys` mit der `deployId` des vorherigen Stands).
+2. Redeploy triggern (`POST /v1/services/srv-dar9h6id0e5s73c0c050/deploys` mit der `deployId` des vorherigen Stands).
 
-### C. Datenbank-Rollback-Strategie
-* **Abwärtskompatible Schema-Änderungen**: Schema-Migrationen dürfen in Produktion spaltenbezogen nur additiv oder nullable erfolgen (kein hartes Löschen von Spalten ohne Übergangsphase).
-* Sollte eine Drizzle-Migration rückgängig gemacht werden müssen, ist ein abwärtskompatibles Gegen-Migrations-Skript als neuer Drizzle-Schritt einzureichen.
+### E. Datenbank-Rollback-Strategie & Richtlinie
+* **Strikte Regel**: DB-Migrationen werden gemäß `docs/BRANCH-PROTECTION.md` **niemals automatisch rückwärts** ausgeführt, um Datenverlust zu vermeiden.
+* **Schema-Design**: Drizzle-Migrationen in Produktion müssen spaltenbezogen **additiv** oder **nullable** gestaltet sein.
+* **Notfall-Schema-Rollback**: Wenn ein Schema-Rollback zwingend erforderlich ist, muss ein getestetes Rückwärts-Migrationsskript als neuer separater Drizzle-Migrationsschritt eingereicht werden.
 
-### D. Router- & Controller-Zustand
+### F. Router- & Controller-Zustand
 * Der Router- und Controller-Status wird im In-Memory-Cache und in `data/controller-state.json` / `data/route-override.json` verwaltet.
 * Ein fehlerhafter Admin-Route-Pin kann jederzeit über die tRPC-Admin-Schnittstelle (`systemRouter.routingOverride(provider: null)`) gelöscht werden.
 
+
+### G. Checkpoint-Tags (Sprint 090)
+* Nach jedem Sprint-Abschluss wird ein Checkpoint-Tag `release-NNN` auf main gesetzt (z. B. `release-089`).
+* Tags werden vor dem Merge des naechsten Sprints gesetzt, um einen stabilen Wiederherstellungspunkt zu haben.
+* Ein Rollback-Ziel ist sicher, wenn:
+  * Die Checkpoint-Nummer kleiner als der aktuelle Stand ist.
+  * Die Checkpoint-Nummer nicht aelter als der letzte als "good" markierte Stand ist.
+  * Das Verifikationsskript `scripts/rollback-verify.sh` gruen ist.
+* Verifikation vor Rollback:
+  ```bash
+  ./scripts/rollback-verify.sh release-089
+  # oder via pnpm
+  pnpm rollback:verify release-089
+  ```
+* Das Skript prueft: Git-Existenz, Ancestor-Relation zu main, pnpm check/test/build.
+
+### H. Router-Config-Persistenz bei Rollback (Sprint 090)
+* Die Router-Config (`data/route-override.json`) bleibt bei einem Code-Rollback lesbar: das Dateiformat ist abwaertskompatibel (zusaetzliche Felder werden ignoriert).
+* Der Route-Override ist prozesslokal und wird nicht persistiert — bei einem Rollback faellt die Engine zurueck in die Auto-Kette.
+* Die `data/controller-state.json` enthaelt nur additive Statusfelder; aeltere Code-Versionen koennen sie sicher lesen.
+* Die Logik-Module `server/rollback-check.ts` mit `verifyRouterConfigPersistence()` und `verifyHealthInvariants()` pruefen diese Invarianten deterministisch.
 ---
 
 ## 4. Monitoring-Checks (Health & Metriken)
