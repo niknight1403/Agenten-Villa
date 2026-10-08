@@ -45,11 +45,20 @@ describe("Release-Review (Sprint 090)", () => {
     expect(content).toContain("SPRINT-STATUS.md");
   });
 
+  it("records the specific open acceptance criteria", () => {
+    const review = readFileSync(reviewPath, "utf-8");
+    const roadmap = readFileSync(join(process.cwd(), "docs", "ROADMAP-100-SPRINTS.md"), "utf-8");
+    expect(roadmap).toContain("| 079 | Metrik-Dashboard | Kernmetriken sind pro Villa und Projekt filterbar.");
+    expect(review).toContain("weder API noch Controller-Dashboard Metriken nach Villa oder Projekt filtern können");
+    expect(roadmap).toContain("| 084 | End-to-End-Smoke-Test | Login, Villa, Lauf und Bericht werden durchlaufen.");
+    expect(review).toContain("084 Login-E2E");
+  });
+
   it("contains security checklist", () => {
     const content = readFileSync(reviewPath, "utf-8");
     expect(content).toContain("Sicherheits-Checkliste");
     expect(content).toContain("Limit-Bypass");
-    expect(content).toContain("Admin-Allowlist");
+    expect(content).toContain("AGENT_ADMIN_EMAIL");
   });
 
   it("contains test overview with counts", () => {
