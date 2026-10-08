@@ -90,3 +90,18 @@ Dokumentierter und getesteter Rollback-Pfad mit Checkpoint-Tags, Verifikationssk
 - **Invarianten**: ok=true, SemVer-Version, database=verbunden, activeRoute!=null, mind. 1 Provider nutzbar, Migrationen abwaertskompatibel, Router-Config lesbar/valid.
 - **Tests**: 25 neue Tests, bestehende Tests unveraendert.
 - **Grenzen**: Logic-Modul operiert auf uebergebenen Daten (keine echten Git/Health-Aufrufe); Skript macht echte Git/pnpm-Aufrufe.
+
+## Sprint 091 — Release-Review (08.10.2026)
+
+Release-Review mit Statusmatrix aller Roadmap-Bereiche 1-9 und Sicherheits-Checkliste.
+
+- **Review-Dokument (`docs/RELEASE-REVIEW.md`)**:
+  - Statusmatrix für alle 10 Roadmap-Bereiche (1-9 plus Bereich 10-Überblick) mit Status (Grün/Teilweise offen), Zusammenfassung und Beweisverweisen auf Code-Dateien und Tests.
+  - Bereich 1-7 und 9: Vollständig grün.
+  - Bereich 8 (Daten, Persistenz, Beobachtbarkeit): Sprints 071-077 grün, Sprints 078-079 (strukturierte Logs, Metrik-Dashboard) ehrlich als teilweise offen markiert mit Empfehlung, vor Release 1.0 nachzuziehen.
+  - Sicherheits-Checkliste: Kein Limit-Bypass, kein Passwort-Login, Admin-Allowlist verbindlich, RLS/Ownership, Provider-Grenzen, keine Secrets, Rate-Limit, CSRF-Schutz — alle Grün mit Beweisverweisen.
+  - Test-Übersicht: ~672 Tests gesamt, alle Grün.
+- **Regressionstest (`tests/release-review.test.ts`)**:
+  - 6 deterministische Tests: Dokument-Existenz, Statusmatrix-Vollständigkeit (alle 9 Bereiche), offene Punkte ehrlich markiert, SPRINT-STATUS.md-Referenz, Sicherheits-Checkliste, Test-Übersicht.
+- **Tests**: 6 neue Release-Review-Tests, bestehende Tests unangetastet.
+- **Offene Punkte**: Bereich 8 Sprints 078-079 (strukturierte Logs, Metrik-Dashboard) vor Release 1.0 nachziehen.
