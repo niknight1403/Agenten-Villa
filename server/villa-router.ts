@@ -6,6 +6,7 @@ import { validRating } from "./agent-engine";
 import {
   appendMessages,
   createVilla,
+  createVillaFromTemplate,
   deleteVilla,
   ensureStarterVilla,
   exportVilla,
@@ -22,6 +23,7 @@ import {
   updateVilla,
   VillaLimitError,
 } from "./villa-store";
+import { VILLA_TEMPLATES, findTemplate } from "./templates";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
@@ -359,6 +361,41 @@ export const villaRouter = router({
         }
         return { rating: message.rating };
       } catch (error) {
+        storeError(error);
+      }
+    }),
+  /** Sprint 091 — Verfügbare Projektvorlagen auflisten. */
+  templatesList: protectedProcedure.query(() => {
+    return VILLA_TEMPLATES.map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      villaName: t.villaName,
+      specialty: t.specialty,
+      icon: t.icon,
+      capacity: t.capacity,
+    }));
+  }),
+
+  /** Sprint 091 — Villa aus einer Vorlage anlegen. */
+  createFromTemplate: protectedProcedure
+    .input(z.object({ templateId: z.string().trim().min(1).max(40) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!findTemplate(input.templateId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Unbekannte Vorlage.",
+        });
+      }
+      try {
+        return await createVillaFromTemplate(ctx.user.id, input.templateId);
+      } catch (error) {
+        if (error instanceof VillaLimitError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Limit erreicht: maximal ${error.maxVillas} Villen. Bitte alte Villen archivieren oder löschen.`,
+          });
+        }
         storeError(error);
       }
     }),

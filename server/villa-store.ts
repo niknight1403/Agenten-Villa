@@ -1,4 +1,5 @@
 import { sanitizeVillaExport } from "./villa-export";
+import { templateToVillaInput } from "./templates";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { LimitConfig, Villa, VillaEvent, VillaMessage } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -131,6 +132,20 @@ export const STARTER_VILLA = {
 
 export async function ensureStarterVilla(userId: number): Promise<Villa> {
   return createVilla({ createdBy: userId, ...STARTER_VILLA });
+}
+
+
+/**
+ * Sprint 091 — Villa aus einer Projektvorlage anlegen.
+ * Nutzt dieselbe createVilla-Funktion, sodass Limits und Audit-Spur
+ * identisch sind wie bei manuell angelegten Villen.
+ */
+export async function createVillaFromTemplate(
+  userId: number,
+  templateId: string,
+): Promise<Villa> {
+  const input = templateToVillaInput(templateId);
+  return createVilla({ createdBy: userId, ...input });
 }
 
 /**

@@ -105,3 +105,15 @@ Release-Review mit Statusmatrix aller Roadmap-Bereiche 1-9 und Sicherheits-Check
   - 6 deterministische Tests: Dokument-Existenz, Statusmatrix-Vollständigkeit (alle 9 Bereiche), offene Punkte ehrlich markiert, SPRINT-STATUS.md-Referenz, Sicherheits-Checkliste, Test-Übersicht.
 - **Tests**: 6 neue Release-Review-Tests, bestehende Tests unangetastet.
 - **Offene Punkte**: Bereich 8 Sprints 078-079 (strukturierte Logs, Metrik-Dashboard) vor Release 1.0 nachziehen.
+
+## Sprint 091 — Projektvorlagen (09.10.2026)
+
+Häufige Agentenprojekte können als sichere Vorlage angelegt werden.
+
+- **Lieferumfang**:
+  1. `server/templates.ts`: Vorlagendefinitionen (`VILLA_TEMPLATES`) mit 5 Vorlagen (Code-Review, Recherche, Brainstorming, Dokumentation, Test-Automatisierung), Validierungsfunktion (`validateTemplate`), Suche (`findTemplate`) und Konvertierung (`templateToVillaInput`).
+  2. `server/villa-store.ts`: `createVillaFromTemplate()` nutzt dieselbe `createVilla`-Funktion, sodass Limits und Audit-Spur identisch sind.
+  3. `server/villa-router.ts`: tRPC-Endpunkte `villa.templatesList` (Query) und `villa.createFromTemplate` (Mutation, protected).
+  4. `server/templates.test.ts`: 17 deterministische Tests (Vorlagen-Vollständigkeit, Kapazitätsgrenzen, Icon-Validierung, Limit-Bypass-Ausschluss, Validierung, Suche, Konvertierung).
+- **Sicherheitsgrenzen**: Keine Vorlage enthält `limit-bypass` oder ähnliches (AGENTS.md-Regel, von `agent-villa.test.ts` geprüft). Kapazität 1–25 (Sprint 012). `validateTemplate` prüft alle Felder beim Modul-Laden.
+- **Tests**: 17 neue Tests, bestehende Tests unangetastet.
