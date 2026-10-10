@@ -52,11 +52,17 @@ async function main() {
     throw new Error("RENDER_API_KEY fehlt (GitHub-Secret RENDER_API_KEY)");
   }
 
-  // Service per Name suchen (Render listet nur die eigenen).
-  const services = await render("/services?limit=100", { method: "GET" });
-  const service = (Array.isArray(services) ? services : []).find(
-    (candidate) => candidate.name === SERVICE_NAME,
-  );
+  // Service per ID (bevorzugt) oder Name suchen (Render listet nur die eigenen).
+  const serviceId = process.env.RENDER_SERVICE_ID;
+  let service;
+  if (serviceId) {
+    service = await render(`/services/${serviceId}`, { method: "GET" });
+  } else {
+    const services = await render("/services?limit=100", { method: "GET" });
+    service = (Array.isArray(services) ? services : []).find(
+      (candidate) => candidate.name === SERVICE_NAME,
+    );
+  }
   if (!service) {
     throw new Error(`Render-Service '${SERVICE_NAME}' nicht gefunden — Render-Dashboard pruefen`);
   }

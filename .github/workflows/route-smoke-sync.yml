@@ -72,6 +72,7 @@ jobs:
       - name: Secrets synchronisieren
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dar9h6id0e5s73c0c050
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           AGENT_ADMIN_EMAIL: ${{ secrets.AGENT_ADMIN_EMAIL }}
@@ -95,8 +96,8 @@ jobs:
           echo "Warte auf Health des Render-Services (Health-Check-Pfad: /api/health)..."
           for attempt in $(seq 1 60); do
             url=$(curl -s -m 15 -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/services?limit=100" \
-              | python3 -c "import json,sys; s=[x for x in json.load(sys.stdin) if x['name']=='agenten-villa']; print(s[0]['serviceDetails']['url'] if s else '')")
+              "https://api.render.com/v1/services/srv-dar9h6id0e5s73c0c050" \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('serviceDetails',{}).get('url','') if d.get('serviceDetails') else '')")
             if [ -n "$url" ]; then
               code=$(curl -s -o /tmp/health.json -w "%{http_code}" -m 20 "$url/api/health" || echo 000)
               echo "Versuch $attempt: $url/api/health → HTTP $code"
