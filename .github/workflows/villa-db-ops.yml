@@ -47,20 +47,27 @@ jobs:
               if (!rows.length) throw new Error(`Villa ${villaId} existiert nicht`);
               if (rows[0].name !== confirmName)
                 throw new Error(`Name-Mismatch: Villa ${villaId} heisst "${rows[0].name}", Bestaetigung war "${confirmName}" — nichts geloescht.`);
+              const tables = await sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`;
+              const has = n => tables.some(t => t.table_name === n);
               await sql.begin(async tx => {
                 await tx`DELETE FROM villa_messages WHERE "villaId" = ${villaId}`;
                 await tx`DELETE FROM villa_events WHERE "villaId" = ${villaId}`;
-                await tx`DELETE FROM villa_test_runs WHERE "villaId" = ${villaId}`;
+                if (has('villa_test_runs')) {
+                  if (has('villa_run_events')) await tx`DELETE FROM villa_run_events WHERE "runId" IN (SELECT id FROM villa_test_runs WHERE "villaId" = ${villaId})`;
+                  await tx`DELETE FROM villa_test_runs WHERE "villaId" = ${villaId}`;
+                }
                 await tx`DELETE FROM villas WHERE id = ${villaId}`;
               });
               const after = await sql`SELECT id, name FROM villas ORDER BY id`;
               console.log('Geloescht:', villaId, confirmName);
               console.log('Verbleibende Villen:', JSON.stringify(after));
             } else {
+              const tables = await sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`;
+              console.log('Tabellen:', tables.map(t => t.table_name).join(', '));
               const villas = await sql`
                 SELECT v.id, v.name, v."createdBy", v."createdAt", v."archivedAt",
                        (SELECT count(*) FROM villa_messages m WHERE m."villaId" = v.id) AS messages,
-                       (SELECT count(*) FROM villa_test_runs t WHERE t."villaId" = v.id) AS test_runs
+                       (SELECT count(*) FROM elite_mission_runs e WHERE e."villaId" = v.id) AS mission_runs
                 FROM villas v ORDER BY v.id`;
               console.log('Villen:', JSON.stringify(villas, null, 1));
               const users = await sql`SELECT id, email, role FROM users ORDER BY id`;
