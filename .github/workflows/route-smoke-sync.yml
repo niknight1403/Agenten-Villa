@@ -1,0 +1,111 @@
+name: Route-Smoke & Render-Secret-Sync
+
+# Sprint 102 — Autonome Ollama-auf-Oracle-Integration:
+# 1. Live-Test der eigenen Ollama-Route (Bearer aus GitHub-Secret
+#    VILLA_OLLAMA_TOKEN) — Modelligte + eine Mini-Completion.
+# 2. Sync aller LLM-/Betriebs-Secrets aus GitHub nach Render
+#    (loest dort einen Deploy aus) und Health-Check des Services.
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_deploy_sync:
+        description: "Nur Ollama-Smoke-Test, kein Render-Sync"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "scripts/render-secrets-sync.mjs"
+      - "server/route-rotator.ts"
+      - ".github/workflows/route-smoke-sync.yml"
+
+concurrency:
+  group: route-smoke-sync
+  cancel-in-progress: false
+
+jobs:
+  ollama-smoke:
+    name: Ollama auf Oracle — Live-Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OLLAMA_BASE_URL: https://ollama.cybersarah-ki.com/v1
+      OLLAMA_TOKEN: ${{ secrets.VILLA_OLLAMA_TOKEN }}
+    steps:
+      - name: Modelligte abrufen (unkritisch, kein Token-Verbrauch)
+        run: |
+          set -euo pipefail
+          status=$(curl -s -o /tmp/models.json -w "%{http_code}" -m 30 \
+            -H "Authorization: Bearer $OLLAMA_TOKEN" \
+            "$OLLAMA_BASE_URL/models")
+          echo "HTTP $status"
+          cat /tmp/models.json
+          [ "$status" = "200" ]
+          count=$(python3 -c "import json;print(len(json.load(open('/tmp/models.json'))['data']))")
+          echo "Modelle auf der VM: $count"
+          [ "$count" -ge 1 ]
+
+      - name: Mini-Completion (1 Token, beweist Inferenz)
+        run: |
+          set -euo pipefail
+          model=$(python3 -c "import json;print(json.load(open('/tmp/models.json'))['data'][0]['id'])")
+          echo "Testmodell: $model"
+          status=$(curl -s -o /tmp/chat.json -w "%{http_code}" -m 300 \
+            -H "Authorization: Bearer $OLLAMA_TOKEN" \
+            -H "content-type: application/json" \
+            -d "{\"model\":\"$model\",\"max_tokens\":5,\"messages\":[{\"role\":\"user\",\"content\":\"Sag nur: OK\"}]}" \
+            "$OLLAMA_BASE_URL/chat/completions")
+          echo "HTTP $status"
+          head -c 400 /tmp/chat.json
+          [ "$status" = "200" ]
+
+  render-sync:
+    name: GitHub-Secrets nach Render synchronisieren
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ollama-smoke
+    if: ${{ !inputs.skip_deploy_sync }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secrets synchronisieren
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          AGENT_ADMIN_EMAIL: ${{ secrets.AGENT_ADMIN_EMAIL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ""
+          HF_TOKEN: ${{ secrets.VILLA_HF_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SERVER_GITHUB_TOKEN }}
+          OLLAMA_BASE_URL: https://ollama.cybersarah-ki.com/v1
+          OLLAMA_API_KEY: ${{ secrets.VILLA_OLLAMA_TOKEN }}
+          OLLAMA_TIMEOUT_MS: "600000"
+        run: node scripts/render-secrets-sync.mjs
+
+      - name: Auf Render-Deploy + Health warten (bis 10 min)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          echo "Warte auf Health des Render-Services (Health-Check-Pfad: /api/health)..."
+          for attempt in $(seq 1 60); do
+            url=$(curl -s -m 15 -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services?limit=500" \
+              | python3 -c "import json,sys; s=[x for x in json.load(sys.stdin) if x['name']=='agenten-villa']; print(s[0]['serviceDetails']['url'] if s else '')")
+            if [ -n "$url" ]; then
+              code=$(curl -s -o /tmp/health.json -w "%{http_code}" -m 20 "$url/api/health" || echo 000)
+              echo "Versuch $attempt: $url/api/health → HTTP $code"
+              if [ "$code" = "200" ]; then
+                python3 -c "import json; d=json.load(open('/tmp/health.json')); print('ok:', d.get('ok'), '| version:', d.get('version')); assert d.get('ok') is True"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Health-Check nicht rechtzeitig grün"
+          exit 1

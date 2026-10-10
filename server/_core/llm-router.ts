@@ -82,6 +82,22 @@ export function registerLLMProvider(provider: LLMProvider): void {
   }
 }
 
+/**
+ * Sprint 102 — Reihenfolge-Hook fuer den API-Routen-Rotator:
+ * sortiert die registrierten Provider nach der uebergebenen Namensliste
+ * (gesundeste Route zuerst). Unbekannte Namen bleiben hinten, in ihrer
+ * bisherigen Reihenfolge.
+ */
+export function setRegisteredProviderOrder(order: string[]): void {
+  const rankOf = (name: string) => {
+    const index = order.indexOf(name);
+    return index < 0 ? order.length : index;
+  };
+  registeredProviders = [...registeredProviders].sort(
+    (a, b) => rankOf(a.name) - rankOf(b.name),
+  );
+}
+
 /** Nur fuer Tests: Registry auf die Default-Provider zuruecksetzen. */
 export function resetLLMProvidersForTests(): void {
   registeredProviders = [...DEFAULT_PROVIDERS];

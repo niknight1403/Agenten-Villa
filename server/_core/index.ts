@@ -9,6 +9,7 @@ import { registerHealthRoute, setDatabaseHealthReport, setControllerStateSource 
 import { validateProductionEnv } from "./env-validation";
 import { startProviderGuardian } from "../provider-guardian";
 import { checkDatabaseHealth } from "../db-health";
+import { runRotationTick } from "../route-rotator";
 import { rateLimit } from "./rate-limit";
 import { demoSubmitRateLimit } from "./demoRateLimit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
@@ -92,6 +93,30 @@ function startDatabaseHealthWatch(): void {
   timer.unref?.();
 }
 
+/**
+ * Sprint 102 — API-Routen-Rotator im Hintergrund (5 min, unref):
+ * Probiert alle freien Routen (unkritisch, kein Token-Verbrauch),
+ * rangiert Ollama-first und uebernimmt die Reihenfolge in den
+ * Fallback-Router. Fehler stoeren den Betrieb nicht.
+ */
+function startRouteRotationWatch(): void {
+  const runTick = async () => {
+    try {
+      const status = await runRotationTick();
+      if (status.activeRoute) {
+        console.log(`[Route-Rotator] Aktiv: ${status.activeRoute} (Rangfolge: ${status.rankedRoutes.join(" > ")})`);
+      } else {
+        console.warn("[Route-Rotator] Keine konfigurierte Route aktiv (OLLAMA_BASE_URL/OPENROUTER_API_KEY/... fehlen?)");
+      }
+    } catch (error) {
+      console.warn("[Route-Rotator] Tick fehlgeschlagen:", error);
+    }
+  };
+  void runTick();
+  const timer = setInterval(() => void runTick(), 5 * 60_000);
+  timer.unref?.();
+}
+
 async function startServer() {
   const app = express();
   // Render (und jeder andere Reverse-Proxy) beendet TLS vor dem Prozess.
@@ -103,6 +128,8 @@ async function startServer() {
   app.set("trust proxy", resolveTrustProxy());
   const server = createServer(app);
   startDatabaseHealthWatch();
+  // Sprint 102 — Routen-Rotation im Hintergrund starten.
+  startRouteRotationWatch();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

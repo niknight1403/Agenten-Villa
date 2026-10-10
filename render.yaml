@@ -23,6 +23,16 @@ services:
       # Required for administrator Elite missions on protected agent/* branches.
       - key: GITHUB_TOKEN
         sync: false
+      # Sprint 102 — Eigene Ollama-Route auf Oracle Cloud Always Free
+      # (unbegrenzte Tokens, keine Abrechnung). Wird ueber den
+      # GitHub-Workflow .github/workflows/route-smoke-sync.yml aus den
+      # GitHub-Secrets (VILLA_OLLAMA_TOKEN) nach Render synchronisiert.
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: OLLAMA_TIMEOUT_MS
+        sync: false
       # Optional model fallback; only used after explicit activation.
       - key: HF_TOKEN
         sync: false
