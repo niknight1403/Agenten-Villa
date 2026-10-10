@@ -53,7 +53,7 @@ async function main() {
   }
 
   // Service per Name suchen (Render listet nur die eigenen).
-  const services = await render("/services?limit=500", { method: "GET" });
+  const services = await render("/services?limit=100", { method: "GET" });
   const service = (Array.isArray(services) ? services : []).find(
     (candidate) => candidate.name === SERVICE_NAME,
   );

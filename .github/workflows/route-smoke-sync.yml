@@ -95,7 +95,7 @@ jobs:
           echo "Warte auf Health des Render-Services (Health-Check-Pfad: /api/health)..."
           for attempt in $(seq 1 60); do
             url=$(curl -s -m 15 -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/services?limit=500" \
+              "https://api.render.com/v1/services?limit=100" \
               | python3 -c "import json,sys; s=[x for x in json.load(sys.stdin) if x['name']=='agenten-villa']; print(s[0]['serviceDetails']['url'] if s else '')")
             if [ -n "$url" ]; then
               code=$(curl -s -o /tmp/health.json -w "%{http_code}" -m 20 "$url/api/health" || echo 000)
