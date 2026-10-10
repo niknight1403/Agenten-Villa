@@ -19,7 +19,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           npm install postgres --no-save --silent
-          node --input-type=module - <<'EOF'
+          node --input-type=module - <<'EOF' 2>&1 || exit 1
           import postgres from 'postgres';
           import crypto from 'node:crypto';
           const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
@@ -38,20 +38,33 @@ jobs:
             forge: { strategy: 'OPTIMIZE', productReview: true, memory: [] },
           };
           const requestHash = crypto.createHash('sha256').update(PROMPT).digest('hex');
-          const users = await sql`select id from users where lower(email) = ${ADMIN_EMAIL} limit 1`;
-          if (users.length === 0) throw new Error('Admin-User nicht gefunden: ' + ADMIN_EMAIL);
-          const userId = users[0].id;
-          const rows = await sql`
-            insert into elite_mission_runs
-              ("userId", "idempotencyKey", "requestHash", "input", "status", "attempt", "ownerId", "leaseUntil", "createdAt", "updatedAt")
-            values
-              (${userId}, 'master-24-7-csc-001', ${requestHash}, ${sql.json(input)}, 'interrupted', 1,
-               ${crypto.randomUUID()}, now() - interval '1 hour', now(), now())
-            on conflict ("userId", "idempotencyKey") do nothing
-            returning id`;
-          const check = await sql`select id, status from elite_mission_runs
-            where "userId" = ${userId} and "idempotencyKey" = 'master-24-7-csc-001'`;
-          if (check.length !== 1) throw new Error('Mission nicht eindeutig angelegt');
-          console.log('Mission OK:', JSON.stringify(check[0]), rows.length ? '(neu angelegt)' : '(existierte bereits)');
+          try {
+            const users = await sql`select id, email, "loginMethod" from users where lower(email) = ${ADMIN_EMAIL} limit 1`;
+            let userId;
+            if (users.length > 0) {
+              userId = users[0].id;
+            } else {
+              const all = await sql`select id, email from users order by id asc`;
+              console.log('WARNUNG: Admin-Email nicht gefunden. Vorhandene User:', JSON.stringify(all));
+              if (all.length === 0) throw new Error('Keine User in der DB — bitte einmal in der Villa-Oberflaeche mit Google anmelden.');
+              userId = all[all.length - 1].id;
+            }
+            console.log('Nutze userId:', userId);
+            const rows = await sql`
+              insert into elite_mission_runs
+                ("userId", "idempotencyKey", "requestHash", "input", "status", "attempt", "ownerId", "leaseUntil", "createdAt", "updatedAt")
+              values
+                (${userId}, 'master-24-7-csc-001', ${requestHash}, ${sql.json(input)}, 'interrupted', 1,
+                 ${crypto.randomUUID()}, now() - interval '1 hour', now(), now())
+              on conflict ("userId", "idempotencyKey") do nothing
+              returning id`;
+            const check = await sql`select id, status from elite_mission_runs
+              where "userId" = ${userId} and "idempotencyKey" = 'master-24-7-csc-001'`;
+            if (check.length !== 1) throw new Error('Mission nicht eindeutig angelegt');
+            console.log('MISSION-OK id=' + check[0].id + ' status=' + check[0].status + (rows.length ? ' (neu angelegt)' : ' (existierte bereits)'));
+          } catch (err) {
+            console.error('SEED-FEHLER:', err && err.message ? err.message : String(err));
+            process.exit(1);
+          }
           await sql.end();
           EOF
