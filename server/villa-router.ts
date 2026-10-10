@@ -24,6 +24,13 @@ import {
   VillaLimitError,
 } from "./villa-store";
 import { VILLA_TEMPLATES, findTemplate } from "./templates";
+import {
+  getSubscription,
+  cancelAtPeriodEnd,
+  resumeSubscription,
+  upgradeToPro,
+} from "./subscription";
+import { billingSummary, checkoutAvailability, planCatalog } from "./billing";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
@@ -85,6 +92,52 @@ export const villaRouter = router({
    * from the client's perspective (it is only requested when the list is
    * empty); the normal villa limit still applies.
    */
+  /** Sprint 103 — SaaS: Subscription-Status + Abrechnung des eigenen Tenants. */
+  subscription: protectedProcedure.query(async ({ ctx }) => {
+    const state = await getSubscription(ctx.user.id);
+    const summary = await billingSummary(ctx.user.id);
+    return {
+      subscription: {
+        plan: state.plan,
+        status: state.status,
+        trialEndsAt: state.trialEndsAt,
+        currentPeriodEnd: state.currentPeriodEnd,
+        graceEndsAt: state.graceEndsAt,
+        cancelAtPeriodEnd: state.cancelAtPeriodEnd,
+      },
+      usage: summary,
+      checkout: checkoutAvailability(),
+    };
+  }),
+
+  /** Sprint 103 — Tier-Katalog fuer Onboarding/Paywall. */
+  plans: protectedProcedure.query(() => planCatalog()),
+
+  /** Sprint 103 — Kuendigung zum Periodenende (Fairness, nie sofort). */
+  subscriptionCancel: protectedProcedure.mutation(async ({ ctx }) => {
+    const state = await cancelAtPeriodEnd(ctx.user.id);
+    return { status: state.status, cancelAtPeriodEnd: state.cancelAtPeriodEnd };
+  }),
+
+  /** Sprint 103 — Kuendigung zuruecknehmen. */
+  subscriptionResume: protectedProcedure.mutation(async ({ ctx }) => {
+    const state = await resumeSubscription(ctx.user.id);
+    return { status: state.status, cancelAtPeriodEnd: state.cancelAtPeriodEnd };
+  }),
+
+  /** Sprint 103 — Upgrade auf Pro (nur Admin, bis der Checkout freigegeben ist). */
+  subscriptionUpgrade: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Upgrades laufen über den Checkout (nach Admin-Freigabe) oder durch einen Administrator.",
+      });
+    }
+    const state = await upgradeToPro(ctx.user.id);
+    return { plan: state.plan, status: state.status };
+  }),
+
   ensureStarter: protectedProcedure.mutation(async ({ ctx }) => {
     try {
       return await ensureStarterVilla(ctx.user.id);

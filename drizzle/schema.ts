@@ -371,3 +371,46 @@ export const telemetryConsents = pgTable("telemetry_consents", {
 
 export type TelemetryConsent = typeof telemetryConsents.$inferSelect;
 export type InsertTelemetryConsent = typeof telemetryConsents.$inferInsert;
+
+/**
+ * Sprint 103 — SaaS & Multi-Tenant (Master-Prompt Abschnitt 2.2):
+ * Subscription-Lifecycle pro Nutzer (Plan, Trial, Kuendigung, Grace) und
+ * monatliche Token-Abrechnung als Grundlage fuer API-Tier-Limits/Paywalls.
+ */
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" })
+    .unique(),
+  /** free | pro */
+  plan: varchar("plan", { length: 16 }).$type<"free" | "pro">().notNull().default("free"),
+  /** trial | active | past_due | canceled | expired */
+  status: varchar("status", { length: 16 })
+    .$type<"trial" | "active" | "past_due" | "canceled" | "expired">()
+    .notNull()
+    .default("trial"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  graceEndsAt: timestamp("grace_ends_at"),
+  /** Kündigung zum Periodenende (Pro behält Rechte bis dahin). */
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+/** Monatliche Token-Abrechnung pro Nutzer (Periode 'YYYY-MM'). */
+export const tokenUsageMonthly = pgTable("token_usage_monthly", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** Abrechnungsperiode, z. B. '2026-10'. */
+  period: varchar("period", { length: 7 }).notNull(),
+  /** Summe aller Tokens (Prompt + Completion) des Monats. */
+  tokens: integer("tokens").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});

@@ -10,6 +10,7 @@ import { validateProductionEnv } from "./env-validation";
 import { startProviderGuardian } from "../provider-guardian";
 import { checkDatabaseHealth } from "../db-health";
 import { runRotationTick } from "../route-rotator";
+import { haaraTick } from "../haara";
 import { rateLimit } from "./rate-limit";
 import { demoSubmitRateLimit } from "./demoRateLimit";
 import { jsonErrorHandler, requestLogger } from "./request-logger";
@@ -117,6 +118,31 @@ function startRouteRotationWatch(): void {
   timer.unref?.();
 }
 
+/**
+ * Sprint 103 — HAARA im Hintergrund: alle 5 Minuten Systemzustand
+ * bewerten und Selbstheilung anwenden (Route-Wechsel, Cooldown-Probe,
+ * DB-Reconnect). Fehler stoeren den Betrieb nie.
+ */
+function startHaaraWatch(): void {
+  let lastLevel = "";
+  const runTick = async () => {
+    try {
+      const status = await haaraTick();
+      if (status.level !== lastLevel) {
+        lastLevel = status.level;
+        const line = `[HAARA] Stufe: ${status.level}${status.reasons.length ? " — " + status.reasons.join("; ") : ""}`;
+        if (status.level === "healthy") console.log(line);
+        else console.warn(line);
+      }
+    } catch (error) {
+      console.warn("[HAARA] Tick fehlgeschlagen:", error);
+    }
+  };
+  void runTick();
+  const timer = setInterval(() => void runTick(), 5 * 60_000);
+  timer.unref?.();
+}
+
 async function startServer() {
   const app = express();
   // Render (und jeder andere Reverse-Proxy) beendet TLS vor dem Prozess.
@@ -130,6 +156,8 @@ async function startServer() {
   startDatabaseHealthWatch();
   // Sprint 102 — Routen-Rotation im Hintergrund starten.
   startRouteRotationWatch();
+  // Sprint 103 — HAARA-Selbstheilung im Hintergrund starten.
+  startHaaraWatch();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

@@ -10,6 +10,7 @@ import {
 import { providerCooldownInfo } from "../provider-cooldown";
 import { getRouteOverride } from "../route-override";
 import type { ControllerState } from "../controller";
+import { getHaaraStatus } from "../haara";
 
 /**
  * Minimaler, oeffentlicher Health-Endpoint fuer Render-Checks und Smoke-Tests.
@@ -43,6 +44,13 @@ export type HealthPayload = {
     pinned: string | null;
     pinnedBy: string | null;
     activeRoute: ProviderName | null;
+  };
+  /** Sprint 103 — HAARA: Systemweite Verfuegbarkeits-Stufe (gecacht, nie blockierend). */
+  haara?: {
+    level: string;
+    reasons: string[];
+    appliedActions: string[];
+    checkedAt: number;
   };
 };
 
@@ -171,6 +179,7 @@ export function getDatabaseHealthReport(): DatabaseHealthReport | null {
 }
 
 export function getHealthPayload(): HealthPayload {
+  const haaraStatus = getHaaraStatus();
   const controllerState = (() => {
     try {
       return controllerStateSource?.() ?? null;
@@ -186,6 +195,17 @@ export function getHealthPayload(): HealthPayload {
     timestamp: new Date().toISOString(),
     providers: providerSummaries(),
     routing: routingSummary(),
+    // Sprint 103 — HAARA-Zusammenfassung aus dem letzten Tick (gecacht).
+    ...(haaraStatus
+      ? {
+          haara: {
+            level: haaraStatus.level,
+            reasons: haaraStatus.reasons,
+            appliedActions: haaraStatus.appliedActions.map((a) => a.type),
+            checkedAt: haaraStatus.checkedAt,
+          },
+        }
+      : {}),
     ...(cachedDatabaseReport ? { database: cachedDatabaseReport } : {}),
     ...(controllerState
       ? {

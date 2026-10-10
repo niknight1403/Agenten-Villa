@@ -45,6 +45,16 @@ import { villaRepositoryToToolTarget } from "../shared/villa-repository";
 import { buildStoppedMissionReport, buildVillaMissionObjective } from "./villa-mission";
 import { advisorStatsSchema } from "@shared/storage-advisor";
 import { runStorageAdvisor } from "./storage-advisor";
+import { PaywallError, assertTokenBudget, meterTokenUsage, readTokensUsed } from "./billing";
+import {
+  generatePriceSeries,
+  optimizeSmaCrossover,
+  recordReward,
+  simulate,
+  checkGate,
+  toGateReport,
+} from "./trading-simulation";
+import { getSubscription } from "./subscription";
 import {
   findMissionByKey, finishMission, getMissionRun, listMissionRuns,
   MAX_MISSION_ATTEMPTS, missionRetryExhausted,
@@ -294,6 +304,41 @@ const eliteMissionSchema = z.object({
   // Freigabepunkt; requireApproval prueft die Quittung mit klarem Text.
   acknowledgeImpact: z.boolean(),
 });
+
+/**
+ * Sprint 103 — SaaS-Paywall vor einem Agent-Lauf: prueft das monatliche
+ * Token-Budget des Tenants. Fail-open bei Abrechnungs-/DB-Fehlern —
+ * Abrechnungsprobleme duerfen den Agent-Betrieb nie blockieren.
+ * Administratoren sind bewusst exempt (Betriebskonto).
+ */
+async function assertUserBudget(userId: number, isAdminUser: boolean): Promise<void> {
+  if (isAdminUser) return;
+  try {
+    const state = await getSubscription(userId);
+    const used = await readTokensUsed(userId);
+    assertTokenBudget(state, used);
+  } catch (error) {
+    if (error instanceof PaywallError) {
+      throw new TRPCError({
+        code: "PAYMENT_REQUIRED",
+        message:
+          error.message +
+          ` (Budget: ${error.summary.tokenBudget.toLocaleString("de-DE")} Tokens/Monat im ${error.summary.tierName}-Tier)`,
+      });
+    }
+    /* DB/Abrechnung nicht verfuegbar -> Lauf erlauben (fail-open). */
+  }
+}
+
+/**
+ * Sprint 103 — Metering nach dem Lauf: traegt die Token-Nutzung des
+ * Ergebnisses auf den monatlichen Zaehler des Tenats ein. Best-effort,
+ * niemals blockierend.
+ */
+function meterResultUsage(userId: number, result: { usage?: { totalTokens: number } }): void {
+  if (!result.usage || result.usage.totalTokens > 0)
+    void meterTokenUsage(userId, result.usage?.totalTokens ?? 0);
+}
 
 type EliteOutput = Awaited<ReturnType<typeof runAutonomousProjectWithGitHub>> & {
   elite: true;
@@ -1034,6 +1079,47 @@ export const agentRouter = router({
    * GitHub-Werkzeuge und mit strikter JSON-Validierung. Der Client sendet
    * NUR anonymisierte Statistiken — Dateinamen erreichen den Server nie.
    */
+  /** Sprint 103 — Microtrading: isolierte Paper-Trading-Simulation (nur Admin).
+   *  Kein Netz, keine echten Keys; das Ergebnis speist direkt das harte
+   *  Live-Gate (68 % Win-Rate, >= 500 Trades, PF >= 1.25, <= 24 h). */
+  tradingSimulation: protectedProcedure
+    .input(
+      z
+        .object({
+          bars: z.number().int().min(100).max(5000).default(1200),
+          seed: z.number().int().default(123),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      const bars = input?.bars ?? 1200;
+      const seed = input?.seed ?? 123;
+      const series = generatePriceSeries(bars, { seed });
+      const optimization = optimizeSmaCrossover(series);
+      const report = optimization.bestReport;
+      recordReward(report.strategy, report);
+      const gate = checkGate(report);
+      return {
+        strategy: report.strategy,
+        params: optimization.bestParams,
+        trades: report.trades.length,
+        winRate: report.winRate,
+        profitFactor: Number.isFinite(report.profitFactor)
+          ? report.profitFactor
+          : null,
+        maxDrawdownPct: report.maxDrawdownPct,
+        totalPnl: report.totalPnl,
+        gate,
+        /**
+         * Explizit false: echte Live-Keys werden von der Simulation NIE
+         * eingebunden — selbst nach bestandenem Gate braucht es die
+         * getrennte Admin-Freigabe (siehe trading-gate.ts).
+         */
+        liveKeysAllowed: false,
+      };
+    }),
+
   storageAdvisor: protectedProcedure
     .input(
       z.object({
@@ -1125,6 +1211,7 @@ export const agentRouter = router({
           },
           { authorization: { administrator: true }, onEvent: progressEmitter(ctx.user.id) }
         );
+        meterResultUsage(ctx.user.id, result);
         return {
           answer: result.answer,
           recommendation: parseStrategyRecommendation(result.answer),
@@ -1149,6 +1236,7 @@ export const agentRouter = router({
       // quotas, per-request safety caps, and external service policies still
       // apply and are never bypassed.
       if (!isAdmin(ctx.user)) consumeTurn(ctx.user.id);
+      await assertUserBudget(ctx.user.id, isAdmin(ctx.user));
       beginProgress(ctx.user.id, input.prompt);
       const emitProgress = progressEmitter(ctx.user.id);
       try {
@@ -1175,6 +1263,7 @@ export const agentRouter = router({
             // außengerufenen Annahmen abhängig.
             { authorization: { administrator: true }, onEvent: emitProgress }
           );
+          meterResultUsage(ctx.user.id, result);
           return {
             ...result,
             workflow: [
@@ -1206,6 +1295,7 @@ export const agentRouter = router({
             onEvent: emitProgress,
           }
         );
+        meterResultUsage(ctx.user.id, result);
         return {
           ...result,
           workflow: [

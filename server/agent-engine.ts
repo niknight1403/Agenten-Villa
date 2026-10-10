@@ -32,7 +32,7 @@ import {
   markProviderFailure,
   providerInCooldown,
 } from "./provider-cooldown";
-import { extractTurnUsage, recordTurnUsage } from "./turn-usage";
+import { extractTurnUsage, recordTurnUsage, type TurnUsage } from "./turn-usage";
 import { getRouteOverride } from "./route-override";
 import { providerCooldownSnapshot } from "./provider-cooldown";
 import { planChainRecovery, waitBudgetMs } from "./route-wait";
@@ -77,6 +77,8 @@ export type AgentResult = {
   githubActions?: number;
   /** true, wenn die Antwort aus dem Free-Tier-Cache kam (0 Token verbraucht). */
   cached?: boolean;
+  /** Sprint 103 — Token-Nutzung des Turns (SaaS-Abrechnung, optional). */
+  usage?: TurnUsage;
 };
 export type AgentToolExecutor = (
   name: string,
@@ -863,6 +865,7 @@ export async function runAgentTurn(
       provider,
       model: completion.model,
       attempts,
+      ...(completion.usage ? { usage: completion.usage } : {}),
     });
   });
 

@@ -120,6 +120,13 @@
       "when": 1791592907944,
       "tag": "0016_deep_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791621817011,
+      "tag": "0017_sparkling_rick_jones",
+      "breakpoints": true
     }
   ]
 }

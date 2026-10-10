@@ -75,6 +75,14 @@ export const agentResultSchema = z
     attempts: z.number().int().min(0),
     githubActions: z.number().int().min(0).optional(),
     cached: z.boolean().optional(),
+    // Sprint 103 — Token-Nutzung des Turns (fuer die SaaS-Abrechnung).
+    usage: z
+      .object({
+        promptTokens: z.number().min(0),
+        completionTokens: z.number().min(0),
+        totalTokens: z.number().min(0),
+      })
+      .optional(),
 });
 
 export type ValidAgentInput = z.infer<typeof agentInputSchema>;
