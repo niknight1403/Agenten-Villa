@@ -4,11 +4,18 @@ name: Ollama Deep-Smoke (Inhalt, alle Modelle)
 # (nicht nur Modellliste) und misst die Latenz. Token kommt aus VILLA_OLLAMA_TOKEN.
 on:
   workflow_dispatch:
+    inputs:
+      models:
+        description: "Leerzeichen-getrennte Modellliste (leer = alle)"
+        default: ""
+      max_tokens:
+        description: "max_tokens je Anfrage"
+        default: "400"
 
 jobs:
   deepsmoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     env:
       OLLAMA_BASE_URL: https://ollama.cybersarah-ki.com/v1
       OLLAMA_TOKEN: ${{ secrets.VILLA_OLLAMA_TOKEN }}
@@ -17,12 +24,13 @@ jobs:
         run: |
           set -uo pipefail
           curl -s -m 30 -H "Authorization: Bearer $OLLAMA_TOKEN" "$OLLAMA_BASE_URL/models" > /tmp/m.json
-          for model in $(python3 -c "import json;print(' '.join(m['id'] for m in json.load(open('/tmp/m.json'))['data']))"); do
+          LIST="${{ inputs.models }}"; [ -z "$LIST" ] && LIST=$(python3 -c "import json;print(' '.join(m['id'] for m in json.load(open('/tmp/m.json'))['data']))")
+          for model in $LIST; do
             echo "=== $model ==="
             start=$(date +%s)
-            code=$(curl -s -o /tmp/c.json -w "%{http_code}" -m 420 \
+            code=$(curl -s -o /tmp/c.json -w "%{http_code}" -m 600 \
               -H "Authorization: Bearer $OLLAMA_TOKEN" -H "content-type: application/json" \
-              -d "{\"model\":\"$model\",\"max_tokens\":400,\"messages\":[{\"role\":\"user\",\"content\":\"Antworte in einem Satz auf Deutsch: Was ist 12 mal 12?\"}]}" \
+              -d "{\"model\":\"$model\",\"max_tokens\":${{ inputs.max_tokens }},\"messages\":[{\"role\":\"user\",\"content\":\"Antworte in einem Satz auf Deutsch: Was ist 12 mal 12?\"}]}" \
               "$OLLAMA_BASE_URL/chat/completions")
             echo "HTTP $code in $(( $(date +%s) - start ))s"
             python3 - <<'PY'
