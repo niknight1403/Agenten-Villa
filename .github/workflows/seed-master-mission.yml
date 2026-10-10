@@ -8,63 +8,32 @@ on:
 
 jobs:
   seed:
+    name: Master-Mission anlegen (idempotent)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
+          cache: pnpm
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
       - name: Mission anlegen
+        run: pnpm exec tsx scripts/seed-master-mission.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Verifikation
         run: |
-          npm install postgres --no-save --silent
-          node --input-type=module - <<'EOF' 2>&1 || exit 1
-          import postgres from 'postgres';
-          import crypto from 'node:crypto';
+          node -e "
+          const postgres = require('postgres');
           const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
-          const ADMIN_EMAIL = 'niko.oeben@gmail.com';
-          const PROMPT = `24/7-Master-Mission: CyberSarah-Control-Center (GitHub: niknight1403/CyberSarah-Control-Center). Analysiere die App vollstaendig (Struktur, Module, APIs, Workflows, UX, Kosten) und entwickle sie autonom weiter, Schritt fuer Schritt, bis zum produktionsreifen, marktfaehigen Zustand:
-          1) Kernidee und Produktfokus praezise erkennen und dokumentieren.
-          2) Alles Sinnlose entfernen (toter Code, ungenutzte Abhaengigkeiten, redundante Module, verwirrende UI-Teile) — ein klar abgegrenzter Bereich je Zyklus.
-          3) Alles fehlende integrieren, was fuer ein marktreifes Produkt noetig ist (Stabilitaet, Performance, Sicherheit, Onboarding, Zahlungs-/Stripe-Flow, Analytics).
-          4) Die Umsatzmoeglichkeiten maximal autonom optimieren: Pricing, Paywalls, Upsells, automatisierte Revenue-Loops — jede Aenderung messbar begruenden.
-          5) Nach jedem Zyklus: Tests schreiben und gruen halten, Verifikation, dann den naechsten Zyklus planen.
-          Vorrang: funktionierendes Kernprodukt > Umsatz > Kosmetik. Arbeite ausschliesslich auf agent/*-Branches mit Draft-PRs, niemals direkt auf main. Missionsende erst, wenn der Zustand 'produktionsreif' verifiziert ist.`;
-          const input = {
-            prompt: PROMPT,
-            history: [],
-            specialty: 'Autonomous Product Engineering',
-            forge: { strategy: 'OPTIMIZE', productReview: true, memory: [] },
-          };
-          const requestHash = crypto.createHash('sha256').update(PROMPT).digest('hex');
-          try {
-            const users = await sql`select id, email, "loginMethod" from users where lower(email) = ${ADMIN_EMAIL} limit 1`;
-            let userId;
-            if (users.length > 0) {
-              userId = users[0].id;
-            } else {
-              const all = await sql`select id, email from users order by id asc`;
-              console.log('WARNUNG: Admin-Email nicht gefunden. Vorhandene User:', JSON.stringify(all));
-              if (all.length === 0) throw new Error('Keine User in der DB — bitte einmal in der Villa-Oberflaeche mit Google anmelden.');
-              userId = all[all.length - 1].id;
-            }
-            console.log('Nutze userId:', userId);
-            const rows = await sql`
-              insert into elite_mission_runs
-                ("userId", "idempotencyKey", "requestHash", "input", "status", "attempt", "ownerId", "leaseUntil", "createdAt", "updatedAt")
-              values
-                (${userId}, 'master-24-7-csc-001', ${requestHash}, ${sql.json(input)}, 'interrupted', 1,
-                 ${crypto.randomUUID()}, now() - interval '1 hour', now(), now())
-              on conflict ("userId", "idempotencyKey") do nothing
-              returning id`;
-            const check = await sql`select id, status from elite_mission_runs
-              where "userId" = ${userId} and "idempotencyKey" = 'master-24-7-csc-001'`;
-            if (check.length !== 1) throw new Error('Mission nicht eindeutig angelegt');
-            console.log('MISSION-OK id=' + check[0].id + ' status=' + check[0].status + (rows.length ? ' (neu angelegt)' : ' (existierte bereits)'));
-          } catch (err) {
-            console.error('SEED-FEHLER:', err && err.message ? err.message : String(err));
-            process.exit(1);
-          }
-          await sql.end();
-          EOF
+          (async () => {
+            const rows = await sql\`SELECT id, status FROM elite_mission_runs WHERE \"idempotencyKey\" = 'master-24-7-csc-001'\`;
+            if (rows.length !== 1) { console.error('Erwartet: 1 Mission, gefunden:', rows.length); process.exit(1); }
+            console.log('Mission in der Live-DB:', JSON.stringify(rows[0]));
+            await sql.end();
+          })().catch(e => { console.error('Verifikations-Fehler:', e.message); process.exit(1); });
+          "
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
