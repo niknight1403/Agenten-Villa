@@ -14,6 +14,8 @@ export interface LLMProvider {
   /** Eindeutiger Name (Kleinbuchstaben). Bestehende Namen werden ersetzt. */
   name: string;
   url: string;
+  /** Optional: Route nur verfuegbar, wenn diese Bedingung gilt (z. B. OLLAMA_BASE_URL gesetzt). */
+  isEnabled?: () => boolean;
   apiKey: () => string;
   /** Default-Modell, wenn der Payload keins mitbringt. */
   model: string;
@@ -24,7 +26,19 @@ export interface LLMProvider {
   quiet?: boolean;
 }
 
+const ollamaProvider: LLMProvider = {
+  name: "ollama",
+  url: "",
+  apiKey: () => process.env.OLLAMA_API_KEY?.trim() ?? "",
+  model: "",
+  authHeader: (key): Record<string, string> => (key ? { authorization: `Bearer ${key}` } : {}),
+  buildUrl: () => buildOllamaChatUrl(),
+  isEnabled: () => Boolean(process.env.OLLAMA_BASE_URL?.trim()),
+  quiet: true,
+};
+
 const DEFAULT_PROVIDERS: LLMProvider[] = [
+  ollamaProvider,
   {
     name: "forge",
     url: ENV.forgeApiUrl?.trim()
@@ -64,6 +78,36 @@ const DEFAULT_PROVIDERS: LLMProvider[] = [
   },
 ];
 
+/**
+ * Sprint 082/Audit — Ollama-Route (Oracle Always Free, "unlimited"):
+ * OpenAI-kompatibler Reverse-Proxy, Bearer-optional. Modell-Default ist
+ * das erste Modell der Kette aus provider-endpoints (OLLAMA_MODELS-Env
+ * oder Code-Default). Ohne OLLAMA_BASE_URL ist die Route deaktiviert.
+ */
+/** Chat-URL: OLLAMA_BASE_URL + /chat/completions (bereits /v1 im Base). */
+function buildOllamaChatUrl(): string {
+  const base = process.env.OLLAMA_BASE_URL?.trim();
+  if (!base) return "";
+  const trimmed = base.replace(/\/$/, "");
+  // Base enthaelt bereits /v1 (z. B. https://ollama.example.com/v1)
+  return trimmed.endsWith("/v1")
+    ? `${trimmed}/chat/completions`
+    : `${trimmed}/v1/chat/completions`;
+}
+
+/** Default-Modell: erstes Modell der Kette aus OLLAMA_MODELS oder Code-Default. */
+function buildOllamaModel(): string {
+  const chain = process.env.OLLAMA_MODELS?.trim();
+  if (chain) {
+    const first = chain
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean)[0];
+    if (first) return first;
+  }
+  return "gemma4:12b";
+}
+
 /** Die aktive Provider-Liste: Defaults + spaeter Angemeldete, in Reihenfolge. */
 let registeredProviders: LLMProvider[] = [...DEFAULT_PROVIDERS];
 
@@ -98,6 +142,11 @@ export function setRegisteredProviderOrder(order: string[]): void {
   );
 }
 
+/** Verwendete Provider (read-only, z. B. fuer Diagnose/Audit). */
+export function getRegisteredProviders(): readonly LLMProvider[] {
+  return registeredProviders;
+}
+
 /** Nur fuer Tests: Registry auf die Default-Provider zuruecksetzen. */
 export function resetLLMProvidersForTests(): void {
   registeredProviders = [...DEFAULT_PROVIDERS];
@@ -111,6 +160,7 @@ const FAILOVER_STATUS = [402, 429, 503];
 function isAvailable(p: LLMProvider): boolean {
   const key = p.apiKey();
   if (!key) return false;
+  if (p.isEnabled && !p.isEnabled()) return false;
   const until = COOLDOWNS.get(p.name) ?? 0;
   return Date.now() > until;
 }
@@ -135,8 +185,9 @@ export async function fetchWithFallback(
 
     // Modell-Fallback: wenn kein Modell im Payload, Provider-Default nutzen
     const body = { ...payload };
-    if (!body.model && provider.model) {
-      body.model = provider.model;
+    if (!body.model) {
+      body.model =
+        provider.name === "ollama" ? buildOllamaModel() : provider.model;
     }
 
     const url = provider.buildUrl ? provider.buildUrl(key) : provider.url;
@@ -182,6 +233,6 @@ export async function fetchWithFallback(
 export function assertAnyApiKey() {
   const hasKey = registeredProviders.some((p) => !!p.apiKey());
   if (!hasKey) {
-    throw new Error("Kein LLM-API-Key konfiguriert (BUILT_IN_FORGE_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY oder GEMINI_API_KEY)");
+    throw new Error("Kein LLM-API-Key konfiguriert (BUILT_IN_FORGE_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY oder OLLAMA_API_KEY + OLLAMA_BASE_URL)");
   }
 }

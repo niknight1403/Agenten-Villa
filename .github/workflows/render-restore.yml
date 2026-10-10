@@ -140,7 +140,7 @@ jobs:
               {"key": "JWT_SECRET", "value": os.environ["JWT"]},
               {"key": "OLLAMA_BASE_URL", "value": "https://ollama.cybersarah-ki.com/v1"},
               {"key": "OLLAMA_API_KEY", "value": os.environ["OLLAMA"]},
-              {"key": "OLLAMA_MODELS", "value": "qwen2.5-coder:1.5b,tinyllama"},
+              {"key": "OLLAMA_MODELS", "value": "qwen3.6:27b,devstral:24b,gemma4:12b"},
           ]
           if gh_ok:
               payload.append({"key": "GITHUB_TOKEN", "value": gh})

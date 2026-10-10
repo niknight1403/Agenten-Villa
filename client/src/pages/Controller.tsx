@@ -468,7 +468,8 @@ export default function Controller() {
           </div>
         </section>
 
-        <WatchdogPanel />\n      <TokenBudgetWidget />
+        <WatchdogPanel />
+      <TokenBudgetWidget />
       <RoutingPanel />
 
         <section className="mt-5 rounded-3xl border border-slate-800 bg-slate-900 p-7">
