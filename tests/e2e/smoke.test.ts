@@ -266,22 +266,43 @@ describe("End-to-End Smoke Test Suite (Sprint 085)", () => {
   beforeAll(async () => {
     resetMockDb();
 
-    // Authenticate test requests as User 17
+    // Sprint 084 — echte Login-Abdeckung: Session-Token-Validierung wie im
+    // echten SDK — fehlender Token ist anonym (null), ungueltiger Token
+    // wirft, gueltiger Token loest den Nutzer auf. User 17 ist der
+    // Standard-Smoke-Nutzer, User 18 traegt den Login-Vollpfad-Test.
+    const sessions = new Map<
+      string,
+      { id: number; openId: string; email: string; name: string }
+    >();
+    sessions.set("e2e-session-user17", {
+      id: 17,
+      openId: "e2e-user-openid",
+      email: "e2e@example.com",
+      name: "E2E Smoke User",
+    });
+    sessions.set("e2e-session-user18", {
+      id: 18,
+      openId: "e2e-user18-openid",
+      email: "login-flow@example.com",
+      name: "Login Flow User",
+    });
     vi.spyOn(sdk, "authenticateRequest").mockImplementation(async (req) => {
       const authHeader = req.headers.authorization;
-      if (authHeader === "Bearer unauthed") {
-        throw new Error("UNAUTHORIZED");
-      }
+      if (!authHeader?.startsWith("Bearer ")) return null;
+      const token = authHeader.slice("Bearer ".length);
+      const session = sessions.get(token);
+      if (!session) throw new Error("INVALID_SESSION");
+      const now = new Date();
       return {
-        id: 17,
-        openId: "e2e-user-openid",
-        email: "e2e@example.com",
-        name: "E2E Smoke User",
+        id: session.id,
+        openId: session.openId,
+        email: session.email,
+        name: session.name,
         loginMethod: "test",
         role: "user",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastSignedIn: new Date(),
+        createdAt: now,
+        updatedAt: now,
+        lastSignedIn: now,
       };
     });
 
@@ -316,6 +337,7 @@ describe("End-to-End Smoke Test Suite (Sprint 085)", () => {
         httpBatchLink({
           url: `${baseUrl}/api/trpc`,
           transformer: superjson,
+          headers: () => ({ Authorization: "Bearer e2e-session-user17" }),
         }),
       ],
     });
@@ -454,5 +476,91 @@ describe("End-to-End Smoke Test Suite (Sprint 085)", () => {
     const runs = await trpcClient.run.list.query();
     expect(runs.length).toBeGreaterThan(0);
     expect(runs.every((r) => r.actorId === 17)).toBe(true);
+  });
+
+  it("11. Login: ohne Session-Token ist man anonym — geschützte Prozeduren antworten UNAUTHORIZED (Sprint 084)", async () => {
+    const anonymousClient = createTRPCClient<AppRouter>({
+      links: [
+        httpBatchLink({
+          url: `${baseUrl}/api/trpc`,
+          transformer: superjson,
+          headers: () => ({}),
+        }),
+      ],
+    });
+
+    // Public Prozedur bleibt offen und meldet anonym.
+    const me = await anonymousClient.auth.me.query();
+    expect(me).toBeNull();
+
+    // Geschützte Prozedur lehnt anonym sauber ab.
+    const rejection = await anonymousClient.villa.list
+      .query()
+      .then(() => undefined, (error: { data?: { code?: string } }) => error);
+    expect(rejection?.data?.code).toBe("UNAUTHORIZED");
+  });
+
+  it("12. Login: ungültige Session wird als anonym behandelt — nie als Fehler-500 (Sprint 084)", async () => {
+    const invalidClient = createTRPCClient<AppRouter>({
+      links: [
+        httpBatchLink({
+          url: `${baseUrl}/api/trpc`,
+          transformer: superjson,
+          headers: () => ({ Authorization: "Bearer abgelaufen-oder-gefaelscht" }),
+        }),
+      ],
+    });
+
+    const me = await invalidClient.auth.me.query();
+    expect(me).toBeNull();
+
+    const rejection = await invalidClient.run.list
+      .query()
+      .then(() => undefined, (error: { data?: { code?: string } }) => error);
+    expect(rejection?.data?.code).toBe("UNAUTHORIZED");
+  });
+
+  it("13. Login-Vollpfad: Login, Villa, Lauf und Bericht mit eigener Session durchlaufen (Sprint 084)", async () => {
+    // Eigene Session fuer User 18 — alle Schritte laufen als ein
+    // durchgehender, login-geschuetzter Pfad.
+    const loginClient = createTRPCClient<AppRouter>({
+      links: [
+        httpBatchLink({
+          url: `${baseUrl}/api/trpc`,
+          transformer: superjson,
+          headers: () => ({ Authorization: "Bearer e2e-session-user18" }),
+        }),
+      ],
+    });
+
+    // Login: Session loest den Nutzer auf.
+    const me = await loginClient.auth.me.query();
+    expect(me?.id).toBe(18);
+    expect(me?.email).toBe("login-flow@example.com");
+
+    // Villa: erstellen und wiederfinden.
+    const villa = await loginClient.villa.create.mutate({
+      name: "Login-Flow-Villa",
+      capacity: 5,
+    });
+    expect(villa.id).toBeGreaterThan(0);
+    const villas = await loginClient.villa.list.query();
+    expect(villas.some((v) => v.id === villa.id)).toBe(true);
+    expect(villas.every((v) => v.createdBy === 18)).toBe(true);
+
+    // Lauf: starten, stoppen.
+    const run = await loginClient.run.start.mutate({ villaId: villa.id });
+    expect(run.status).toBe("running");
+    const finished = await loginClient.run.finish.mutate({
+      runId: run.id,
+      status: "succeeded",
+      result: { loginFlow: true },
+    });
+    expect(finished.status).toBe("succeeded");
+
+    // Bericht: vollstaendig abrufbar.
+    const report = await loginClient.run.report.query({ runId: run.id });
+    expect(report.runId).toBe(run.id);
+    expect(report.status).toBe("succeeded");
   });
 });

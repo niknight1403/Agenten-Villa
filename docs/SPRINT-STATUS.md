@@ -157,3 +157,15 @@ Persistenz-, Health- und Logpfade sind gebündelt geprüft und dokumentiert (Roa
   - Logs: Zugriffs- und Fehlerlogzeilen als JSON mit Korrelation/Status/Dauer, requestId in der 500-Antwort ohne Interna, Geheimnis-Verwurf.
 - **`docs/DATA-REVIEW.md` (neu)**: Soll-Zustand, Invarianten-Tabellen und Verifikationskommandos je Pfad.
 - Suite: 753 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 084 — Echte Login-Abdeckung im E2E-Pfad (10.10.2026)
+
+Der E2E-Smoke deckt jetzt den echten Login-Pfad ab: Login, Villa, Lauf und Bericht werden mit eigener Session durchlaufen (Roadmap 084).
+
+- **`tests/e2e/smoke.test.ts` (erweitert, 10 → 13 Tests)**:
+  - Der SDK-Auth-Mock validiert jetzt echte Session-Token (Bearer): fehlender Token → anonym (null), ungültiger Token → INVALID_SESSION, gültiger Token → Nutzer-Auflösung — wie im echten Base44-SDK. Der Standard-Client sendet seinen Session-Token explizit.
+  - Test 11: ohne Session-Token ist man anonym; öffentliche Prozeduren (`auth.me`) melden null, geschützte Prozeduren antworten sauber UNAUTHORIZED (kein 500).
+  - Test 12: ungültige Session wird wie anonym behandelt — gleiche UNAUTHORIZED-Grenze.
+  - Test 13: Login-Vollpfad mit eigener Session (User 18): Login → Villa erstellen → Lauf starten → Lauf stoppen → Bericht abrufen, alles unter einem durchgehenden login-geschützten Pfad inkl. Nutzer-Isolation.
+- Suite: 756 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
