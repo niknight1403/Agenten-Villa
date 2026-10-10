@@ -50,7 +50,7 @@ funktioniert, müssen im **selben Google-Cloud-Projekt** zwei OAuth-Clients exis
 1. **Web-Client** – dessen ID steht in `capacitor.config.ts` unter
    `plugins.GoogleAuth.clientId` und in der Server-Umgebung als `GOOGLE_CLIENT_ID`.
    Der Server prüft das `aud`-Claim des ID-Tokens gegen diesen Wert.
-   Produktion: `656137332727-vhip14vrtgmdc65rsbdlpqud4tss0v4q.apps.googleusercontent.com`
+   Produktion: `656137332727-2i47bqt2fk359nj48tc0kdfl3mhjmoo1.apps.googleusercontent.com`
    (identisch in `capacitor.config.ts` und `strings.xml`; ein Regressionstest
    in `server/_core/native-client-config.test.ts` prüft die Konsistenz).
    Fuer den Web-Redirect-Flow muss dieser Client zusaetzlich die autorisierte
