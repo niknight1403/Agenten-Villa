@@ -1,0 +1,57 @@
+# Legt die 24/7-Master-Mission (CyberSarah-Control-Center) als startbare
+# Elite-Mission in der Neon-Datenbank an: Status 'interrupted', damit der
+# Administrator sie in der Villa-Oberflaeche mit einem Klick (Neustart)
+# startet. Idempotent ueber (userId, idempotencyKey).
+name: seed-master-mission
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Mission anlegen
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npm install postgres --no-save --silent
+          node --input-type=module - <<'EOF'
+          import postgres from 'postgres';
+          import crypto from 'node:crypto';
+          const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
+          const ADMIN_EMAIL = 'niko.oeben@gmail.com';
+          const PROMPT = `24/7-Master-Mission: CyberSarah-Control-Center (GitHub: niknight1403/CyberSarah-Control-Center). Analysiere die App vollstaendig (Struktur, Module, APIs, Workflows, UX, Kosten) und entwickle sie autonom weiter, Schritt fuer Schritt, bis zum produktionsreifen, marktfaehigen Zustand:
+          1) Kernidee und Produktfokus praezise erkennen und dokumentieren.
+          2) Alles Sinnlose entfernen (toter Code, ungenutzte Abhaengigkeiten, redundante Module, verwirrende UI-Teile) — ein klar abgegrenzter Bereich je Zyklus.
+          3) Alles fehlende integrieren, was fuer ein marktreifes Produkt noetig ist (Stabilitaet, Performance, Sicherheit, Onboarding, Zahlungs-/Stripe-Flow, Analytics).
+          4) Die Umsatzmoeglichkeiten maximal autonom optimieren: Pricing, Paywalls, Upsells, automatisierte Revenue-Loops — jede Aenderung messbar begruenden.
+          5) Nach jedem Zyklus: Tests schreiben und gruen halten, Verifikation, dann den naechsten Zyklus planen.
+          Vorrang: funktionierendes Kernprodukt > Umsatz > Kosmetik. Arbeite ausschliesslich auf agent/*-Branches mit Draft-PRs, niemals direkt auf main. Missionsende erst, wenn der Zustand 'produktionsreif' verifiziert ist.`;
+          const input = {
+            prompt: PROMPT,
+            history: [],
+            specialty: 'Autonomous Product Engineering',
+            forge: { strategy: 'OPTIMIZE', productReview: true, memory: [] },
+          };
+          const requestHash = crypto.createHash('sha256').update(PROMPT).digest('hex');
+          const users = await sql`select id from users where lower(email) = ${ADMIN_EMAIL} limit 1`;
+          if (users.length === 0) throw new Error('Admin-User nicht gefunden: ' + ADMIN_EMAIL);
+          const userId = users[0].id;
+          const rows = await sql`
+            insert into elite_mission_runs
+              ("userId", "idempotencyKey", "requestHash", "input", "status", "attempt", "ownerId", "leaseUntil", "createdAt", "updatedAt")
+            values
+              (${userId}, 'master-24-7-csc-001', ${requestHash}, ${sql.json(input)}, 'interrupted', 1,
+               ${crypto.randomUUID()}, now() - interval '1 hour', now(), now())
+            on conflict ("userId", "idempotencyKey") do nothing
+            returning id`;
+          const check = await sql`select id, status from elite_mission_runs
+            where "userId" = ${userId} and "idempotencyKey" = 'master-24-7-csc-001'`;
+          if (check.length !== 1) throw new Error('Mission nicht eindeutig angelegt');
+          console.log('Mission OK:', JSON.stringify(check[0]), rows.length ? '(neu angelegt)' : '(existierte bereits)');
+          await sql.end();
+          EOF
