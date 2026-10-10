@@ -214,3 +214,12 @@ Neue Provider, Packs und Phasen können ohne Kernumbau ergänzt werden (Roadmap 
 - **Pack-Katalog (`server/pack-catalog.ts`)**: `buildPackCatalog(packs, authority)` als reine Funktion; neue Packs brauchen nur CAPABILITY_PACKS- plus Authority-Eintrag. Fehlende Katalogisierung wirft weiterhin ehrlich.
 - **`server/extension-points.test.ts` (neu, 8 Tests)**: neuer Provider läuft ohne Kernumbau im Fallback (inkl. eigener URL-Konstruktion), Update-Registrierung, Reset; Schema/Prompt/Parser konsistent aus einem Register, nur registrierte Strategien gelten; neue Packs katalogisierbar, fehlende Authority wirft, Produktiv-Katalog vollständig.
 - Suite: 782 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 096 — Administrator-Handbuch (10.10.2026)
+
+Betrieb, Grenzen und Notfallstop sind dokumentiert (Roadmap 096).
+
+- **`docs/ADMIN-HANDBUCH.md` (neu)**: Betrieb (Deployment-Verweise, Server-Secrets, Provider-Fallback mit Cooldown, Watchdog), Grenzen (Elite-Limits, GitHub-Schreibgrenzen, Freigabepunkte, Audit/Metriken) und Notfallstop (`agent.setState` mit `acknowledgeStop`-Quittung, Wirkung/Nicht-Wirkung, Eskalations-Kurzliste).
+- **`server/admin-handbook.test.ts` (neu, 7 Tests)**: hält das Handbuch ehrlich gegen den Code — jede env.ts-Variable dokumentiert, echte Zustände/Mutationen, Elite-Limits mit echten Zahlen, GitHub-Grenzen, referenzierte Dokumente existieren wirklich, Provider-Reihenfolge korrekt. Driftet der Code, fällt der Test.
+- Suite: 789 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
