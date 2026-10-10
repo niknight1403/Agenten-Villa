@@ -1,36 +1,54 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
+import { startCorrelation, structuredLog } from "../structured-log";
 
 /**
- * Minimaler HTTP-Zugriffs-Logger ohne personenbezogene Daten:
- * Methode, Pfad (ohne Query), Status, Dauer. Health-Checks bleiben still,
- * damit die Render-Logs nicht mit Pruefzyklen volllaufen.
+ * Sprint 078 — Strukturierter HTTP-Zugriffs-Logger: eine JSON-Zeile pro
+ * Request mit Korrelations-ID, Status und Dauer. Health-Checks bleiben
+ * still, damit die Render-Logs nicht mit Prüfzyklen volllaufen.
+ * Die Korrelations-ID wird als `X-Request-Id`-Antwortkopf zurückgegeben
+ * (wenn vom Response-Objekt unterstützt), damit Nutzer-Supportmeldungen
+ * eindeutig einer Logzeile zugeordnet werden können.
  */
 export function requestLogger(): RequestHandler {
   return (req, res, next) => {
-    const start = Date.now();
+    const { correlationId, elapsedMs } = startCorrelation();
+    if (typeof res.setHeader === "function")
+      res.setHeader("X-Request-Id", correlationId);
     res.on("finish", () => {
       const pathname = (req.originalUrl ?? req.url ?? "").split("?")[0];
       if (pathname === "/api/health") return;
-      const durationMs = Date.now() - start;
-      console.log(
-        `[http] ${req.method} ${pathname} -> ${res.statusCode} (${durationMs}ms)`
-      );
+      structuredLog("info", "http_request", {
+        correlationId,
+        method: req.method,
+        path: pathname,
+        status: res.statusCode,
+        durationMs: elapsedMs(),
+      });
     });
     next();
   };
 }
 
 /**
- * LetzterFallback fuer unbehandelte Fehler: loggt den Stack serverseitig
- * und antwortet mit einem JSON-500 ohne Interna nach aussen.
+ * Letzter Fallback für unbehandelte Fehler: loggt strukturiert serverseitig
+ * (Stack nur in die Logzeile, ohne Interna nach außen) und antwortet mit
+ * einem JSON-500 inklusive Korrelations-ID.
  */
 export function jsonErrorHandler(): ErrorRequestHandler {
   return (err, _req, res, _next) => {
     if (res.headersSent) return;
-    console.error(
-      "[http] Unbehandelter Fehler:",
-      err instanceof Error ? err.stack ?? err.message : err
-    );
-    res.status(500).json({ error: "Interner Serverfehler." });
+    const { correlationId, elapsedMs } = startCorrelation();
+    structuredLog("error", "unhandled_request_error", {
+      correlationId,
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? (err.stack ?? "") : "",
+      durationMs: elapsedMs(),
+    });
+    if (typeof res.setHeader === "function")
+      res.setHeader("X-Request-Id", correlationId);
+    res.status(500).json({
+      error: "Interner Serverfehler.",
+      requestId: correlationId,
+    });
   };
 }

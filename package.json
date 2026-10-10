@@ -130,6 +130,9 @@
       "uuid@<14.0.0": ">=14.0.2 <15",
       "source-map-js": "1.2.2",
       "postcss-selector-parser": "7.1.6"
-    }
+    },
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

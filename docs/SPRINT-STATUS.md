@@ -117,3 +117,18 @@ Häufige Agentenprojekte können als sichere Vorlage angelegt werden.
   4. `server/templates.test.ts`: 17 deterministische Tests (Vorlagen-Vollständigkeit, Kapazitätsgrenzen, Icon-Validierung, Limit-Bypass-Ausschluss, Validierung, Suche, Konvertierung).
 - **Sicherheitsgrenzen**: Keine Vorlage enthält `limit-bypass` oder ähnliches (AGENTS.md-Regel, von `agent-villa.test.ts` geprüft). Kapazität 1–25 (Sprint 012). `validateTemplate` prüft alle Felder beim Modul-Laden.
 - **Tests**: 17 neue Tests, bestehende Tests unangetastet.
+
+
+## Sprint 078 — Strukturierte Logs (10.10.2026)
+
+Jede HTTP-Zugriffslogzeile ist jetzt eine maschinenlesbare JSON-Zeile mit Korrelations-ID, Status und Dauer (Roadmap 078).
+
+- **`server/structured-log.ts` (neu)**:
+  - `structuredLog(level, event, fields)`: eine JSON-Zeile mit `ts`, `level`, `event` und sicher bereinigten Feldern.
+  - Sicherheitsinvarianten: Felder mit geheimnisverdächtigen Namen (secret/token/key/password/authorization/cookie) werden verworfen, Werte über 500 Zeichen gekürzt — keine Prompts, Nutzdaten oder Geheimnisse in Logs.
+  - `newCorrelationId()`: kompakte, nicht vorhersagbare 12-Hex-ID; `startCorrelation()` für Zeitmessungen.
+- **`server/_core/request-logger.ts` (umgestellt)**:
+  - Zugriffslog als `http_request`-JSON-Zeile (früher: formatierter Text) mit `correlationId`, `method`, `path` (ohne Query), `status`, `durationMs`. Health-Checks bleiben still.
+  - Die Korrelations-ID wird als `X-Request-Id`-Antwortkopf zurückgegeben; Supportmeldungen lassen sich eindeutig einer Logzeile zuordnen.
+  - Unbehandelte Fehler loggen als `unhandled_request_error`-JSON-Zeile und antworten mit `{ error, requestId }` — weiterhin ohne Interna nach außen.
+- **Tests**: 9 neue/erweiterte Tests (structured-log.test.ts, request-logger.test.ts): JSON-Parsbarkeit, Frische Korrelations-IDs pro Request, Geheimnis-Verwurf, Kürzung, Health-Silence, Header-Sent-Wahrung. Suite: 736 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
