@@ -40,7 +40,7 @@ afterEach(() => {
 describe("Freigabepunkte (Sprint 047)", () => {
   it("führt jeden risikorechten Einstieg als markierten Freigabepunkt", () => {
     const ids = APPROVAL_GATES.map(gate => gate.id);
-    expect(ids).toEqual(["mission-start", "mission-restart", "controller-stop"]);
+    expect(ids).toEqual(["mission-start", "live-trading-keys", "mission-restart", "controller-stop"]);
     for (const gate of APPROVAL_GATES) {
       expect(approvalPoint(gate.id)).toBe(gate);
       expect(gate.description.length).toBeGreaterThan(20);

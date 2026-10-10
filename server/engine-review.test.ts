@@ -77,7 +77,7 @@ describe("Engine-Review (Sprint 050)", () => {
   });
 
   it("markiert jeden risikorechten Einstieg als Freigabepunkt mit Quittungstext", () => {
-    expect(APPROVAL_GATES.length).toBe(3);
+    expect(APPROVAL_GATES.length).toBe(4);
     for (const gate of APPROVAL_GATES) {
       const point = approvalPoint(gate.id);
       expect(point.id).toBe(gate.id);

@@ -199,3 +199,19 @@ Der native Login läuft über `@codetrix-studio/capacitor-google-auth`. Zwei Fal
 - `client/src/` — React-Seiten und Komponenten
 - `drizzle/` — Schema und Migrationen (0000–0008)
 - `docs/` — Deploy, APK, Testing, Roadmap, Sprintstatus
+
+## Master-Prompt-Charter (Sprint 101)
+
+Die Mission "System-Analyse, Hyper-Autonomie & Revenue Optimization" für das
+integrierte Projekt CyberSarah Control Center liegt in
+`docs/MASTER-PROMPT.md`. Verbindliche Regeln:
+
+1. **Schritt-für-Schritt-Freigabe:** Die vier Abschnitte werden ausschließlich
+   nacheinander abgearbeitet — erst Plan, dann Admin-Freigabe, dann Code,
+   dann Verifikation (`server/master-prompt.ts`).
+2. **Trading-Gate:** Live-Handel erfordert Mindest-Win-Rate 68 % über
+   mindestens 500 simulierte Trades, stabilen Profit-Faktor (>= 1.25) und ein
+   Simulationsfenster jünger als 24 h — plus separate Admin-Freigabe für echte
+   API-Keys (`server/trading-gate.ts`, Gate `live-trading-keys`).
+3. **Abbruchkriterium:** Entwicklung stoppt erst, wenn alles grün ist und
+   funktioniert.

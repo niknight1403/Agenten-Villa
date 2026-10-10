@@ -23,6 +23,12 @@ export const APPROVAL_GATES: readonly ApprovalGate[] = [
     acknowledgement: "Ich habe verstanden, dass diese Mission echte GitHub-Änderungen auslöst, und gebe sie ausdrücklich frei.",
   },
   {
+    id: "live-trading-keys",
+    label: "Echte Trading-API-Keys fuer Live-Handel einbinden",
+    description: "Live-Handel setzt ein bestandenes Simulations-Gate voraus (Mindest-Win-Rate 68 % ueber mindestens 500 simulierte Trades, stabiler Profit-Faktor, Fenster < 24 h — siehe server/trading-gate.ts). Diese Freigabe ist zusaetzlich zum Gate und nie autonom.",
+    acknowledgement: "Ich habe die Simulationskennzahlen geprueft (>= 68 % Win-Rate, >= 500 Trades, stabiler Profit-Faktor) und binde echte Trading-API-Keys ausdruecklich fuer den Live-Handel ein.",
+  },
+  {
     id: "mission-restart",
     label: "Unterbrochene Mission neu starten",
     description: "Der vorherige Versuch kann bereits Branches, Dateien oder einen Draft-PR verändert haben; ein Neustart kann weitere Seitenwirkungen erzeugen.",
