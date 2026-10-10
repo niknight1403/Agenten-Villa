@@ -162,7 +162,7 @@ Ein Sprint ist grün, wenn seine Akzeptanzkriterien erfüllt sind, `pnpm check`,
 | 097 | Nutzer-Onboarding | Neue Nutzer können eine Villa ohne Sackgasse erstellen. |
 | 098 | Produkt-Telemetrie | Nur datenschutzkonforme, optionale Metriken werden erhoben. |
 | 099 | Gesamt- und Sicherheitsreview | Alle Bereiche besitzen einen dokumentierten grünen Status. |
-| 100 | Release 1.0 | Roadmap, Tests, Dokumentation und Produktionsbuild sind vollständig grün. |
+| 100 | Release 1.0 | ✅ Abgeschlossen am 2026-10-10 (v1.2.0, Build 8): Roadmap, Tests, Doku und Produktionsbuild vollständig grün. |
 
 ## Startstatus
 
@@ -171,3 +171,21 @@ Die ersten drei Sprints werden direkt mit diesem Roadmap-Commit umgesetzt. Der R
 ## References
 
 [1]: https://github.com/niknight1403/Agenten-Villa "Agenten-Villa Repository"
+
+
+---
+
+## Abschluss: 100/100 Sprints (2026-10-10)
+
+Die 100-Sprint-Roadmap ist vollstaendig abgearbeitet. Release-Zustand:
+
+- **Version**: 1.2.0 (Build 8, APK-Diagnose synchron mit `android/app/build.gradle`).
+- **Qualitaet**: 811 Tests gruen (4 bewusst uebersprungen), `tsc --noEmit`
+  sauber, `pnpm build` reproduzierbar, `scripts/release-check.sh` Summe: OK.
+- **Sicherheit**: Gesamtreview gruen (`docs/GESAMT-REVIEW.md`), keine
+  Geheimnisse im Repo, Opt-in-Telemetrie (`docs/TELEMETRIE.md`).
+- **Datenbank**: Migrationen 0000–0016, inkl. Telemetrie-Consent (0016);
+  anwendbar via `pnpm db:push`.
+
+Git-Tag und GitHub-Release bleiben bewusst eine Owner-Entscheidung
+(siehe `docs/RELEASE-CHECKLISTE.md`).

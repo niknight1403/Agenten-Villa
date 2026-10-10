@@ -22,8 +22,8 @@
 | 088     | Grün    | Build-Reproduzierbarkeit: PR #92 (scripts/build-manifest.ts, pnpm build:manifest, 11 Tests). Repro-Nachweis via Doppel-Build verifiziert: 100 % identische Artefakt-Hashes (Aggregat-Hash 2cd39f7a...). Doku in docs/TESTING.md. |
 | 089     | Grün    | Release-Checkliste: docs/RELEASE.md (SemVer, Drizzle-Migrationen, Rollback, Monitoring, Render-Deploy + Recovery-Route) + scripts/release-check.sh (check+test+build) + 3 Tests grün. |
 | 090     | Grün    | Rollback-Test: Checkpoint-Tags (release-NNN), Verifikationsskript scripts/rollback-verify.sh, server/rollback-check.ts (Health-Invarianten, Router-Config, Migrationen), Checkpoint-Tool scripts/rollback-checkpoint.ts, 45 Tests grün. |
-| 091–099 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
-| 099 | Grün | 099 Gesamt-/Sicherheitsreview erledigt; 100 Release 1.0 geplant. |
+| 091–100 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
+| 100 | Grün | Release 1.0 abgeschlossen — Roadmap 100/100. |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
 
@@ -257,3 +257,13 @@ Alle Bereiche besitzen einen dokumentierten gruenen Status (Roadmap 099).
 - **`tests/overall-review.test.ts` (neu, 6 Tests)**: Matrixzeilen sind alle Gruen und keine Zeile Rot/Gelb/Geplant; jede referenzierte Testdatei und Doku existiert real; Geheimnis-Scan ueber server/client/shared/scripts/tests (gsk_, sk-or-v1-, AIza, hf_ Muster); .env nicht versioniert, .gitignore deckt sie ab.
 - Befund des Scans: keine Provider-Keys im Quellcode, keine .env im Git.
 - Suite: 811 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen.
+
+
+## Sprint 100 — Release 1.0: Roadmap vollstaendig (10.10.2026)
+
+Roadmap, Tests, Dokumentation und Produktionsbuild sind vollstaendig gruen (Roadmap 100).
+
+- **Versionsbumo auf v1.2.0 (Build 8)**: `package.json`, `shared/const.ts` (APP_VERSION/APP_BUILD, APK-Diagnose) und `android/app/build.gradle` (versionName/versionCode) synchron. Der Versions-Commit ist der Release-Commit fuer den APK-Bau (voller SHA als `ref`-Input, siehe RELEASE-CHECKLISTE).
+- **Vollvalidierung**: 811 Tests gruen / 4 bewusst uebersprungen; `tsc --noEmit` sauber; `pnpm build` gruen; `scripts/release-check.sh` Summe OK (Check/Tests/Build).
+- **Abschlussdokumentation**: `docs/ROADMAP-100-SPRINTS.md` haelt 100/100 fest (Abschlusssektion mit Release-Zustand); `docs/GESAMT-REVIEW.md` (099) bleibt der Sicherheitsnachweis.
+- **Bewusst offen (Owner-Entscheidungen, keine Rot-Status)**: Git-Tag, GitHub-Release und APK-Bau via workflow_dispatch; Neon-Migration `pnpm db:push` im Deployment; Keystore-Fingerprint in der Google-Konsole (alles in RELEASE-CHECKLISTE dokumentiert).
