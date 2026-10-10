@@ -49,8 +49,8 @@ jobs:
       - name: Mini-Completion (1 Token, beweist Inferenz)
         run: |
           set -euo pipefail
-          model=$(python3 -c "import json;print(json.load(open('/tmp/models.json'))['data'][0]['id'])")
-          echo "Testmodell: $model"
+          model=$(python3 -c "import json,re; ms=[m['id'] for m in json.load(open('/tmp/models.json'))['data']]; k=lambda x:(float(m.group(1)) if (m:=re.search(r'(\d+(?:\.\d+)?)b',x.lower())) else 999); print(sorted(ms,key=k)[0])")
+          echo "Testmodell (kleinstes): $model"
           status=$(curl -s -o /tmp/chat.json -w "%{http_code}" -m 300 \
             -H "Authorization: Bearer $OLLAMA_TOKEN" \
             -H "content-type: application/json" \
