@@ -39,6 +39,7 @@ import {
   setGuardianEnabled,
   setGuardianIntervalMs,
 } from "./provider-guardian";
+import { missionStrategySchema, parseStrategyRecommendation, strategyChoicePrompt } from "./mission-strategies";
 import { appendMessages, getVilla } from "./villa-store";
 import { villaRepositoryToToolTarget } from "../shared/villa-repository";
 import { buildStoppedMissionReport, buildVillaMissionObjective } from "./villa-mission";
@@ -874,7 +875,7 @@ export const agentRouter = router({
       z.object({
         villaId: z.number().int().positive(),
         objective: z.string().trim().max(2_000).optional(),
-        strategy: z.enum(["OPTIMIZE", "REBUILD"]).optional(),
+        strategy: missionStrategySchema.optional(),
         idempotencyKey: z.uuid().optional(),
         acknowledgeImpact: z.boolean(),
       })
@@ -1099,11 +1100,7 @@ export const agentRouter = router({
         `Analysiere das verbundene Repository ${analysisRepository} fuer eine Projekt-Villa${villaName ? ` ('${villaName}')` : ""}.`,
         "Untersuche mit LESenden Werkzeugen: Repository-Ueberblick, Dateibaum, letzte Commits, offene Issues und Pull Requests sowie CI-Check-Runs.",
         "Bewerte ehrlich: Projektzustand, Architektur, Test- und CI-Situation, erkennbare Luecken.",
-        "Lege dem Nutzer danach genau zwei Fertigstell-Moeglichkeiten vor, jede mit kurzer Begruendung und Konsequenz:",
-        "1) OPTIMIZE — das bestehende Projekt weiterentwickeln, verbessern und optimieren.",
-        "2) REBUILD — einen begruendeten Neubau als neues Projekt planen.",
-        "Empfehlungspflicht: Nenne die aus deiner Analyse besser geeignete Option als klare Empfehlung.",
-        "Beende die Antwort zwingend mit einer eigenen Zeile im Format 'EMPFEHLUNG: OPTIMIZE' oder 'EMPFEHLUNG: REBUILD'.",
+        ...strategyChoicePrompt(),
       ].join(" ");
       beginProgress(ctx.user.id, analysisPrompt);
       try {
@@ -1120,10 +1117,9 @@ export const agentRouter = router({
           },
           { authorization: { administrator: true }, onEvent: progressEmitter(ctx.user.id) }
         );
-        const match = /EMPFEHLUNG:\s*(OPTIMIZE|REBUILD)/.exec(result.answer);
         return {
           answer: result.answer,
-          recommendation: (match?.[1] as "OPTIMIZE" | "REBUILD" | undefined) ?? null,
+          recommendation: parseStrategyRecommendation(result.answer),
           repository: analysisRepository,
           model: result.model,
           githubActions: result.githubActions ?? 0,

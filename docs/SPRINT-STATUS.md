@@ -203,3 +203,14 @@ Alle vier Themes (midnight/paper/terminal/sunset) teilen denselben Kern-Design-T
 - **52 Kernregeln migriert**: Header, Icon-Buttons (inkl. Hover/Active), Suggestion-Chips, Nachrichten-Bubbles (inkl. eigene), Send-Button, Autorenfarbe, Villa-Zeilen (inkl. Hover/Selected), Drawer, Mobile-Tabbar, Villa-Modal je Theme auf `var(--vf-*)` umgestellt. Struktur-Eigenschaften (Rahmenbreiten, Radien, Schriften, Schatten) bleiben themen-eigene Regeln.
 - **`client/src/lib/theme-tokens.test.ts` (neu, 4 Tests)**: Vollständigkeit des Kern-Token-Satzes je Theme, jede `var(--vf-*)`-Referenz definiert, Kernregeln nutzen Tokens, Token-Werte unterscheiden sich je Theme.
 - Suite: 774 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 095 — Erweiterungspunkte (10.10.2026)
+
+Neue Provider, Packs und Phasen können ohne Kernumbau ergänzt werden (Roadmap 095).
+
+- **Provider-Registry (`server/_core/llm-router.ts`)**: `registerLLMProvider()` meldet neue Anbieter an (reine Daten; gleichnamige Registrierung aktualisiert statt zu verdoppeln). Die Namens-Sonderfälle des Fallback-Loops sind Provider-Hooks geworden: `buildUrl` (Gemini-Query-Key) und `quiet` (Forge-Logging) — der Kern ist generisch. `resetLLMProvidersForTests()` für saubere Tests.
+- **Phasen-Register (`server/mission-strategies.ts`, neu)**: OPTIMIZE/REBUILD liegen in einem Register; tRPC-Schema (`missionStrategySchema`), Analyse-Prompt (`strategyChoicePrompt()`) und Empfehlungs-Parser (`parseStrategyRecommendation()`) werden daraus abgeleitet. agent-router.ts nutzt nur noch das Register — eine neue Phase ist ein reiner Registereintrag.
+- **Pack-Katalog (`server/pack-catalog.ts`)**: `buildPackCatalog(packs, authority)` als reine Funktion; neue Packs brauchen nur CAPABILITY_PACKS- plus Authority-Eintrag. Fehlende Katalogisierung wirft weiterhin ehrlich.
+- **`server/extension-points.test.ts` (neu, 8 Tests)**: neuer Provider läuft ohne Kernumbau im Fallback (inkl. eigener URL-Konstruktion), Update-Registrierung, Reset; Schema/Prompt/Parser konsistent aus einem Register, nur registrierte Strategien gelten; neue Packs katalogisierbar, fehlende Authority wirft, Produktiv-Katalog vollständig.
+- Suite: 782 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.

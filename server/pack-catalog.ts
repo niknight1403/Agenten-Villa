@@ -148,11 +148,18 @@ const PACK_AUTHORITY: Record<string, PackAuthority> = {
   },
 };
 
-/** Der vollständige, schema-validierte Pack-Katalog. */
-export function getPackCatalog(): PackCatalogEntry[] {
-  return CAPABILITY_PACKS.map(pack => {
-    const authority = PACK_AUTHORITY[pack.id];
-    if (!authority)
+/**
+ * Sprint 095 — Erweiterungspunkt: der Katalog-Builder ist eine reine
+ * Funktion. Neue Packs ergaenzen CAPABILITY_PACKS + die Authority-Map —
+ * der Builder selbst bleibt unangetastet.
+ */
+export function buildPackCatalog(
+  packs: ReadonlyArray<{ id: string; name: string; kind: string; description: string; administratorOnly?: boolean; enabledByDefault: boolean }>,
+  authority: Record<string, PackAuthority>
+): PackCatalogEntry[] {
+  return packs.map(pack => {
+    const packAuthority = authority[pack.id];
+    if (!packAuthority)
       throw new Error(
         `Pack ${pack.id} ist nicht katalogisiert: Berechtigungen und Grenzen fehlen.`
       );
@@ -161,10 +168,15 @@ export function getPackCatalog(): PackCatalogEntry[] {
       name: pack.name,
       kind: pack.kind,
       purpose: pack.description,
-      permissions: authority.permissions,
-      limits: authority.limits,
+      permissions: packAuthority.permissions,
+      limits: packAuthority.limits,
       administratorOnly: Boolean(pack.administratorOnly),
       enabledByDefault: pack.enabledByDefault,
     });
   });
+}
+
+/** Der vollständige, schema-validierte Pack-Katalog. */
+export function getPackCatalog(): PackCatalogEntry[] {
+  return buildPackCatalog(CAPABILITY_PACKS, PACK_AUTHORITY);
 }
