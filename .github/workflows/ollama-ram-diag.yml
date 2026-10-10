@@ -1,0 +1,101 @@
+name: Ollama RAM-Diagnose (Oracle VM)
+
+# Tiefendiagnose ohne SSH: nutzt die native Ollama-API hinter dem
+# Token-Proxy, um den 27b-Ladefehler zu vermessen:
+#   /api/ps   -> geladene Modelle + RAM-Footprint
+#   /api/tags -> Modellgroessen auf Disk
+#   /api/show -> Quantisierung + Default-Kontextlaenge
+#   /api/chat -> gezielter Ladeversuch mit num_ctx-Begrenzung
+# Ziel: Kann qwen3.6:27b laufen, wenn der KV-Cache per num_ctx
+# begrenzt wird? Antwort ist datenbasiert, nicht geraten.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Modell fuer den Ladeversuch"
+        default: "qwen3.6:27b"
+      num_ctx:
+        description: "KV-Cache-Kontextlaenge (RAM-Hebel)"
+        default: "2048"
+      attempts:
+        description: "Ladeversuche (2. Versuch = Page-Cache warm)"
+        default: "2"
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BASE: https://ollama.cybersarah-ki.com
+      TOK: ${{ secrets.VILLA_OLLAMA_TOKEN }}
+      MODEL: ${{ inputs.model }}
+      NUM_CTX: ${{ inputs.num_ctx }}
+    steps:
+      - name: "1. Ist-Zustand: geladene Modelle + Disk-Groessen"
+        run: |
+          set -uo pipefail
+          H="Authorization: Bearer $TOK"
+          echo "== /api/ps (geladen, RAM) =="; curl -s -m 20 -H "$H" "$BASE/api/ps"; echo
+          echo "== /api/tags (Disk) =="; curl -s -m 20 -H "$H" "$BASE/api/tags" | python3 -c "import json,sys; [print(f\"{m['name']}: {m['size']/1e9:.1f} GB\") for m in json.load(sys.stdin)['models']]"
+      - name: "2. Modell-Details: Quantisierung + Default-Kontext"
+        run: |
+          set -uo pipefail
+          curl -s -m 30 -H "Authorization: Bearer $TOK" -H "content-type: application/json" \
+            -d "{\"model\":\"$MODEL\"}" "$BASE/api/show" > /tmp/show.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open('/tmp/show.json'))
+          def find(obj, keys, path=""):
+              if isinstance(obj, dict):
+                  for k, v in obj.items():
+                      p = f"{path}.{k}" if path else k
+                      if any(t in k.lower() for t in keys): print(f"{p}: {str(v)[:120]}")
+                      find(v, keys, p)
+              elif isinstance(obj, list):
+                  for i, v in enumerate(obj): find(v, keys, f"{path}[{i}]")
+          print("--- Modell-Parameter (ctx/quant/arch) ---")
+          find(d, ["context", "ctx", "quant", "embedding", "block_count", "arch"])
+          err = d.get("error")
+          if err: print("API-Fehler:", err)
+          PY
+      - name: "3. Ladeversuche mit num_ctx=$NUM_CTX (Native-API)"
+        run: |
+          set -uo pipefail
+          H="Authorization: Bearer $TOK"
+          for i in $(seq 1 ${{ inputs.attempts }}); do
+            echo "=== Versuch $i: $MODEL num_ctx=$NUM_CTX ==="
+            start=$(date +%s)
+            code=$(curl -s -o /tmp/chat.json -w "%{http_code}" -m 620 \
+              -H "$H" -H "content-type: application/json" \
+              -d "{\"model\":\"$MODEL\",\"keep_alive\":\"30m\",\"options\":{\"num_ctx\":$NUM_CTX,\"num_predict\":32,\"num_thread\":4},\"messages\":[{\"role\":\"user\",\"content\":\"Sag nur: OK\"}]}" \
+              "$BASE/api/chat")
+            echo "HTTP $code in $(( $(date +%s) - start ))s"
+            python3 - <<'PY'
+          import json
+          try:
+              d=json.load(open('/tmp/chat.json'))
+              if 'error' in d: print('Fehler:', str(d['error'])[:200])
+              else: print('content:', repr(d.get('message',{}).get('content','')[:120]),
+                           '| eval_count:', d.get('eval_count'), '| load_duration_ms:', d.get('load_duration'))
+          except Exception as e: print('PARSE:', e, open('/tmp/chat.json').read()[:200])
+          PY
+            echo "== /api/ps danach =="; curl -s -m 20 -H "$H" "$BASE/api/ps"; echo
+            [ "$code" = "200" ] && break
+          done
+      - name: "4. OpenAI-kompatibel: nimmt der /v1-Endpoint options/keep_alive an?"
+        run: |
+          set -uo pipefail
+          H="Authorization: Bearer $TOK"
+          code=$(curl -s -o /tmp/oai.json -w "%{http_code}" -m 120 \
+            -H "$H" -H "content-type: application/json" \
+            -d "{\"model\":\"gemma4:12b\",\"max_tokens\":16,\"keep_alive\":\"30m\",\"options\":{\"num_ctx\":2048},\"messages\":[{\"role\":\"user\",\"content\":\"Sag nur: OK\"}]}" \
+            "$BASE/v1/chat/completions")
+          echo "HTTP $code"; head -c 400 /tmp/oai.json; echo
+      - name: "5. Warmstand: gemma4:12b mit langem keep_alive laden (fuer die Villa)"
+        run: |
+          set -uo pipefail
+          curl -s -o /dev/null -m 620 -w "warmup gemma4:12b HTTP %{http_code}\n" \
+            -H "Authorization: Bearer $TOK" -H "content-type: application/json" \
+            -d '{"model":"gemma4:12b","keep_alive":"60m","messages":[{"role":"user","content":"Hi"}]}' \
+            "$BASE/api/chat"
+          curl -s -m 20 -H "Authorization: Bearer $TOK" "$BASE/api/ps"; echo
