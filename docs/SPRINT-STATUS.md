@@ -145,3 +145,15 @@ Kernmetriken (Laufzeit, Ergebnisstatus, Fehlercodes) sind jetzt pro Villa und Pr
   - `instrumentAgentRun(kind, isComplete, run, scope?)` reicht den Scope in Erfolgs- UND Fehlerpfad durch; bestehende Aufrufer bleiben kompatibel.
 - **`server/agent-router.ts`**: Elite-Missionsläufe erfassen `villaContext.villaId` und `villaContext.repository` als Scope; der Admin-Endpunkt `agentMetrics` akzeptiert optionale Filter `{ villaId?, project? }` und liefert zusätzlich `scopes` mit.
 - **Tests**: 7 neue Tests (agent-metrics.test.ts, agent-router.test.ts): Scope-Erfassung, Filter nach Villa/Projekt/Kombination, Scope-Übersicht, Fehlerpfad-Durchreichung, Endpunkt inkl. Admin-Gate. Suite: 743 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 080 — Daten-Review (10.10.2026)
+
+Persistenz-, Health- und Logpfade sind gebündelt geprüft und dokumentiert (Roadmap 080).
+
+- **`server/data-review.test.ts` (neu, 10 Tests)**: gebündelte Regressionssuite für die drei Betriebspfade:
+  - Persistenz: ehrliche Schreibfehler (`DATABASE_UNAVAILABLE`, openId-Validierung), saubere Lese-Degradation, DB-Sonde verbunden/fehler/nicht_konfiguriert.
+  - Health: Payload-Struktur (`ok`, SemVer-Version, providers, routing), kein Secret-Muster im Payload, DB-Status als reine Cache-Durchreichung, Route antwortet 200.
+  - Logs: Zugriffs- und Fehlerlogzeilen als JSON mit Korrelation/Status/Dauer, requestId in der 500-Antwort ohne Interna, Geheimnis-Verwurf.
+- **`docs/DATA-REVIEW.md` (neu)**: Soll-Zustand, Invarianten-Tabellen und Verifikationskommandos je Pfad.
+- Suite: 753 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
