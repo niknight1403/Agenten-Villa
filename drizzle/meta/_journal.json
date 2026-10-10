@@ -127,6 +127,13 @@
       "when": 1791621817011,
       "tag": "0017_sparkling_rick_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791623242833,
+      "tag": "0018_loud_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

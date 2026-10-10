@@ -31,6 +31,33 @@ import {
   upgradeToPro,
 } from "./subscription";
 import { billingSummary, checkoutAvailability, planCatalog } from "./billing";
+import {
+  listPersonas,
+  createPersona,
+  updatePersona,
+  seedPersonasIfMissing,
+  listAssets,
+  createAssetJob,
+  advanceAsset,
+  listSlots,
+  persistPlannedSlots,
+  setSlotDraft,
+  reviewSlot,
+  TRPCSlotError,
+  PersonaDisclosureError,
+} from "./persona-store";
+import { planSlots, buildSlotPrompt } from "./content-scheduler";
+import {
+  listAffiliateLinks,
+  createAffiliateLink,
+  registerAffiliateClick,
+  listSponsorshipDeals,
+  createSponsorshipLead,
+  advanceSponsorship,
+  listMerch,
+  createMerchProduct,
+} from "./monetization-store";
+import { TIER_BENEFITS, contentTierForPlan } from "./monetization";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
@@ -452,4 +479,205 @@ export const villaRouter = router({
         storeError(error);
       }
     }),
+
+  /* ================================================================
+   * Sprint 103 / Master-Prompt Abschnitt 3 —
+   * Transparenz KI-Influencer & Reichweiten-Engine
+   * ================================================================ */
+
+  /** 3.1 — Personas auflisten (Schreibzugriff nur Admin). */
+  personaList: protectedProcedure.query(async () => {
+    try {
+      return { personas: await listPersonas() };
+    } catch {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Personas sind gerade nicht abrufbar." });
+    }
+  }),
+
+  /** 3.1 — Idempotenter Seed der drei Start-Personas (nur Admin). */
+  personaSeed: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Nur Administratoren pflegen Personas." });
+    }
+    try {
+      return await seedPersonasIfMissing();
+    } catch {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Seed fehlgeschlagen (DB nicht erreichbar)." });
+    }
+  }),
+
+  /** 3.1 — Persona anlegen (Admin; AI-Kennzeichnung ist Pflicht). */
+  personaCreate: protectedProcedure
+    .input(
+      z.object({
+        handle: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{2,64}$/),
+        displayName: z.string().trim().min(1).max(120),
+        tagline: z.string().trim().max(240).optional(),
+        styleguide: z.string().max(20000).optional(),
+        characterSheet: z.record(z.string(), z.unknown()).optional(),
+        systemPrompt: z.string().min(1),
+        themes: z.array(z.string().trim().min(1).max(120)).min(1),
+        channels: z.array(z.string().trim().min(1).max(32)).min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Nur Administratoren legen Personas an." });
+      }
+      try {
+        const persona = await createPersona(input);
+        return { id: persona.id, handle: persona.handle };
+      } catch (error) {
+        if (error instanceof PersonaDisclosureError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Persona konnte nicht gespeichert werden." });
+      }
+    }),
+
+  /** 3.1 — Asset-Pipeline: Jobs auflisten/anlegen/weiterfuehren (Admin). */
+  assetList: protectedProcedure.query(async ({ ctx, input }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Asset-Verwaltung ist Administratoren vorbehalten." });
+    }
+    return { assets: await listAssets((input as { personaId?: number } | undefined)?.personaId) };
+  }),
+
+  assetCreate: protectedProcedure
+    .input(z.object({ personaId: z.number().int().positive(), kind: z.enum(["image", "text", "style"]), prompt: z.string().trim().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Asset-Verwaltung ist Administratoren vorbehalten." });
+      }
+      return createAssetJob(input);
+    }),
+
+  /** 3.2 — Slots planen (deterministisch) und als 'planned' speichern. */
+  contentPlan: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Content-Planung ist Administratoren vorbehalten." });
+    }
+    try {
+      const personas = await listPersonas();
+      const planned = planSlots(personas.filter((p) => p.active));
+      const rows = await persistPlannedSlots(planned);
+      return { planned: rows.length };
+    } catch {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Slot-Planung fehlgeschlagen." });
+    }
+  }),
+
+  /** 3.2 — Slots abrufen (Review-Queue im Dashboard). */
+  contentSlots: protectedProcedure.query(async () => {
+    try {
+      return { slots: await listSlots() };
+    } catch {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Slots gerade nicht abrufbar." });
+    }
+  }),
+
+  /** 3.2 — Slot-Review: approve/reject/publish — NUR Admin (Freigabe-Pflicht). */
+  contentReview: protectedProcedure
+    .input(z.object({ slotId: z.number().int().positive(), decision: z.enum(["approve", "reject", "publish"]) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Freigabe und Veroeffentlichung sind Administratoren vorbehalten." });
+      }
+      try {
+        const slot = await reviewSlot(input.slotId, ctx.user.id, input.decision);
+        if (!slot) throw new TRPCError({ code: "NOT_FOUND", message: "Slot nicht gefunden." });
+        return { id: slot.id, status: slot.status };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        if (error instanceof TRPCSlotError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Review fehlgeschlagen." });
+      }
+    }),
+
+  /** 3.2 — Monetarisierung: Affiliate (Admin), Sponsoring (Admin), Merch (alle lesend). */
+  affiliateList: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Affiliate-Verwaltung ist Administratoren vorbehalten." });
+    }
+    return { links: await listAffiliateLinks() };
+  }),
+
+  affiliateCreate: protectedProcedure
+    .input(z.object({ personaId: z.number().int().positive(), label: z.string().trim().min(1).max(120), url: z.string().trim().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Affiliate-Verwaltung ist Administratoren vorbehalten." });
+      }
+      try {
+        return await createAffiliateLink(input);
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Affiliate-Link ungueltig." });
+      }
+    }),
+
+  affiliateClick: protectedProcedure
+    .input(z.object({ linkId: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const link = await registerAffiliateClick(input.linkId);
+      if (!link) throw new TRPCError({ code: "NOT_FOUND", message: "Link nicht gefunden." });
+      return { url: link.url };
+    }),
+
+  sponsorshipList: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sponsoring-Pipeline ist Administratoren vorbehalten." });
+    }
+    return { deals: await listSponsorshipDeals() };
+  }),
+
+  sponsorshipCreate: protectedProcedure
+    .input(z.object({ personaId: z.number().int().positive(), sponsor: z.string().trim().min(1).max(160), notes: z.string().max(2000).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sponsoring-Pipeline ist Administratoren vorbehalten." });
+      }
+      return createSponsorshipLead(input);
+    }),
+
+  sponsorshipAdvance: protectedProcedure
+    .input(z.object({ dealId: z.number().int().positive(), to: z.enum(["lead", "contacted", "negotiating", "closed", "declined"]), valueCents: z.number().int().nonnegative().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sponsoring-Pipeline ist Administratoren vorbehalten." });
+      }
+      try {
+        const deal = await advanceSponsorship(input.dealId, input.to, input.valueCents);
+        if (!deal) throw new TRPCError({ code: "NOT_FOUND", message: "Deal nicht gefunden." });
+        return { id: deal.id, stage: deal.stage };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({ code: "BAD_REQUEST", message: (error as Error).message });
+      }
+    }),
+
+  /** Merch-Katalog: alle lesend, Pflege (Admin) via merchCreate. */
+  merchList: protectedProcedure.query(async () => {
+    return { products: await listMerch(true) };
+  }),
+
+  merchCreate: protectedProcedure
+    .input(z.object({ name: z.string().trim().min(1).max(160), description: z.string().max(4000).optional(), priceCents: z.number().int().positive(), kind: z.enum(["digital", "physical"]).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Merch-Pflege ist Administratoren vorbehalten." });
+      }
+      try {
+        return await createMerchProduct(input);
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Produkt ungueltig (Name, Preis in Cent)." });
+      }
+    }),
+
+  /** 3.2 — Content-Tiers transparent machen (an Subscription aus 2.2). */
+  contentTierBenefits: protectedProcedure.query(async ({ ctx }) => {
+    const tier = contentTierForPlan(ctx.user.role === "admin" ? "pro" : "free");
+    return { tier, benefits: TIER_BENEFITS[tier] };
+  }),
 });

@@ -414,3 +414,157 @@ export const tokenUsageMonthly = pgTable("token_usage_monthly", {
   tokens: integer("tokens").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
 });
+
+/**
+ * Sprint 103 / Master-Prompt Abschnitt 3 — Transparente KI-Influencer.
+ * Profilmappen (Dossiers), Asset-Pipeline, Content-Slots, Reichweiten-
+ * metriken und Monetarisierung. Transparenz ist strukturell erzwungen:
+ * jede Persona traegt eine AI-Kennzeichnung, die API lehnt Personas ohne
+ * kennzeichnenden System-Prompt ab (siehe server/persona-dossier.ts).
+ */
+export const personas = pgTable("personas", {
+  id: serial("id").primaryKey(),
+  /** Eindeutiger Handle, z. B. 'nova'. */
+  handle: varchar("handle", { length: 64 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 120 }).notNull(),
+  tagline: varchar("tagline", { length: 240 }).notNull().default(""),
+  /** Vollstaendiger Styleguide (Markdown). */
+  styleguide: text("styleguide").notNull().default(""),
+  /** Strukturiertes Character Sheet (Aussehen, Stimme, Werte, Tabus). */
+  characterSheet: jsonb("character_sheet").$type<Record<string, unknown>>().notNull().default({}),
+  /** System-Prompt — MUSS AI-Kennzeichnung enthalten (validiert). */
+  systemPrompt: text("system_prompt").notNull(),
+  /** Content-Themes fuer den Scheduler. */
+  themes: jsonb("themes").$type<string[]>().notNull().default([]),
+  /** Kanal-Identifiers, z. B. ['youtube','instagram','blog']. */
+  channels: jsonb("channels").$type<string[]>().notNull().default([]),
+  /** Strukturell erzwungene AI-Transparenz-Kennzeichnung. */
+  aiDisclosure: boolean("ai_disclosure").notNull().default(true),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type Persona = typeof personas.$inferSelect;
+export type InsertPersona = typeof personas.$inferInsert;
+
+/** Asset-Pipeline: Bild-/Text-Assets pro Persona (Generierung, Verwaltung). */
+export const personaAssets = pgTable("persona_assets", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id")
+    .notNull()
+    .references(() => personas.id, { onDelete: "cascade" }),
+  /** image | text | style */
+  kind: varchar("kind", { length: 16 }).$type<"image" | "text" | "style">().notNull(),
+  /** pending | generating | ready | failed */
+  status: varchar("status", { length: 16 })
+    .$type<"pending" | "generating" | "ready" | "failed">()
+    .notNull()
+    .default("pending"),
+  /** Generierungsprompt bzw. Beschreibung. */
+  prompt: text("prompt").notNull().default(""),
+  /** Oeffentliche URL, sobald das Asset bereit ist. */
+  url: text("url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type PersonaAsset = typeof personaAssets.$inferSelect;
+export type InsertPersonaAsset = typeof personaAssets.$inferInsert;
+
+/** Geplanter Content-Slot: Drafts warten IMMER auf Admin-Freigabe. */
+export const contentSlots = pgTable("content_slots", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id")
+    .notNull()
+    .references(() => personas.id, { onDelete: "cascade" }),
+  channel: varchar("channel", { length: 32 }).notNull(),
+  theme: varchar("theme", { length: 120 }).notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  /** Ausgearbeiteter Draft (leer bis zur Generierung). */
+  draft: text("draft").notNull().default(""),
+  /** planned | drafted | approved | rejected | published */
+  status: varchar("status", { length: 16 })
+    .$type<"planned" | "drafted" | "approved" | "rejected" | "published">()
+    .notNull()
+    .default("planned"),
+  /** Admin, der freigegeben/abgelehnt hat. */
+  reviewedBy: integer("reviewed_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type ContentSlot = typeof contentSlots.$inferSelect;
+export type InsertContentSlot = typeof contentSlots.$inferInsert;
+
+/** Reichweiten-Metriken pro Persona und Monat. */
+export const reachMetrics = pgTable("reach_metrics", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id")
+    .notNull()
+    .references(() => personas.id, { onDelete: "cascade" }),
+  /** Periode 'YYYY-MM'. */
+  period: varchar("period", { length: 7 }).notNull(),
+  impressions: integer("impressions").notNull().default(0),
+  engagements: integer("engagements").notNull().default(0),
+  followers: integer("followers").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type ReachMetric = typeof reachMetrics.$inferSelect;
+export type InsertReachMetric = typeof reachMetrics.$inferInsert;
+
+/** Affiliate-Links: Klick-Tracking und Umsatz pro Persona. */
+export const affiliateLinks = pgTable("affiliate_links", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id")
+    .notNull()
+    .references(() => personas.id, { onDelete: "cascade" }),
+  label: varchar("label", { length: 120 }).notNull(),
+  url: text("url").notNull(),
+  clickCount: integer("click_count").notNull().default(0),
+  revenueCents: integer("revenue_cents").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type AffiliateLink = typeof affiliateLinks.$inferSelect;
+export type InsertAffiliateLink = typeof affiliateLinks.$inferInsert;
+
+/** Sponsoring-Pipeline: Lead → Kontakt → Verhandlung → Abschluss/Absage. */
+export const sponsorshipDeals = pgTable("sponsorship_deals", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id")
+    .notNull()
+    .references(() => personas.id, { onDelete: "cascade" }),
+  sponsor: varchar("sponsor", { length: 160 }).notNull(),
+  /** lead | contacted | negotiating | closed | declined */
+  stage: varchar("stage", { length: 16 })
+    .$type<"lead" | "contacted" | "negotiating" | "closed" | "declined">()
+    .notNull()
+    .default("lead"),
+  valueCents: integer("value_cents").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type SponsorshipDeal = typeof sponsorshipDeals.$inferSelect;
+export type InsertSponsorshipDeal = typeof sponsorshipDeals.$inferInsert;
+
+/** Merch-/Digital-Products-Katalog (Checkout hinter Stripe-Doppelgate). */
+export const merchProducts = pgTable("merch_products", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 160 }).notNull(),
+  description: text("description").notNull().default(""),
+  priceCents: integer("price_cents").notNull().default(0),
+  /** digital | physical */
+  kind: varchar("kind", { length: 16 }).$type<"digital" | "physical">().notNull().default("digital"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type MerchProduct = typeof merchProducts.$inferSelect;
+export type InsertMerchProduct = typeof merchProducts.$inferInsert;
