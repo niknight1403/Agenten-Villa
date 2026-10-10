@@ -11,12 +11,12 @@ afterEach(() => {
 });
 
 describe("Ollama-Endpunkte (Sprint 080)", () => {
-  it("dokumentiert die Standard-Modellkette: Coding-Experte, Agenten-Spezialist, Allrounder", () => {
+  it("dokumentiert die Standard-Modellkette klein zuerst (Oracle-VM-realistisch, Sprint 103)", () => {
     expect(ollamaModels()).toEqual([
+      "gemma4:12b",
+      "devstral:24b",
       "qwen3.6:27b",
       "qwen3-coder:30b",
-      "devstral:24b",
-      "gemma4:12b",
     ]);
   });
 

@@ -36,18 +36,24 @@ function modelChain(
 }
 
 /**
- * Sprint 080 — lokale Ollama-Route: qwen3.6:27b / qwen3-coder:30b
- * (Coding-Experte), devstral:24b (Agenten-Spezialist) und gemma4:12b
- * (ressourcen-effizienter Allrounder) ersetzen auf eigener Hardware
- * kostenpflichtige Cloud-Modelle. Konfiguriert per OLLAMA_BASE_URL
- * (OpenAI-kompatibel, z. B. http://mein-host:11434/v1), Modelle per
- * OLLAMA_MODELS ueberschreibbar. Ohne Base-URL existiert die Route nicht.
+ * Sprint 080 — lokale Ollama-Route: gemma4:12b (ressourcen-effizienter
+ * Allrounder), devstral:24b (Agenten-Spezialist) und qwen3.6:27b
+ * (Coding-Experte) ersetzen auf eigener Hardware kostenpflichtige
+ * Cloud-Modelle. Konfiguriert per OLLAMA_BASE_URL (OpenAI-kompatibel,
+ * z. B. http://mein-host:11434/v1), Modelle per OLLAMA_MODELS ueberschreibbar.
+ * Ohne Base-URL existiert die Route nicht.
+ *
+ * Sprint 103 — Reihenfolge bewusst klein zuerst (Deep-Smoke auf der
+ * Oracle-Always-Free-VM, 10.10.2026): qwen3.6:27b startet dort nicht
+ * (llama-server-Timeout beim Laden), devstral:24b braucht lange zum Laden.
+ * gemma4:12b ist bewiesen lauffaehig und steht deshalb an erster Stelle;
+ * die grossen Modelle bleiben als Kette fuer groessere Hosts/Naechte.
  */
 const DEFAULT_OLLAMA_MODELS = [
+  "gemma4:12b",
+  "devstral:24b",
   "qwen3.6:27b",
   "qwen3-coder:30b",
-  "devstral:24b",
-  "gemma4:12b",
 ] as const;
 
 export function ollamaModels(): string[] {
