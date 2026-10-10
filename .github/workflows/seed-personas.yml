@@ -1,0 +1,43 @@
+name: Seed Personas
+
+# Sprint 103 / Master-Prompt Abschnitt 3.1 — legt die drei Start-Personas
+# idempotent auf der Neon-Datenbank an. DATABASE_URL kommt aus den
+# verschlüsselten Repository-Secrets und wird nie ins Log geschrieben.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    name: Start-Personas anlegen (idempotent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Migrationen sicherstellen, dann Seed
+        run: |
+          pnpm db:push
+          pnpm exec tsx scripts/seed-personas.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Verifikation (Persona-Zaehlung)
+        run: |
+          node -e "
+          const postgres = require('postgres');
+          const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
+          (async () => {
+            const rows = await sql\`SELECT handle, display_name FROM personas ORDER BY id\`;
+            console.log('Personas in der Live-DB:', rows.map(r => r.handle + ' (' + r.display_name + ')').join(', '));
+            if (rows.length < 3) { console.error('Erwartet: 3 Personas, gefunden:', rows.length); process.exit(1); }
+            await sql.end();
+          })().catch(e => { console.error('Verifikations-Fehler:', e.message); process.exit(1); });
+          "
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
