@@ -193,3 +193,13 @@ UI-Texte sind zentral und übersetzbar organisiert (Roadmap 093). Deutsche Texte
 - **Mustermigration**: `TokenBudgetWidget` nutzt als erste Komponente vollständig den Katalog (`budget.*`), inkl. längeabhängiger Zeitformatierung (`de-DE`/`en-US`).
 - Folgearbeit (ausserhalb dieses Sprints): weitere Komponenten auf den Katalog umstellen — der Katalog ist die zentrale Anlaufstelle, neue UI-Texte werden dort gepflegt.
 - Suite: 770 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 094 — Theme-System stabilisieren (10.10.2026)
+
+Alle vier Themes (midnight/paper/terminal/sunset) teilen denselben Kern-Design-Token-Satz; Kernflächen ziehen ihre Farben nur noch aus Tokens (Roadmap 094).
+
+- **Token-Layer in `styles/themes.css`**: Abschnitt 0 definiert je Theme 29 Kern-Tokens (`--vf-header-*`, `--vf-btn-*`, `--vf-chip-*`, `--vf-bubble-*`, `--vf-send-*`, `--vf-author-text`, `--vf-row-*`, `--vf-drawer-*`, `--vf-tabbar-*`, `--vf-modal-*`). Werte stammen 1:1 aus den bisherigen Regeln — das Erscheinungsbild ändert sich nicht.
+- **52 Kernregeln migriert**: Header, Icon-Buttons (inkl. Hover/Active), Suggestion-Chips, Nachrichten-Bubbles (inkl. eigene), Send-Button, Autorenfarbe, Villa-Zeilen (inkl. Hover/Selected), Drawer, Mobile-Tabbar, Villa-Modal je Theme auf `var(--vf-*)` umgestellt. Struktur-Eigenschaften (Rahmenbreiten, Radien, Schriften, Schatten) bleiben themen-eigene Regeln.
+- **`client/src/lib/theme-tokens.test.ts` (neu, 4 Tests)**: Vollständigkeit des Kern-Token-Satzes je Theme, jede `var(--vf-*)`-Referenz definiert, Kernregeln nutzen Tokens, Token-Werte unterscheiden sich je Theme.
+- Suite: 774 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
