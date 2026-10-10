@@ -25,11 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Install postgres-Treiber
-        run: npm install postgres@3 --no-save --silent
+          cache: pnpm
+      - name: Abhaengigkeiten installieren
+        run: pnpm install --frozen-lockfile
       - name: "Villen verwalten"
         run: |
           node - <<'JS'
