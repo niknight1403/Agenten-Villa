@@ -70,6 +70,23 @@ zeigen, und der erste Agenten-Turn sollte mit `provider: "ollama"` antworten.
 Sicherheit: Ollama lauscht nur auf localhost, öffentlich hängt ausschließlich
 der token-geschützte TLS-Proxy.
 
+## RAM-Diagnose & Native-Modus (Sprint 103, 10.10.2026)
+
+Messwerte von der VM (per Token-Proxy, ohne SSH):
+
+| Modell | Disk | Befund |
+|---|---|---|
+| gemma4:12b | 8,0 GB | laeuft; ~200 s pro Antwort (ARM-CPU), Kontext 4096 |
+| devstral:24b | 14,3 GB | laedt nur langsam (Kaltladen >300 s) |
+| qwen3.6:27b | 17,8 GB | Default-Kontext **262.144** Tokens — llama-server startet bei 24 GB RAM nicht (500 nach ~300 s, Ollama-Ladebudget 5 min). Mit `num_ctx=2048` laedt und antwortet es bewiesen (Kaltversuch 1: 500/304 s; Page-Cache-warm Versuch 2: **200/209 s**, danach 17,85 GB resident) |
+
+Konsequenzen (im Villa-Backend umgesetzt, Commit "Sprint 103"):
+
+- Die Villa spricht Ollama jetzt nativ ueber `/api/chat` statt `/v1/chat/completions`: nur dort sind `options.num_ctx` (KV-Cache, Env `OLLAMA_NUM_CTX`, Default 2048, begrenzt 512–8192) und `keep_alive` (Env `OLLAMA_KEEP_ALIVE`, Default 30 m — Modell bleibt resident, Kaltladekosten amortisieren sich im 24/7-Betrieb) pro Anfrage steuerbar.
+- Thinking-Felder (`message.thinking` / `reasoning`) werden bewusst NICHT als Antwort gewertet — eine nur denkende Antwort ist ehrlich leer und fuehrt zum naechsten Modell.
+- Erste Kaltladeversuche der grossen Modelle koennen Ollamas internes 5-Minuten-Budget sprengen (HTTP 500) — der Router stuft 5xx als UNAVAILABLE ein und faehrt ehrlich mit der Kette fort (gemma4 zuerst).
+- Ohne SSH bleiben `OLLAMA_LOAD_TIMEOUT`, `OLLAMA_KV_CACHE_TYPE` (q8_0) und Swap-Konfiguration Owner-Handoffs; per OCI-API waeren sie (Security-List/Neustart) indirekt beeinflussbar.
+
 ## Betrieb & Grenzen
 
 - **Kosten:** 0 EUR — Always Free gilt dauerhaft; 3.000 OCPU-Stunden/Monat

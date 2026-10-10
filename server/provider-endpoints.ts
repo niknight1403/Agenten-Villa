@@ -83,6 +83,32 @@ export function ollamaChatUrl(): string {
   return base ? `${base}/chat/completions` : "";
 }
 
+/**
+ * Sprint 103 — Native Ollama-Chat-Endpoint (/api/chat). Nur hier lassen
+ * sich RAM-kritische Optionen pro Anfrage steuern: num_ctx (KV-Cache) und
+ * keep_alive (Modell bleibt resident; Kaltladen der grossen Modelle von
+ * Oracle-Block-Storage dauert Minuten und ueberschreitet sonst Ollamas
+ * internes 5-Minuten-Ladebudget — RAM-Diagnose 10.10.2026: qwen3.6:27b
+ * defaultet auf 262.144 Token Kontext und laesst llama-server bei 24 GB
+ * RAM nicht anlaufen; mit num_ctx 2048 laedt und antwortet es bewiesen).
+ */
+export function ollamaNativeChatUrl(): string {
+  const base = ollamaBase();
+  return base ? `${base.replace(/\/v1$/, "")}/api/chat` : "";
+}
+
+/** KV-Cache-Kontextlaenge pro Anfrage (OLLAMA_NUM_CTX, Default 2048, begrenzt 512–8192). */
+export function ollamaNumCtx(): number {
+  const raw = Number(process.env.OLLAMA_NUM_CTX?.trim());
+  if (!Number.isFinite(raw) || raw <= 0) return 2_048;
+  return Math.max(512, Math.min(8_192, Math.floor(raw)));
+}
+
+/** Resident-Haltezeit des Modells (OLLAMA_KEEP_ALIVE, Default "30m") — amortisiert Kaltladezeiten im 24/7-Betrieb. */
+export function ollamaKeepAlive(): string {
+  return process.env.OLLAMA_KEEP_ALIVE?.trim() || "30m";
+}
+
 /** Ollama-Modelliste — ungefährlicher Health-Probe ohne Verbrauch. */
 export function ollamaModelsUrl(): string {
   const base = ollamaBase();

@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ollamaChatUrl,
+  ollamaKeepAlive,
   ollamaModels,
   ollamaModelsUrl,
+  ollamaNativeChatUrl,
+  ollamaNumCtx,
   ollamaTimeoutMs,
 } from "./provider-endpoints";
 
@@ -18,6 +21,27 @@ describe("Ollama-Endpunkte (Sprint 080)", () => {
       "qwen3.6:27b",
       "qwen3-coder:30b",
     ]);
+  });
+
+  it("baut die Native-Chat-URL korrekt (Sprint 103): /v1 wird entfernt, /api/chat angehaengt", () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "https://ollama.example.com/v1");
+    expect(ollamaNativeChatUrl()).toBe("https://ollama.example.com/api/chat");
+    vi.stubEnv("OLLAMA_BASE_URL", "http://host:11434");
+    expect(ollamaNativeChatUrl()).toBe("http://host:11434/api/chat");
+  });
+
+  it("begrenzt OLLAMA_NUM_CTX ehrlich auf 512-8192 mit Default 2048 (Sprint 103)", () => {
+    expect(ollamaNumCtx()).toBe(2048);
+    vi.stubEnv("OLLAMA_NUM_CTX", "100");
+    expect(ollamaNumCtx()).toBe(512);
+    vi.stubEnv("OLLAMA_NUM_CTX", "999999");
+    expect(ollamaNumCtx()).toBe(8192);
+  });
+
+  it("liefert keep_alive mit Default 30m, per Env ueberschreibbar (Sprint 103)", () => {
+    expect(ollamaKeepAlive()).toBe("30m");
+    vi.stubEnv("OLLAMA_KEEP_ALIVE", "2h");
+    expect(ollamaKeepAlive()).toBe("2h");
   });
 
   it("erlaubt Modellketten-Override per OLLAMA_MODELS", () => {

@@ -20,6 +20,9 @@ import {
   HUGGINGFACE_CHAT_URL,
   geminiModels,
   ollamaChatUrl,
+  ollamaNativeChatUrl,
+  ollamaNumCtx,
+  ollamaKeepAlive,
   ollamaModels,
   ollamaTimeoutMs,
   groqModels,
@@ -171,6 +174,8 @@ type ProviderCallOptions = {
   maxTokens?: number;
   maxToolCalls?: number;
   timeoutMs?: number;
+  /** Sprint 103 — Ollama native /api/chat: RAM-bewusste Optionen (num_ctx, keep_alive). */
+  nativeOllama?: boolean;
 };
 
 function retryable(status: number) {
@@ -219,6 +224,8 @@ type ProviderRoute = {
   models: string[];
   /** Sprint 080 — route-spezifisches Zeitlimit (Ollama-Inferenz ist langsam). */
   timeoutMs?: number;
+  /** Sprint 103 — Route spricht natives /api/chat (RAM-Optionen steuerbar). */
+  native?: boolean;
 };
 
 /* Sprint 034 — der Cooldown-Mechanismus lebt in provider-cooldown.ts:
@@ -246,9 +253,10 @@ function providerRegistry(allowHuggingFace: boolean): ProviderRoute[] {
     routes.push({
       name: "ollama",
       key: process.env.OLLAMA_API_KEY?.trim() ?? "",
-      url: ollamaChatUrl(),
+      url: ollamaNativeChatUrl(),
       models: ollamaModels(),
       timeoutMs: ollamaTimeoutMs(),
+      native: true,
     });
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
   if (openRouterKey)
@@ -463,7 +471,11 @@ async function runProviderChain(
           tools,
           // Sprint 080 — route-spezifisches Zeitlimit (Ollama) hat Vorrang
           // vor dem allgemeinen Turn-Limit; Cloud-Routen behalten es.
-          { ...options, timeoutMs: route.timeoutMs ?? options.timeoutMs }
+          {
+            ...options,
+            timeoutMs: route.timeoutMs ?? options.timeoutMs,
+            nativeOllama: route.native === true,
+          }
         );
         reportProviderOutcome(
           route.name === "openrouter" ? model : `${route.name}:${model}`,
@@ -701,14 +713,33 @@ async function callProvider(
         ...(key ? { Authorization: `Bearer ${key}` } : {}),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.2,
-        stream: false,
-        ...(tools ? { tools, tool_choice: "auto" } : {}),
-      }),
+      body: JSON.stringify(
+        options.nativeOllama
+          ? {
+              // Sprint 103 — natives /api/chat: RAM-Hebel num_ctx (KV-Cache)
+              // und keep_alive (Modell bleibt resident, Kaltladen dauert
+              // Minuten); num_predict bekommt einen Puffer, weil Thinking-
+              // Modelle (gemma4/qwen3.6) Denkschritte vom Budget abziehen.
+              model,
+              messages,
+              stream: false,
+              keep_alive: ollamaKeepAlive(),
+              options: {
+                num_ctx: ollamaNumCtx(),
+                num_predict: maxTokens + 256,
+                temperature: 0.2,
+              },
+              ...(tools ? { tools } : {}),
+            }
+          : {
+              model,
+              messages,
+              max_tokens: maxTokens,
+              temperature: 0.2,
+              stream: false,
+              ...(tools ? { tools, tool_choice: "auto" } : {}),
+            }
+      ),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -778,6 +809,22 @@ async function callProvider(
       "INVALID_RESPONSE",
       "Der Modellanbieter lieferte keine lesbare Antwort."
     );
+  }
+  // Sprint 103 — native Ollama-Antworten besitzen kein choices[]; sie
+  // werden vor der gemeinsamen Auswertung in die Completion-Form gehoben.
+  // Thinking ("message.thinking") bleibt bewusst ungenutzt — nur der echte
+  // Antworttext zaehlt; eine nur denkende Antwort ist ehrlich leer.
+  if (options.nativeOllama && !data.choices?.[0]?.message) {
+    const native = data as unknown as {
+      message?: { content?: unknown };
+      model?: string;
+    };
+    const nativeContent =
+      typeof native.message?.content === "string" ? native.message.content : "";
+    data = {
+      model: data.model || native.model || model,
+      choices: [{ message: { content: nativeContent } }],
+    };
   }
   const message = data.choices?.[0]?.message;
   const answer = message?.content?.trim() ?? "";

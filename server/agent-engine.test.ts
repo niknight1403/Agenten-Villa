@@ -252,11 +252,51 @@ describe("Lokale Ollama-Route (Sprint 080)", () => {
     ).resolves.toMatchObject({ provider: "ollama", attempts: 1 });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(
-      "http://mein-host:11434/v1/chat/completions"
+      "http://mein-host:11434/api/chat"
     );
     // Ohne OLLAMA_API_KEY wird kein Authorization-Kopf gesendet.
     const headers = fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers?.Authorization).toBeUndefined();
+  });
+
+  it("sendet RAM-bewusste Native-Optionen: num_ctx, keep_alive, kein max_tokens (Sprint 103)", async () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    vi.stubEnv("OLLAMA_NUM_CTX", "1024");
+    vi.stubEnv("OLLAMA_KEEP_ALIVE", "60m");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ model: "gemma4:12b", message: { content: "OK", thinking: "irrelevant" }, done: true }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+    const result = await runAgentTurn(input, false, { fetcher });
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(body.keep_alive).toBe("60m");
+    expect(body.max_tokens).toBeUndefined();
+    expect((body.options as Record<string, unknown>).num_ctx).toBe(1024);
+    expect(typeof (body.options as Record<string, unknown>).num_predict).toBe("number");
+    // Native-Antwort: content wird gehoben, thinking bleibt ungenutzt.
+    expect(result).toMatchObject({ answer: "OK", provider: "ollama" });
+  });
+
+  it("faellt bei nativer Thinking-only-Antwort (leerer content) ehrlich weiter, statt Thinking als Antwort zu nehmen", async () => {
+    vi.stubEnv("OLLAMA_BASE_URL", "http://mein-host:11434/v1");
+    vi.stubEnv("OLLAMA_MODELS", "gemma4:12b");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ model: "gemma4:12b", message: { content: "", thinking: "Gruebel..." }, done: true }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(reply(200, "cloud-model"));
+    const result = await runAgentTurn(input, false, { fetcher });
+    expect(result).toMatchObject({ provider: "openrouter" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it("faellt bei Kontingent-Fehler der lokalen Route ehrlich auf die Cloud-Kette zurueck", async () => {
