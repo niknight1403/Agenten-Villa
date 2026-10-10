@@ -58,7 +58,7 @@ jobs:
               console.log('Verbleibende Villen:', JSON.stringify(after));
             } else {
               const villas = await sql`
-                SELECT v.id, v.name, v.archived, v.createdBy, v.createdAt,
+                SELECT v.id, v.name, v.createdBy, v.createdAt, v.archivedAt,
                        (SELECT count(*) FROM villa_messages m WHERE m.villaId = v.id) AS messages,
                        (SELECT count(*) FROM villa_test_runs t WHERE t.villaId = v.id) AS test_runs
                 FROM villas v ORDER BY v.id`;
