@@ -21,6 +21,7 @@
  */
 
 import { getRotationStatus, runRotationTick, type RotationStatus } from "./route-rotator";
+import { activeRouteFromConfig } from "./active-route";
 import { checkDatabaseHealth, type DatabaseHealthReport } from "./db-health";
 import { providerCooldownSnapshot } from "./provider-cooldown";
 
@@ -253,7 +254,10 @@ export async function haaraTick(options: HaaraTickOptions = {}): Promise<HaaraSt
   }
 
   const signal: HaaraSignal = {
-    activeRoute: rotation?.activeRoute ?? null,
+    // Sprint 103 — Fix: aktive Route zustandslos aus Konfiguration
+    // (gleiche Quelle wie /api/health), NICHT aus dem probe-basierten
+    // Rotator-State, der beim Kaltstart noch leer ist.
+    activeRoute: activeRouteFromConfig(),
     rotation: rotation ? { rankedRoutes: rotation.rankedRoutes, routes: rotation.routes } : null,
     cooldowns,
     database,

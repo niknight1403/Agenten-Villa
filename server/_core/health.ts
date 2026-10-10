@@ -9,6 +9,7 @@ import {
 } from "../provider-registry";
 import { providerCooldownInfo } from "../provider-cooldown";
 import { getRouteOverride } from "../route-override";
+import { activeRouteFromConfig, PROVIDER_KEY_ENV } from "../active-route";
 import type { ControllerState } from "../controller";
 import { getHaaraStatus } from "../haara";
 
@@ -64,15 +65,6 @@ export type ProviderHealthSummary = {
   cooldownSecLeft?: number;
 };
 
-const PROVIDER_KEY_ENV: Record<ProviderName, string> = {
-  // Sprint 080 — Ollama wird per Base-URL konfiguriert (kein Schluessel
-  // noetig); die Eintragung hier bezeichnet "konfiguriert".
-  ollama: "OLLAMA_BASE_URL",
-  openrouter: "OPENROUTER_API_KEY",
-  groq: "GROQ_API_KEY",
-  gemini: "GEMINI_API_KEY",
-  huggingface: "HF_TOKEN",
-};
 
 function providerSummaries(): ProviderHealthSummary[] {
   return fallbackOrder().map(name => {
@@ -93,13 +85,9 @@ function providerSummaries(): ProviderHealthSummary[] {
 
 /** Sprint 079 — welche Route wuerde als naechstes bedienen (ohne Netzprobe). */
 function activeRouteName(): ProviderName | null {
-  for (const name of fallbackOrder()) {
-    if (!isProviderActive(name)) continue;
-    if (!Boolean(process.env[PROVIDER_KEY_ENV[name]]?.trim())) continue;
-    if (providerCooldownInfo(name) !== null) continue;
-    return name;
-  }
-  return null;
+  // Sprint 103 — gemeinsam mit HAARA in active-route.ts gepflegt,
+  // damit Health und Selbstheilung dieselbe Route sehen.
+  return activeRouteFromConfig();
 }
 
 /** Sprint 079 — Routing-Zustand: Admin-Pin und naechste aktive Route. */
