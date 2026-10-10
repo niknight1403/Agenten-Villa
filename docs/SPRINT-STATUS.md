@@ -132,3 +132,16 @@ Jede HTTP-Zugriffslogzeile ist jetzt eine maschinenlesbare JSON-Zeile mit Korrel
   - Die Korrelations-ID wird als `X-Request-Id`-Antwortkopf zurückgegeben; Supportmeldungen lassen sich eindeutig einer Logzeile zuordnen.
   - Unbehandelte Fehler loggen als `unhandled_request_error`-JSON-Zeile und antworten mit `{ error, requestId }` — weiterhin ohne Interna nach außen.
 - **Tests**: 9 neue/erweiterte Tests (structured-log.test.ts, request-logger.test.ts): JSON-Parsbarkeit, Frische Korrelations-IDs pro Request, Geheimnis-Verwurf, Kürzung, Health-Silence, Header-Sent-Wahrung. Suite: 736 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 079 — Metrik-Dashboard: pro Villa und Projekt filterbar (10.10.2026)
+
+Kernmetriken (Laufzeit, Ergebnisstatus, Fehlercodes) sind jetzt pro Villa und Projekt filterbar (Roadmap 079).
+
+- **`server/agent-metrics.ts` (erweitert)**:
+  - Jeder Lauf trägt jetzt `villaId` und `project` ("owner/repo"; jeweils null bei serverweiten Läufen).
+  - `agentMetricsSummary(filter?)`: filtert nach `villaId` und/oder `project`; ohne Filter bleibt die globale Übersicht unverändert.
+  - `agentMetricsScopes()` (neu): jede bekannte Villa/Projekt-Kombination mit eigener aggregierter Kernmetrik (Totals, mittlere Laufzeit, Samples), absteigend sortiert — Datenbasis für das Dashboard.
+  - `instrumentAgentRun(kind, isComplete, run, scope?)` reicht den Scope in Erfolgs- UND Fehlerpfad durch; bestehende Aufrufer bleiben kompatibel.
+- **`server/agent-router.ts`**: Elite-Missionsläufe erfassen `villaContext.villaId` und `villaContext.repository` als Scope; der Admin-Endpunkt `agentMetrics` akzeptiert optionale Filter `{ villaId?, project? }` und liefert zusätzlich `scopes` mit.
+- **Tests**: 7 neue Tests (agent-metrics.test.ts, agent-router.test.ts): Scope-Erfassung, Filter nach Villa/Projekt/Kombination, Scope-Übersicht, Fehlerpfad-Durchreichung, Endpunkt inkl. Admin-Gate. Suite: 743 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.

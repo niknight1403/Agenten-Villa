@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { appRouter } from "./routers";
 import * as villaStore from "./villa-store";
 import * as agentEngine from "./agent-engine";
+import { recordAgentRun, resetAgentMetricsForTests } from "./agent-metrics";
 import * as missionStore from "./elite-mission-store";
 import * as githubTools from "./github-tools";
 import type { TrpcContext } from "./_core/context";
@@ -43,6 +44,7 @@ function createContext(role: "user" | "admin", email: string): TrpcContext {
 
 afterEach(() => {
   resetAgentRouterForTests();
+  resetAgentMetricsForTests();
   resetProviderGuardianForTests();
   resetRouterTelemetryForTests();
   vi.unstubAllEnvs();
@@ -823,5 +825,40 @@ describe("Live-Fortschritt (agent.progress)", () => {
     expect(result.answer).toContain("Ziel");
     // Nach Abschluss ist kein Auftrag mehr aktiv.
     expect(await user.agent.progress()).toBeNull();
+  });
+});
+
+
+describe("agentMetrics-Endpunkt (Sprint 079)", () => {
+  it("akzeptiert Villa- und Projektfilter und liefert Scopes mit", async () => {
+    const caller = appRouter.createCaller(createContext("admin", "admin@example.com"));
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 250,
+      scope: { villaId: 42, project: "niknight1403/Agenten-Villa" },
+    });
+    recordAgentRun({ kind: "elite", outcome: "failed", durationMs: 90 });
+
+    const filtered = await caller.agent.agentMetrics({
+      villaId: 42,
+      project: "niknight1403/Agenten-Villa",
+    });
+    expect(filtered.samples).toBe(1);
+    expect(filtered.totals.completed).toBe(1);
+    expect(
+      filtered.scopes.some(
+        (entry) => entry.scope.villaId === 42 && entry.samples === 1
+      )
+    ).toBe(true);
+
+    const unfiltered = await caller.agent.agentMetrics(undefined);
+    expect(unfiltered.samples).toBe(2);
+    expect(unfiltered.scopes.length).toBeGreaterThan(0);
+  });
+
+  it("bleibt administratoren-only", async () => {
+    const caller = appRouter.createCaller(createContext("user", "user@example.com"));
+    await expect(caller.agent.agentMetrics(undefined)).rejects.toThrow();
   });
 });

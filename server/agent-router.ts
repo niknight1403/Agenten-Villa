@@ -61,7 +61,7 @@ import { getPackCatalog } from "./pack-catalog";
 import { requireApproval } from "./approval-gates";
 import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./roles";
 import { recordAuditEntry, listAuditEntries, auditLogSize } from "./audit-log";
-import { agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
+import { agentMetricsScopes, agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
 import { villaController } from "./controller";
 
 // The assistant is ready out of the box so a signed-in user can chat
@@ -386,7 +386,12 @@ async function executePersistedMission(
           // Werkzeugrunde weiter.
           authorization: { administrator: true },
         }
-      )
+      ),
+      // Sprint 079 — Metriken sind pro Villa und Projekt filterbar.
+      {
+        villaId: villaContext?.villaId ?? undefined,
+        project: villaContext?.repository?.trim() || undefined,
+      }
     );
     const output: EliteOutput = {
       ...result,
@@ -948,11 +953,23 @@ export const agentRouter = router({
       return { stopping: true };
     }),
 
-  // Sprint 048 — Agentenmetriken: Laufzeit, Fehler und Ergebnisstatus.
-  agentMetrics: protectedProcedure.query(({ ctx }) => {
-    requireAdmin(ctx.user);
-    return agentMetricsSummary();
-  }),
+  // Sprint 048 — Agentenmetriken; Sprint 079 — pro Villa und Projekt filterbar.
+  agentMetrics: protectedProcedure
+    .input(
+      z
+        .object({
+          villaId: z.number().int().positive().optional(),
+          project: z.string().trim().min(1).max(200).optional(),
+        })
+        .optional()
+    )
+    .query(({ ctx, input }) => {
+      requireAdmin(ctx.user);
+      return {
+        ...agentMetricsSummary(input),
+        scopes: agentMetricsScopes(),
+      };
+    }),
   eliteMissionRuns: protectedProcedure.query(async ({ ctx }) => {
     requireAdminMutation(ctx.user);
     try {

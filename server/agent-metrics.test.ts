@@ -7,6 +7,7 @@ import * as missionStore from "./elite-mission-store";
 import * as agentEngine from "./agent-engine";
 import {
   AgentRunOutcome,
+  agentMetricsScopes,
   agentMetricsSummary,
   instrumentAgentRun,
   recordAgentRun,
@@ -140,5 +141,134 @@ describe("Router-Integration der Agentenmetriken (Sprint 048)", () => {
   it("schützt die Metrikenabfrage für Nicht-Administratoren", async () => {
     const user = appRouter.createCaller(createContext("user", "user@example.com"));
     await expect(user.agent.agentMetrics()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+
+describe("Metrik-Filter pro Villa und Projekt (Sprint 079)", () => {
+  it("erfasst villaId und project auf jedem Lauf", () => {
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 1200,
+      scope: { villaId: 7, project: "niknight1403/Agenten-Villa" },
+    });
+    recordAgentRun({ kind: "elite", outcome: "failed", durationMs: 300 });
+    const summary = agentMetricsSummary();
+    expect(summary.samples).toBe(2);
+  });
+
+  it("filtert Kernmetriken nach villaId", () => {
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 100,
+      scope: { villaId: 7, project: "a/b" },
+    });
+    recordAgentRun({
+      kind: "elite",
+      outcome: "failed",
+      durationMs: 900,
+      scope: { villaId: 9, project: "a/b" },
+    });
+    recordAgentRun({ kind: "elite", outcome: "partial", durationMs: 50 });
+
+    const villa7 = agentMetricsSummary({ villaId: 7 });
+    expect(villa7.samples).toBe(1);
+    expect(villa7.totals.completed).toBe(1);
+    expect(villa7.averageDurationMs).toBe(100);
+
+    const villaNull = agentMetricsSummary({ villaId: null as unknown as number });
+    // villaId: null passt nicht zu undefined — ohne Filter bleibt es global:
+    expect(agentMetricsSummary().samples).toBe(3);
+  });
+
+  it("filtert Kernmetriken nach Projekt und kombiniert Villa+Projekt", () => {
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 100,
+      scope: { villaId: 1, project: "niknight1403/CyberSarah-Control-Center" },
+    });
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 300,
+      scope: { villaId: 2, project: "niknight1403/Agenten-Villa" },
+    });
+    recordAgentRun({
+      kind: "elite",
+      outcome: "failed",
+      durationMs: 200,
+      scope: { villaId: 2, project: "niknight1403/CyberSarah-Control-Center" },
+    });
+
+    const sarah = agentMetricsSummary({ project: "niknight1403/CyberSarah-Control-Center" });
+    expect(sarah.samples).toBe(2);
+    expect(sarah.totals).toEqual({ completed: 1, partial: 0, failed: 1 });
+
+    const both = agentMetricsSummary({
+      villaId: 2,
+      project: "niknight1403/Agenten-Villa",
+    });
+    expect(both.samples).toBe(1);
+    expect(both.totals.completed).toBe(1);
+    expect(both.averageDurationMs).toBe(300);
+  });
+
+  it("listet bekannte Scopes mit eigenen Kernmetriken (Dashboard)", () => {
+    recordAgentRun({
+      kind: "elite",
+      outcome: "completed",
+      durationMs: 100,
+      scope: { villaId: 1, project: "a/b" },
+    });
+    recordAgentRun({
+      kind: "elite",
+      outcome: "failed",
+      durationMs: 400,
+      scope: { villaId: 1, project: "a/b" },
+    });
+    recordAgentRun({ kind: "elite-restart", outcome: "partial", durationMs: 60 });
+
+    const scopes = agentMetricsScopes();
+    expect(scopes).toHaveLength(2);
+    const top = scopes[0];
+    expect(top.scope).toEqual({ villaId: 1, project: "a/b" });
+    expect(top.samples).toBe(2);
+    expect(top.totals).toEqual({ completed: 1, partial: 0, failed: 1 });
+    expect(top.averageDurationMs).toBe(250);
+
+    const global = scopes.find(
+      (entry) => entry.scope.villaId === null && entry.scope.project === null
+    );
+    expect(global?.samples).toBe(1);
+    expect(global?.totals.partial).toBe(1);
+  });
+
+  it("instrumentAgentRun reicht den Scope durch — auch im Fehlerfall", async () => {
+    const result = await instrumentAgentRun(
+      "elite",
+      () => true,
+      async () => "ok",
+      { villaId: 5, project: "x/y" }
+    );
+    expect(result).toBe("ok");
+    await expect(
+      instrumentAgentRun(
+        "elite",
+        () => true,
+        async () => {
+          throw new Error("LIMIT");
+        },
+        { villaId: 5, project: "x/y" }
+      )
+    ).rejects.toThrow("LIMIT");
+
+    const scoped = agentMetricsSummary({ villaId: 5, project: "x/y" });
+    expect(scoped.samples).toBe(2);
+    expect(scoped.totals.completed).toBe(1);
+    expect(scoped.totals.failed).toBe(1);
+    expect(scoped.errorsByCode[0]?.code).toBe("Error");
   });
 });
