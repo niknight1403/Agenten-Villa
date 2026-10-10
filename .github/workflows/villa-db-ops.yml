@@ -52,10 +52,7 @@ jobs:
               await sql.begin(async tx => {
                 await tx`DELETE FROM villa_messages WHERE "villaId" = ${villaId}`;
                 await tx`DELETE FROM villa_events WHERE "villaId" = ${villaId}`;
-                if (has('villa_test_runs')) {
-                  if (has('villa_run_events')) await tx`DELETE FROM villa_run_events WHERE "runId" IN (SELECT id FROM villa_test_runs WHERE "villaId" = ${villaId})`;
-                  await tx`DELETE FROM villa_test_runs WHERE "villaId" = ${villaId}`;
-                }
+                if (has('villa_attachments')) await tx`DELETE FROM villa_attachments WHERE "villaId" = ${villaId}`;
                 await tx`DELETE FROM villas WHERE id = ${villaId}`;
               });
               const after = await sql`SELECT id, name FROM villas ORDER BY id`;
@@ -67,7 +64,7 @@ jobs:
               const villas = await sql`
                 SELECT v.id, v.name, v."createdBy", v."createdAt", v."archivedAt",
                        (SELECT count(*) FROM villa_messages m WHERE m."villaId" = v.id) AS messages,
-                       (SELECT count(*) FROM elite_mission_runs e WHERE e."villaId" = v.id) AS mission_runs
+                       (SELECT count(*) FROM villa_attachments a WHERE a."villaId" = v.id) AS attachments
                 FROM villas v ORDER BY v.id`;
               console.log('Villen:', JSON.stringify(villas, null, 1));
               const users = await sql`SELECT id, email, role FROM users ORDER BY id`;
