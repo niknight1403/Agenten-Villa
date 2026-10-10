@@ -134,6 +134,13 @@
       "when": 1791623242833,
       "tag": "0018_loud_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791623748143,
+      "tag": "0019_early_celestials",
+      "breakpoints": true
     }
   ]
 }

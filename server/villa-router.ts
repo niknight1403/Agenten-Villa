@@ -58,6 +58,17 @@ import {
   createMerchProduct,
 } from "./monetization-store";
 import { TIER_BENEFITS, contentTierForPlan } from "./monetization";
+import {
+  recordSignals,
+  listSignals,
+  listHypotheses,
+  generateHypotheses,
+  decideHypothesis,
+  listLoopRuns,
+  executiveLoopTick,
+} from "./revenue-store";
+import { discoveryPeriod } from "./revenue-discovery";
+import { LOOP_ORDER } from "./executive-loop";
 
 const villaNameSchema = z.string().trim().min(1).max(80);
 const specialtySchema = z.string().trim().min(1).max(80);
@@ -680,4 +691,123 @@ export const villaRouter = router({
     const tier = contentTierForPlan(ctx.user.role === "admin" ? "pro" : "free");
     return { tier, benefits: TIER_BENEFITS[tier] };
   }),
+
+  /* ================================================================
+   * Sprint 103 / Master-Prompt Abschnitt 4 —
+   * Autonome Umsatzgenerierung & Executive Master-Loop (24/7)
+   * ================================================================ */
+
+  /** 4.1 — Loop-Status (Phasen, Intervall) fuer alle lesbar. */
+  loopStatus: protectedProcedure.query(async () => {
+    return {
+      phases: LOOP_ORDER,
+      intervalMinutes: 15,
+      autonomous: ["analyze", "hypothesize", "simulate", "verify_revenue"],
+      adminGated: ["deploy", "refactor_scale"],
+    };
+  }),
+
+  /** 4.2 — Loop-Verlauf (Admin-Sicht). */
+  loopHistory: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Loop-Verlauf ist Administratoren vorbehalten." });
+    }
+    try {
+      return { runs: await listLoopRuns(50) };
+    } catch {
+      throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Loop-Verlauf gerade nicht abrufbar." });
+    }
+  }),
+
+  /** 4.1 — Signale erfassen (Admin, z. B. aus internen Quellen). */
+  revenueSignalRecord: protectedProcedure
+    .input(
+      z.object({
+        signals: z
+          .array(
+            z.object({
+              source: z.enum(["billing", "affiliate", "sponsorship", "merch", "reach", "trading"]),
+              key: z.string().trim().min(1).max(64),
+              value: z.number().int().nonnegative(),
+              period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+            })
+          )
+          .min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Signalerfassung ist Administratoren vorbehalten." });
+      }
+      const recorded = await recordSignals(input.signals);
+      return { recorded, period: discoveryPeriod() };
+    }),
+
+  /** 4.1 — Hypothesen-Liste (Admin). */
+  revenueHypothesisList: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Hypothesen sind Administratoren vorbehalten." });
+    }
+    return { hypotheses: await listHypotheses() };
+  }),
+
+  /** 4.1 — Hypothesen aus aktuellem Quellenbild ableiten (Admin-Ausstoss). */
+  revenueHypothesisGenerate: protectedProcedure.mutation(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Hypothesen-Generierung ist Administratoren vorbehalten." });
+    }
+    const result = await generateHypotheses({ tradingSimGatePassed: false });
+    return { created: result.created.length, skipped: result.skipped };
+  }),
+
+  /** 4.1/4.2 — Admin-Entscheidung ueber eine Hypothese (Freigabe-Pflicht). */
+  revenueHypothesisDecide: protectedProcedure
+    .input(z.object({ hypothesisId: z.number().int().positive(), decision: z.enum(["approve", "reject", "deploy", "scale", "park"]) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Hypothesen-Freigabe ist Administratoren vorbehalten." });
+      }
+      try {
+        const hypothesis = await decideHypothesis(input.hypothesisId, ctx.user.id, input.decision);
+        if (!hypothesis) throw new TRPCError({ code: "NOT_FOUND", message: "Hypothese nicht gefunden." });
+        return { id: hypothesis.id, status: hypothesis.status };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({ code: "BAD_REQUEST", message: (error as Error).message });
+      }
+    }),
+
+  /** 4.2 — Ein Loop-Tick manuell anstossen (Admin; deploy bleibt Gate). */
+  loopTick: protectedProcedure
+    .input(z.object({ phase: z.enum(["analyze", "hypothesize", "simulate", "deploy", "verify_revenue", "refactor_scale"]) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Loop-Steuerung ist Administratoren vorbehalten." });
+      }
+      try {
+        const signals = await listSignals();
+        const drafts = await listHypotheses("draft");
+        const summary: Record<string, number> = {};
+        for (const s of signals) {
+          const key = `${s.source}:${s.key}`;
+          summary[key] = (summary[key] ?? 0) + s.value;
+        }
+        const approved = await listHypotheses("approved");
+        const deployed = await listHypotheses("deployed");
+        const expected = [...approved, ...deployed].reduce((sum, h) => sum + h.expectedMonthlyCents, 0);
+        const actual = (summary["affiliate:revenue_cents"] ?? 0) + (summary["sponsorship:revenue_cents"] ?? 0) + (summary["merch:revenue_cents"] ?? 0);
+        return await executiveLoopTick(
+          {
+            signalSummary: summary,
+            tradingSimGatePassed: false, // Sim-Gate laeuft im Trading-Modul
+            draftHypotheses: drafts.length,
+            actualMonthlyCents: actual,
+            expectedMonthlyCents: expected,
+          },
+          input.phase
+        );
+      } catch {
+        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Loop-Tick fehlgeschlagen (DB nicht erreichbar)." });
+      }
+    }),
 });

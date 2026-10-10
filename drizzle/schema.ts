@@ -568,3 +568,73 @@ export const merchProducts = pgTable("merch_products", {
 
 export type MerchProduct = typeof merchProducts.$inferSelect;
 export type InsertMerchProduct = typeof merchProducts.$inferInsert;
+
+/**
+ * Sprint 103 / Master-Prompt Abschnitt 4 — Autonome Umsatzgenerierung.
+ * Revenue-Discovery (Signale + Hypothesen) und Executive Master-Loop.
+ * Autonom erlaubt: Analyse, Simulation, Einnahmen-Pruefung.
+ * NUR mit Admin-Freigabe: Deployment-/Skalierungsschritte.
+ */
+export const revenueSignals = pgTable("revenue_signals", {
+  id: serial("id").primaryKey(),
+  /** billing | affiliate | sponsorship | merch | reach | trading */
+  source: varchar("source", { length: 32 }).notNull(),
+  /** Freier Bezeichner, z. B. 'affiliate_klicks' oder 'token_verbrauch'. */
+  key: varchar("key", { length: 64 }).notNull(),
+  /** Numerischer Messwert (Umsatz in Cent, Anzahl, Rate *100). */
+  value: integer("value").notNull(),
+  /** Periode 'YYYY-MM' fuer Aggregation. */
+  period: varchar("period", { length: 7 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type RevenueSignal = typeof revenueSignals.$inferSelect;
+export type InsertRevenueSignal = typeof revenueSignals.$inferInsert;
+
+/** Revenue-Hypothesen: Entwuerfe mit Score, Umsetzung NUR nach Admin-Freigabe. */
+export const revenueHypotheses = pgTable("revenue_hypotheses", {
+  id: serial("id").primaryKey(),
+  /** micro_saas | content_pipe | automated_trading */
+  kind: varchar("kind", { length: 32 })
+    .$type<"micro_saas" | "content_pipe" | "automated_trading">()
+    .notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  /** Begruendung: Markt, Automatisierbarkeit, Kosten, Risiko. */
+  rationale: text("rationale").notNull().default(""),
+  /** 0-100 Gesamtscore (Marktgroesse, Automatisierbarkeit, Kosten, Risiko). */
+  score: integer("score").notNull().default(0),
+  /** Erwartete monatliche Einnahmen in Cent (konservativ geschaetzt). */
+  expectedMonthlyCents: integer("expected_monthly_cents").notNull().default(0),
+  /** draft | approved | rejected | deployed | scaled | parked */
+  status: varchar("status", { length: 16 })
+    .$type<"draft" | "approved" | "rejected" | "deployed" | "scaled" | "parked">()
+    .notNull()
+    .default("draft"),
+  reviewedBy: integer("reviewed_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
+export type RevenueHypothesis = typeof revenueHypotheses.$inferSelect;
+export type InsertRevenueHypothesis = typeof revenueHypotheses.$inferInsert;
+
+/** Executive Master-Loop: ein Lauf des 24/7-Zirkels pro Phase protokolliert. */
+export const executiveLoopRuns = pgTable("executive_loop_runs", {
+  id: serial("id").primaryKey(),
+  /** analyze | hypothesize | simulate | deploy | verify_revenue | refactor_scale */
+  phase: varchar("phase", { length: 32 })
+    .$type<"analyze" | "hypothesize" | "simulate" | "deploy" | "verify_revenue" | "refactor_scale">()
+    .notNull(),
+  /** ok | blocked | needs_admin | error */
+  outcome: varchar("outcome", { length: 16 })
+    .$type<"ok" | "blocked" | "needs_admin" | "error">()
+    .notNull(),
+  /** Ergebnis-Notiz (Metrik, Refaktor-Hinweis, Grund fuer Block). */
+  note: text("note").notNull().default(""),
+  /** Referenz auf eine Hypothese, falls relevant. */
+  hypothesisId: integer("hypothesis_id"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+});
+
+export type ExecutiveLoopRun = typeof executiveLoopRuns.$inferSelect;
+export type InsertExecutiveLoopRun = typeof executiveLoopRuns.$inferInsert;
