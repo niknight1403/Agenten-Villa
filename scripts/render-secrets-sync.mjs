@@ -68,7 +68,7 @@ async function main() {
   }
   console.log(`[render-secrets-sync] Service: ${service.name} (${service.id})`);
 
-  const existing = await render(`/services/${service.id}/env-vars`, { method: "GET" });
+  const existing = await render(`/services/${service.id}/env-vars?limit=100`, { method: "GET" });
   const byKey = new Map(existing.map((variable) => [variable.key, variable]));
 
   let created = 0;
@@ -81,21 +81,17 @@ async function main() {
       console.log(`[render-secrets-sync] ueberspringe ${key} (nicht gesetzt)`);
       continue;
     }
-    const variable = byKey.get(key);
-    if (variable) {
-      await render(`/services/${service.id}/env-vars/${variable.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ value }),
-      });
+    // Render-Spec: PUT /env-vars/{envVarKey} ist Upsert (Add or update).
+    await render(`/services/${service.id}/env-vars/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+    if (byKey.has(key)) {
       updated += 1;
     } else {
-      await render(`/services/${service.id}/env-vars`, {
-        method: "POST",
-        body: JSON.stringify({ key, value }),
-      });
       created += 1;
     }
-    console.log(`[render-secrets-sync] ${key}: ${variable ? "aktualisiert" : "erstellt"}`);
+    console.log(`[render-secrets-sync] ${key}: ${byKey.has(key) ? "aktualisiert" : "erstellt"}`);
   }
 
   console.log(
