@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Coins } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   usageDisplay,
   type TurnUsageSummaryLike,
@@ -13,6 +14,7 @@ import {
  * (Free-Tier = 0,00 EUR — ehrlich, nicht fiktiv).
  */
 export function TokenBudgetWidget() {
+  const { t, locale } = useI18n();
   const [usage, setUsage] = useState<UsageDisplay | null>(null);
   const [live, setLive] = useState(false);
   const [lastTickAt, setLastTickAt] = useState<string | null>(null);
@@ -44,10 +46,8 @@ export function TokenBudgetWidget() {
         <div className="flex items-center gap-3">
           <Coins className={live ? "text-amber-400" : "text-slate-500"} size={22} />
           <div>
-            <h2 className="text-lg font-semibold">Token-Budget</h2>
-            <p className="text-xs text-slate-500">
-              Live-Verbrauch je Anbieter — begrenzte Prozesshistorie, kein Nutzinhalt
-            </p>
+            <h2 className="text-lg font-semibold">{t("budget.title")}</h2>
+            <p className="text-xs text-slate-500">{t("budget.subtitle")}</p>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -55,23 +55,25 @@ export function TokenBudgetWidget() {
             className={`h-2.5 w-2.5 rounded-full ${live ? "bg-amber-400 shadow-[0_0_12px_#fbbf24]" : "bg-slate-600"}`}
           />
           <span className="text-slate-400">
-            {live ? (lastTickAt ? `Letzter Tick ${new Date(lastTickAt).toLocaleTimeString("de-DE")}` : "warte auf ersten Tick") : "Verbinde …"}
+            {live
+              ? (lastTickAt
+                ? t("budget.live.lastTick", { time: new Date(lastTickAt).toLocaleTimeString(locale === "en" ? "en-US" : "de-DE") })
+                : t("budget.live.waiting"))
+              : t("budget.live.connecting")}
           </span>
         </div>
       </div>
 
       {usage === null ? (
-        <p className="mt-4 text-sm text-slate-500">
-          Noch keine Nutzungsdaten — der erste Watchdog-Tick meldet sich innerhalb einer Minute.
-        </p>
+        <p className="mt-4 text-sm text-slate-500">{t("budget.empty")}</p>
       ) : (
         <>
           <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
-            <StatTile label="Turns" value={usage.turns} />
-            <StatTile label="Prompt-Tokens" value={usage.prompt} />
-            <StatTile label="Antwort-Tokens" value={usage.completion} />
-            <StatTile label="Tokens gesamt" value={usage.total} />
-            <StatTile label="Geschätzte Kosten" value={usage.cost} />
+            <StatTile label={t("budget.tile.turns")} value={usage.turns} />
+            <StatTile label={t("budget.tile.promptTokens")} value={usage.prompt} />
+            <StatTile label={t("budget.tile.completionTokens")} value={usage.completion} />
+            <StatTile label={t("budget.tile.totalTokens")} value={usage.total} />
+            <StatTile label={t("budget.tile.costs")} value={usage.cost} />
           </div>
           {usage.perProvider.length > 0 ? (
             <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">

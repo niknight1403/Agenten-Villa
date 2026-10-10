@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AuthGate from "./components/AuthGate";
+import { I18nProvider } from "./contexts/I18nContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Auth from "./pages/Auth";
 import Controller from "./pages/Controller";
@@ -61,10 +62,12 @@ function App() {
         defaultTheme="light"
         // switchable
       >
-        <TooltipProvider>
+        <I18nProvider>
+      <TooltipProvider>
           <Toaster />
           <Router />
         </TooltipProvider>
+      </I18nProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

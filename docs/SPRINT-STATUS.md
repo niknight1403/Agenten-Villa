@@ -181,3 +181,15 @@ Dashboard-Inhalte passen sich der Rolle an; die sichtbaren Abschnitte sind zentr
 - **Client (`Home.tsx`)**: alle 17 Rollen-Gates leiten sich aus `agent.dashboard` ab (Fallback auf `statusQuery`, solange das Layout lädt).
 - Suite: 763 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
 - Hinweis: tRPC-v11-Caller ruft Prozeduren direkt auf (`caller.agent.dashboard()`), nicht mit `.query()` — sonst resolution-Fehler.
+
+
+## Sprint 093 — Mehrsprachigkeit vorbereiten (10.10.2026)
+
+UI-Texte sind zentral und übersetzbar organisiert (Roadmap 093). Deutsche Texte bleiben Referenz; erste Zielsprache Englisch.
+
+- **`client/src/lib/i18n.ts` (neu)**: flacher, zentraler Textkatalog (`messages.de`/`messages.en`, Schluesselkonvention `bereich.text`), `translate()` mit Platzhalter-Ersetzung und de-Fallback, Locale-Erkennung (Speicher > Browsersprache > Standard de), Private-Modus-tolerante Speicherfunktionen.
+- **`client/src/lib/i18n.test.ts` (neu, 7 Tests)**: Vollständigkeit (jeder de-Schluessel in jeder Sprache), flache eindeutige Schluessel, Fallback-Verhalten, Platzhalter, Locale-Guards, Speicher-/Browsererkennung.
+- **`client/src/contexts/I18nContext.tsx` (neu)**: `I18nProvider` + `useI18n()` mit app-weiter Sprachwahl und Browser-Speicherung; in `App.tsx` eingehängt.
+- **Mustermigration**: `TokenBudgetWidget` nutzt als erste Komponente vollständig den Katalog (`budget.*`), inkl. längeabhängiger Zeitformatierung (`de-DE`/`en-US`).
+- Folgearbeit (ausserhalb dieses Sprints): weitere Komponenten auf den Katalog umstellen — der Katalog ist die zentrale Anlaufstelle, neue UI-Texte werden dort gepflegt.
+- Suite: 770 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
