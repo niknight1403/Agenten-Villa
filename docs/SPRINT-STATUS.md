@@ -22,8 +22,8 @@
 | 088     | Grün    | Build-Reproduzierbarkeit: PR #92 (scripts/build-manifest.ts, pnpm build:manifest, 11 Tests). Repro-Nachweis via Doppel-Build verifiziert: 100 % identische Artefakt-Hashes (Aggregat-Hash 2cd39f7a...). Doku in docs/TESTING.md. |
 | 089     | Grün    | Release-Checkliste: docs/RELEASE.md (SemVer, Drizzle-Migrationen, Rollback, Monitoring, Render-Deploy + Recovery-Route) + scripts/release-check.sh (check+test+build) + 3 Tests grün. |
 | 090     | Grün    | Rollback-Test: Checkpoint-Tags (release-NNN), Verifikationsskript scripts/rollback-verify.sh, server/rollback-check.ts (Health-Invarianten, Router-Config, Migrationen), Checkpoint-Tool scripts/rollback-checkpoint.ts, 45 Tests grün. |
-| 091–098 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
-| 098 | Grün | 098 Produkt-Telemetrie (Opt-in) erledigt; 099–100 geplant. |
+| 091–099 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
+| 099 | Grün | 099 Gesamt-/Sicherheitsreview erledigt; 100 Release 1.0 geplant. |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
 
@@ -247,3 +247,13 @@ Nur datenschutzkonforme, optionale Metriken werden erhoben (Roadmap 098).
 - **Doku**: `docs/TELEMETRIE.md` — Produktmetriken (Opt-in, nur Zahlen, max. 200 In-Memory) vs. Betriebsmetriken (Router-Telemetrie/Turn-Usage, rein technisch); nie erhoben: Inhalte, Prompts, personenbezogene Daten, Geheimnisse; kein Export.
 - **Tests**: `telemetry-consent.test.ts` (Router: Zustand, Standard AUS, Store-Weitergabe, SERVICE_UNAVAILABLE-Fallback), `telemetry-consent-store.test.ts` (DB-Ausfall = konservativ AUS, Hinweis-Grenzen), `agent-metrics.test.ts` (telemetryEnabled=false erfasst nichts; Integrationstests simulieren erteilte Einwilligung).
 - Suite: 805 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen. Deployment-Hinweis: `pnpm db:push` fuer die neue Tabelle.
+
+
+## Sprint 099 — Gesamt- und Sicherheitsreview (10.10.2026)
+
+Alle Bereiche besitzen einen dokumentierten gruenen Status (Roadmap 099).
+
+- **`docs/GESAMT-REVIEW.md` (neu)**: Statusmatrix ueber 15 Bereiche (Auth, CSRF, Sicherheitsheader, Admin-Grenzen, Export-Redaktion, Werkzeug-/Missions-Freigaben, Provider-Routing, Telemetrie-Consent, Logs, Onboarding, A11y, Datenspeicherung, Rollback/Release-Gates, Geheimnisse) — je Zeile Gruen-Status mit Nachweis-Test und Doku-Referenz; Pruefprotokoll vom 10.10.2026 (811 Tests, tsc, Repro-Build, Geheimnis-Scan, Migrationen); bewusste Einschraenkungen ehrlich als keine-Rot-Status benannt.
+- **`tests/overall-review.test.ts` (neu, 6 Tests)**: Matrixzeilen sind alle Gruen und keine Zeile Rot/Gelb/Geplant; jede referenzierte Testdatei und Doku existiert real; Geheimnis-Scan ueber server/client/shared/scripts/tests (gsk_, sk-or-v1-, AIza, hf_ Muster); .env nicht versioniert, .gitignore deckt sie ab.
+- Befund des Scans: keine Provider-Keys im Quellcode, keine .env im Git.
+- Suite: 811 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen.
