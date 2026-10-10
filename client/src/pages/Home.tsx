@@ -95,6 +95,20 @@ export default function Home() {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
   });
+  // Sprint 092 — Rollenbasierte Dashboards: sichtbare Abschnitte kommen
+  // zentral vom Server (agent.dashboard); waehrend des Ladens greift der
+  // Status-Fallback aus statusQuery.
+  const dashboardQuery = trpc.agent.dashboard.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchOnWindowFocus: false,
+  });
+  const dashboardSections = new Set(dashboardQuery.data?.sections ?? []);
+  const isAdminUser = dashboardQuery.isSuccess
+    ? dashboardSections.has("admin_metrics")
+    : Boolean(statusQuery.data?.isAdmin);
+  const canControlUser = dashboardQuery.isSuccess
+    ? dashboardSections.has("controller")
+    : Boolean(statusQuery.data?.canControl) || Boolean(statusQuery.data?.isAdmin);
   const usageQuery = trpc.agent.usage.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
@@ -165,7 +179,7 @@ export default function Home() {
   const effectivePrompt = promptDraft ?? statusQuery.data?.systemPrompt ?? "";
   const keyTestMutation = trpc.agent.testOpenRouterKey.useMutation({ gcTime: 0 });
   const guardianQuery = trpc.agent.guardian.useQuery(undefined, {
-    enabled: Boolean(isAuthenticated && statusQuery.data?.isAdmin),
+    enabled: Boolean(isAuthenticated && isAdminUser),
     refetchInterval: 60_000,
   });
   const runGuardianMutation = trpc.agent.runProviderGuardian.useMutation({
@@ -662,7 +676,7 @@ export default function Home() {
             >
               <Search />
             </button>
-            {(statusQuery.data?.canControl || statusQuery.data?.isAdmin) && (
+            {(canControlUser) && (
               <a
                 className="icon-button"
                 aria-label="Mastervillage Controller"
@@ -676,11 +690,11 @@ export default function Home() {
               className="icon-button tool-optional"
               aria-label="OpenRouter-Key prüfen"
               title={
-                statusQuery.data?.isAdmin
+                isAdminUser
                   ? "OpenRouter-Key sicher prüfen"
                   : "Administratorzugriff erforderlich"
               }
-              disabled={!statusQuery.data?.isAdmin}
+              disabled={!isAdminUser}
               onClick={() => {
                 setOpenRouterKey("");
                 setKeyTestResult(null);
@@ -757,7 +771,7 @@ export default function Home() {
               · {villaSnapshotQuery.data.packs.length} Capability-Packs aktiv
             </p>
           )}
-          {statusQuery.data?.isAdmin && guardianQuery.data && (
+          {isAdminUser && guardianQuery.data && (
             <section className="guardian-panel" aria-label="Provider-Wächter">
               <header className="guardian-heading">
                 <span>
@@ -967,7 +981,7 @@ export default function Home() {
                   <div className="villa-project-actions">
                     {activeVilla.projectBrief && <p className="villa-project-brief">Projektziel: {activeVilla.projectBrief}</p>}
                     {activeVilla.repository && <p className="villa-project-brief">Verbundenes Repository: {activeVilla.repository}</p>}
-                    {statusQuery.data?.isAdmin && (
+                    {isAdminUser && (
                       <div className="mission-launcher">
                         <input
                           className="mission-objective"
@@ -1000,7 +1014,7 @@ export default function Home() {
                         )}
                       </div>
                     )}
-                    {statusQuery.data?.isAdmin && (
+                    {isAdminUser && (
                       <a className="villa-project-link" href={`/core/elite?villaId=${activeVilla.id}`}>
                         <Sparkles size={16} /> Projekt mit Superagent entwickeln
                       </a>
@@ -1182,7 +1196,7 @@ export default function Home() {
             </div>
           )}
 {messages.length > 0 && <div className="chat-ready"><span className="ready-pulse" />{chatMutation.isPending ? "Antwort wird erstellt …" : agentRunning ? "Agent bereit" : "Agent gestoppt"}<span>·</span> {isWorkshop ? "Projekt-Werkstatt" : "KI-Operations"}<button aria-label="Chat einklappen" onClick={() => setMessages([])}><ChevronDown size={18} /></button></div>}
-            {statusQuery.data?.isAdmin && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
+            {isAdminUser && <button className="agent-control" type="button" disabled={controlMutation.isPending} onClick={() => (agentRunning && !window.confirm("Den Agentenbetrieb für alle Konten anhalten?")) ? undefined : controlMutation.mutate({ state: agentRunning ? "STOPPED" : "RUNNING", ...(agentRunning ? { acknowledgeStop: true } : {}) })}>{controlMutation.isPending ? "Status wird geändert …" : agentRunning ? "Agent stoppen" : "Agent starten"}</button>}
             <form className="message-composer" onSubmit={onSubmit}>
               <input
                 ref={attachFileInputRef}
@@ -1350,12 +1364,12 @@ export default function Home() {
                   <span>
                     Details &amp; Systemeinstellungen
                     {!advancedOpen &&
-                      statusQuery.data?.isAdmin &&
-                      statusQuery.data.systemPrompt
+                      isAdminUser &&
+                      statusQuery.data?.systemPrompt
                       ? " · Anweisung aktiv"
                       : ""}
                     {!advancedOpen &&
-                      statusQuery.data?.isAdmin &&
+                      isAdminUser &&
                       githubToolsEnabled
                       ? " · GitHub aktiv"
                       : ""}
@@ -1367,7 +1381,7 @@ export default function Home() {
                 </button>
                 {advancedOpen && (
                   <div className="advanced-settings-body">
-                    {statusQuery.data?.isAdmin && (
+                    {isAdminUser && (
                       <div className="admin-prompt-panel">
                         <strong>Eigene Systemanweisung (Administrator)</strong>
                         <small>Ersetzt die Standard-Persona des Assistenten. Leer lassen und speichern = Standard wiederherstellen. GitHub-Sicherheitsregeln und Anbieterrichtlinien gelten weiterhin.</small>
@@ -1381,16 +1395,16 @@ export default function Home() {
                         />
                         <span className="prompt-actions">
                           <button className="agent-control" type="button" disabled={systemPromptMutation.isPending} onClick={() => systemPromptMutation.mutate({ prompt: effectivePrompt.trim() || null })}>{systemPromptMutation.isPending ? "Speichern …" : "Anweisung speichern"}</button>
-                          <button className="agent-control" type="button" disabled={systemPromptMutation.isPending || !statusQuery.data.systemPrompt} onClick={() => { setPromptDraft(null); systemPromptMutation.mutate({ prompt: null }); }}>Zurücksetzen</button>
+                          <button className="agent-control" type="button" disabled={systemPromptMutation.isPending || !statusQuery.data?.systemPrompt} onClick={() => { setPromptDraft(null); systemPromptMutation.mutate({ prompt: null }); }}>Zurücksetzen</button>
                         </span>
                       </div>
                     )}
-                    {statusQuery.data?.isAdmin && (
+                    {isAdminUser && (
                       <label className="github-tool-toggle">
-                        <input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data.github?.configured || chatMutation.isPending} />
+                        <input type="checkbox" checked={githubToolsEnabled} onChange={(event) => setGithubToolsEnabled(event.target.checked)} disabled={!statusQuery.data?.github?.configured || chatMutation.isPending} />
                         <span>
                           <strong>GitHub-Werkzeuge aktivieren</strong>
-                          <small>{statusQuery.data.github?.configured ? `${statusQuery.data.github.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small>
+                          <small>{statusQuery.data?.github?.configured ? `${statusQuery.data?.github?.repository} · max. 3 Aktionen je Auftrag · Änderungen nur auf agent/*-Branches als Draft-PR` : "GITHUB_TOKEN fehlt — noch keine Repository-Aktionen möglich"}</small>
                         </span>
                       </label>
                     )}
@@ -1521,7 +1535,7 @@ export default function Home() {
             >
               <FolderGit2 size={18} /> Projekt-Werkstatt
             </button>
-            {statusQuery.data?.isAdmin && (
+            {isAdminUser && (
               <button
                 className="drawer-link"
                 onClick={() => {
@@ -1534,7 +1548,7 @@ export default function Home() {
                 <KeyRound size={18} /> OpenRouter-Key prüfen
               </button>
             )}
-            {statusQuery.data?.isAdmin && (
+            {isAdminUser && (
               <button
                 className="drawer-link"
                 type="button"
@@ -1655,7 +1669,7 @@ export default function Home() {
         </div>
       )}
 
-      {keyDialogOpen && statusQuery.data?.isAdmin && (
+      {keyDialogOpen && isAdminUser && (
         <div
           className="modal-backdrop"
           role="presentation"

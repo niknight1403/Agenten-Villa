@@ -169,3 +169,15 @@ Der E2E-Smoke deckt jetzt den echten Login-Pfad ab: Login, Villa, Lauf und Beric
   - Test 12: ungültige Session wird wie anonym behandelt — gleiche UNAUTHORIZED-Grenze.
   - Test 13: Login-Vollpfad mit eigener Session (User 18): Login → Villa erstellen → Lauf starten → Lauf stoppen → Bericht abrufen, alles unter einem durchgehenden login-geschützten Pfad inkl. Nutzer-Isolation.
 - Suite: 756 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 092 — Rollenbasierte Dashboards (10.10.2026)
+
+Dashboard-Inhalte passen sich der Rolle an; die sichtbaren Abschnitte sind zentral definiert und der Client fragt sie beim Server ab (Roadmap 092).
+
+- **`server/dashboard.ts` (neu)**: zentrale Abschnittsdefinition (`villa_overview`, `token_budget`, `onboarding` für Viewer; `villa_mission`, `controller` ab Operator; `elite_mission`, `admin_metrics`, `routing`, `provider_config` ab Administrator) mit stabiler Render-Reihenfolge und reiner Layout-Berechnung `dashboardLayoutForRole`.
+- **tRPC-Endpunkt `agent.dashboard`**: liefert Rollen-Layout über `resolveAgentRole` — Single Source of Truth statt Client-Ratrerei.
+- **`server/dashboard.test.ts` (neu, 7 Tests)**: Viewer sehen nie Operator-/Admin-Inhalte, Operatoren nie Admin-Inhalte, Admins alles; Operator-Allowlist hebt das Layout korrekt; Endpunkt spiegelt die Rolle.
+- **Client (`Home.tsx`)**: alle 17 Rollen-Gates leiten sich aus `agent.dashboard` ab (Fallback auf `statusQuery`, solange das Layout lädt).
+- Suite: 763 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+- Hinweis: tRPC-v11-Caller ruft Prozeduren direkt auf (`caller.agent.dashboard()`), nicht mit `.query()` — sonst resolution-Fehler.

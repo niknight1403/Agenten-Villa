@@ -60,6 +60,7 @@ import { routerTelemetrySummary } from "./router-telemetry";
 import { getPackCatalog } from "./pack-catalog";
 import { requireApproval } from "./approval-gates";
 import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./roles";
+import { dashboardLayoutForRole } from "./dashboard";
 import { recordAuditEntry, listAuditEntries, auditLogSize } from "./audit-log";
 import { agentMetricsScopes, agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
 import { villaController } from "./controller";
@@ -952,6 +953,11 @@ export const agentRouter = router({
       villaMissionStops.add(ctx.user.id);
       return { stopping: true };
     }),
+
+  // Sprint 092 — Rollenbasierte Dashboards: sichtbare Abschnitte je Rolle.
+  dashboard: protectedProcedure.query(({ ctx }) => {
+    return dashboardLayoutForRole(resolveAgentRole(ctx.user));
+  }),
 
   // Sprint 048 — Agentenmetriken; Sprint 079 — pro Villa und Projekt filterbar.
   agentMetrics: protectedProcedure
