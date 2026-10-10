@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { offlineBannerMessage, useOnlineStatus } from "../hooks/useOnlineStatus";
 import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
+import { onboardingSteps, validateNewVillaForm } from "@/lib/villa-onboarding";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useDashboardTheme } from "@/contexts/DashboardThemeContext";
@@ -482,10 +483,35 @@ export default function Home() {
     keyTestMutation.reset();
   }
 
+  // Sprint 097 — Live-Feedback im Erstellungs-Modal (keine Sackgassen):
+  // Feldfehler erscheinen sofort neben dem Feld, nicht erst als Server-Fehler.
+  const newVillaValidation = useMemo(
+    () =>
+      validateNewVillaForm({
+        name: villaName,
+        repository: villaRepository,
+        projectBrief: villaIdea,
+        description: villaDescription,
+      }),
+    [villaName, villaRepository, villaIdea, villaDescription]
+  );
+
   async function createVilla(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (createVillaMutation.isPending) return;
+    // Sprint 097 — Onboarding: Validierung VOR dem Absenden mit klaren
+    // Meldungen; niemand landet in einer Server-Zod-Sackgasse.
+    const validation = validateNewVillaForm({
+      name: villaName,
+      repository: villaRepository,
+      projectBrief: villaIdea,
+      description: villaDescription,
+    });
+    if (!validation.ok) {
+      toast.error(Object.values(validation.errors)[0] ?? "Bitte prüfe deine Eingaben.");
+      return;
+    }
     const cleanName = villaName.trim();
-    if (!cleanName || createVillaMutation.isPending) return;
     try {
       const cleanDescription = villaDescription.trim();
       const villa = await createVillaMutation.mutateAsync({
@@ -495,7 +521,9 @@ export default function Home() {
         capacity: villaCapacity,
         ...(villaIdea.trim() ? { projectBrief: villaIdea.trim() } : {}),
         ...(cleanDescription ? { description: cleanDescription } : {}),
-        ...(villaRepository.trim() ? { repository: villaRepository.trim() } : {}),
+        ...(validation.normalizedRepository
+          ? { repository: validation.normalizedRepository }
+          : {}),
       });
       setVillaName("");
       setVillaDescription("");
@@ -506,6 +534,15 @@ export default function Home() {
       setScreen("home");
       setActiveVillaId(villa.id);
       setMessages([]);
+      // Sprint 097 — keine Sackgasse nach dem Erstellen: der naechste
+      // sinnvolle Schritt steht sofort im Raum.
+      toast.info(
+        onboardingSteps({
+          name: villa.name,
+          repository: villa.repository ?? null,
+          projectBrief: villa.projectBrief ?? null,
+        })[0]
+      );
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -981,6 +1018,11 @@ export default function Home() {
                   <div className="villa-project-actions">
                     {activeVilla.projectBrief && <p className="villa-project-brief">Projektziel: {activeVilla.projectBrief}</p>}
                     {activeVilla.repository && <p className="villa-project-brief">Verbundenes Repository: {activeVilla.repository}</p>}
+                    {(!activeVilla.projectBrief || !activeVilla.repository) && (
+                      <p className="villa-project-brief">
+                        Nächste Schritte: {onboardingSteps({ name: activeVilla.name, repository: activeVilla.repository ?? null, projectBrief: activeVilla.projectBrief ?? null }).join(" ")}
+                      </p>
+                    )}
                     {isAdminUser && (
                       <div className="mission-launcher">
                         <input
@@ -1613,6 +1655,9 @@ export default function Home() {
               autoFocus
               required
             />
+            {villaName.trim() && newVillaValidation.errors.name && (
+              <p className="modal-hint" role="alert">{newVillaValidation.errors.name}</p>
+            )}
             <label className="modal-label" htmlFor="villa-idea">Projektidee (optional)</label>
             <textarea
               id="villa-idea"
@@ -1633,6 +1678,12 @@ export default function Home() {
               maxLength={120}
               placeholder="z. B. niknight1403/CyberSarah-control-center"
             />
+            {villaRepository.trim() && newVillaValidation.errors.repository && (
+              <p className="modal-hint" role="alert">{newVillaValidation.errors.repository}</p>
+            )}
+            {villaRepository.trim() && newVillaValidation.normalizedRepository && (
+              <p className="modal-hint">Wird verbunden als „{newVillaValidation.normalizedRepository}".</p>
+            )}
             <p className="modal-hint">
               Mit Repository arbeitet die Villa (Chat-Werkzeuge und autonome
               Missionen) direkt auf diesem Projekt; ohne Eintrag gilt das

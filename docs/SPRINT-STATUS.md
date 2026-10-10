@@ -22,7 +22,8 @@
 | 088     | Grün    | Build-Reproduzierbarkeit: PR #92 (scripts/build-manifest.ts, pnpm build:manifest, 11 Tests). Repro-Nachweis via Doppel-Build verifiziert: 100 % identische Artefakt-Hashes (Aggregat-Hash 2cd39f7a...). Doku in docs/TESTING.md. |
 | 089     | Grün    | Release-Checkliste: docs/RELEASE.md (SemVer, Drizzle-Migrationen, Rollback, Monitoring, Render-Deploy + Recovery-Route) + scripts/release-check.sh (check+test+build) + 3 Tests grün. |
 | 090     | Grün    | Rollback-Test: Checkpoint-Tags (release-NNN), Verifikationsskript scripts/rollback-verify.sh, server/rollback-check.ts (Health-Invarianten, Router-Config, Migrationen), Checkpoint-Tool scripts/rollback-checkpoint.ts, 45 Tests grün. |
-| 091–100 | Geplant | Naechste Sprints aus der Roadmap (Release-Review, Projektvorlagen, Dashboards etc.). |
+| 091–097 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
+| 098–100 | Geplant | Verbleibende Roadmap-Sprints. |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
 
@@ -223,3 +224,13 @@ Betrieb, Grenzen und Notfallstop sind dokumentiert (Roadmap 096).
 - **`docs/ADMIN-HANDBUCH.md` (neu)**: Betrieb (Deployment-Verweise, Server-Secrets, Provider-Fallback mit Cooldown, Watchdog), Grenzen (Elite-Limits, GitHub-Schreibgrenzen, Freigabepunkte, Audit/Metriken) und Notfallstop (`agent.setState` mit `acknowledgeStop`-Quittung, Wirkung/Nicht-Wirkung, Eskalations-Kurzliste).
 - **`server/admin-handbook.test.ts` (neu, 7 Tests)**: hält das Handbuch ehrlich gegen den Code — jede env.ts-Variable dokumentiert, echte Zustände/Mutationen, Elite-Limits mit echten Zahlen, GitHub-Grenzen, referenzierte Dokumente existieren wirklich, Provider-Reihenfolge korrekt. Driftet der Code, fällt der Test.
 - Suite: 789 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` grün.
+
+
+## Sprint 097 — Nutzer-Onboarding (10.10.2026)
+
+Neue Nutzer koennen eine Villa ohne Sackgasse erstellen (Roadmap 097).
+
+- **`client/src/lib/villa-onboarding.ts` (neu)**: `normalizeRepositoryInput()` verzeiht eingeklebte GitHub-URLs (https://, www., .git, Trailing-Slashes) und haelt das Server-Format `owner/repo` ein; `validateNewVillaForm()` prueft Name/Projektidee/Beschreibung/Repository vor dem Absenden mit klaren deutschen Meldungen; `onboardingSteps()` nennt fuer eine frische Villa den naechsten sinnvollen Schritt.
+- **Home.tsx verdrahtet**: Live-Feldfehler im Erstellungs-Modal (inkl. „Wird verbunden als ..."-Vorschau der Normalisierung), Submit blockiert mit klarer Meldung statt Server-Zod-Fehler, Onboarding-Toast direkt nach der Erstellung und persistenter „Naechste Schritte"-Hinweis in der Villa-Stage, solange Projektziel oder Repository fehlen.
+- **`client/src/lib/villa-onboarding.test.ts` (neu, 10 Tests)**: Normalisierungsfaelle, ehrliche Ablehnung (Gitlab-URLs, einName), Minimalformular okay, klare Fehlermeldungen statt Sackgasse, Onboarding-Schritte je Villa-Zustand.
+- Suite: 797 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen.
