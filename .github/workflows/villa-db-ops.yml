@@ -1,0 +1,74 @@
+name: Villa-DB-Ops
+
+# Sprint 103 — Verwaltung der Villen in der Neon-DB ohne SSH:
+#   mode=list                -> read-only: alle Villen mit Besitzer, Status, Zaehlern
+#   mode=delete, villa_id=N  -> transaktionale Loeschung exakt wie server/deleteVilla
+#                               (Nachrichten, Events, Test-Runs, dann die Villa)
+# DATABASE_URL kommt aus den verschlüsselten Repository-Secrets und wird
+# nie ins Log geschrieben. Delete verweigert sich ohne Bestaetigung des
+# Villennamens (confirm_name) — kein Vertippen loescht die falsche Villa.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "list | delete"
+        default: "list"
+      villa_id:
+        description: "Villa-ID (nur mode=delete)"
+        default: ""
+      confirm_name:
+        description: "Exakter Villenname als Bestaetigung (nur mode=delete)"
+        default: ""
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install postgres-Treiber
+        run: npm install postgres@3 --no-save --silent
+      - name: "Villen verwalten"
+        run: |
+          node - <<'JS'
+          const postgres = require('postgres');
+          const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
+          const mode = process.env.MODE;
+          const villaId = Number(process.env.VILLA_ID || 0);
+          const confirmName = (process.env.CONFIRM_NAME || '').trim();
+          (async () => {
+            if (mode === 'delete') {
+              if (!villaId || !confirmName) throw new Error('mode=delete braucht villa_id und confirm_name');
+              const rows = await sql`SELECT id, name FROM villas WHERE id = ${villaId}`;
+              if (!rows.length) throw new Error(`Villa ${villaId} existiert nicht`);
+              if (rows[0].name !== confirmName)
+                throw new Error(`Name-Mismatch: Villa ${villaId} heisst "${rows[0].name}", Bestaetigung war "${confirmName}" — nichts geloescht.`);
+              await sql.begin(async tx => {
+                await tx`DELETE FROM villa_messages WHERE villaId = ${villaId}`;
+                await tx`DELETE FROM villa_events WHERE villaId = ${villaId}`;
+                await tx`DELETE FROM villa_test_runs WHERE villaId = ${villaId}`;
+                await tx`DELETE FROM villas WHERE id = ${villaId}`;
+              });
+              const after = await sql`SELECT id, name FROM villas ORDER BY id`;
+              console.log('Geloescht:', villaId, confirmName);
+              console.log('Verbleibende Villen:', JSON.stringify(after));
+            } else {
+              const villas = await sql`
+                SELECT v.id, v.name, v.archived, v.createdBy, v.createdAt,
+                       (SELECT count(*) FROM villa_messages m WHERE m.villaId = v.id) AS messages,
+                       (SELECT count(*) FROM villa_test_runs t WHERE t.villaId = v.id) AS test_runs
+                FROM villas v ORDER BY v.id`;
+              console.log('Villen:', JSON.stringify(villas, null, 1));
+              const users = await sql`SELECT id, email, role FROM users ORDER BY id`;
+              console.log('Nutzer (id, role, email):', users.map(u => `${u.id}/${u.role}/${u.email.replace(/(.{2}).*(@.*)/, '$1…$2')}`).join(', '));
+            }
+            await sql.end();
+          })().catch(e => { console.error('OPS-Fehler:', e.message); process.exit(1); });
+          JS
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          VILLA_ID: ${{ inputs.villa_id }}
+          CONFIRM_NAME: ${{ inputs.confirm_name }}
