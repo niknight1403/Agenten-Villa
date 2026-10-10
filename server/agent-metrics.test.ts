@@ -1,4 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// Sprint 098 — Router-Integrationstests simulieren eine erteilte
+// Telemetrie-Einwilligung, damit die Missionslaeufe wie vor 098 erfasst
+// werden (Opt-in-Gate in executePersistedMission).
+vi.mock("./telemetry-consent", () => ({
+  getTelemetryConsent: async () => ({
+    optedIn: true,
+    notice: "Test-Einwilligung.",
+  }),
+  setTelemetryConsent: async () => ({
+    optedIn: true,
+    notice: "Test-Einwilligung.",
+  }),
+  TELEMETRY_PRIVACY_NOTICE: "Test-Einwilligung.",
+}));
 import { appRouter, type TrpcContext } from "./routers";
 import { resetAgentRouterForTests } from "./agent-router";
 import { resetProviderGuardianForTests } from "./provider-guardian";
@@ -35,6 +49,24 @@ describe("Agentenmetriken (Sprint 048)", () => {
     expect(summary.samples).toBe(1);
     expect(summary.averageDurationMs).toBeGreaterThanOrEqual(10);
     expect(summary.errorsByCode).toEqual([]);
+  });
+
+  it("Sprint 098: ohne Einwilligung (telemetryEnabled=false) wird nichts erfasst", async () => {
+    await instrumentAgentRun(
+      "elite",
+      () => true,
+      async () => ({ completed: true }),
+      { villaId: 3 },
+      false
+    );
+    await expect(
+      instrumentAgentRun("elite", () => true, async () => {
+        throw new Error("boom");
+      }, undefined, false)
+    ).rejects.toThrow("boom");
+    const summary = agentMetricsSummary();
+    expect(summary.samples).toBe(0);
+    expect(summary.totals).toEqual({ completed: 0, partial: 0, failed: 0 });
   });
 
   it("unterscheidet Teilergebnisse und Misserfolge mit Fehlercode", async () => {

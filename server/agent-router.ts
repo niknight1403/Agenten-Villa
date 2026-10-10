@@ -64,6 +64,7 @@ import { resolveAgentRole, requireRole, ROLE_RANK, type AgentRole } from "./role
 import { dashboardLayoutForRole } from "./dashboard";
 import { recordAuditEntry, listAuditEntries, auditLogSize } from "./audit-log";
 import { agentMetricsScopes, agentMetricsSummary, instrumentAgentRun, type AgentRunKind } from "./agent-metrics";
+import { getTelemetryConsent } from "./telemetry-consent";
 import { villaController } from "./controller";
 
 // The assistant is ready out of the box so a signed-in user can chat
@@ -360,6 +361,11 @@ async function executePersistedMission(
     void renewMissionLease(run).catch(() => { /* no secrets or history in logs */ });
   }, missionLeaseIntervalMs());
   heartbeat.unref?.();
+  // Sprint 098 — Produkt-Telemetrie ist Opt-in: nur mit Einwilligung
+  // des Missions-Besitzers werden Laufmetriken erfasst.
+  const telemetryEnabled = await getTelemetryConsent(run.userId)
+    .then(state => state.optedIn)
+    .catch(() => false);
   try {
     // Sprint 044 — Missionskontexte sind gegeneinander isoliert: die
     // Missions-Identität reist mit dem Auftrag und namespaced Cache/Dedupe.
@@ -393,7 +399,9 @@ async function executePersistedMission(
       {
         villaId: villaContext?.villaId ?? undefined,
         project: villaContext?.repository?.trim() || undefined,
-      }
+      },
+      // Sprint 098 — nur mit Telemetrie-Einwilligung des Nutzers.
+      telemetryEnabled
     );
     const output: EliteOutput = {
       ...result,

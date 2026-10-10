@@ -22,8 +22,8 @@
 | 088     | Grün    | Build-Reproduzierbarkeit: PR #92 (scripts/build-manifest.ts, pnpm build:manifest, 11 Tests). Repro-Nachweis via Doppel-Build verifiziert: 100 % identische Artefakt-Hashes (Aggregat-Hash 2cd39f7a...). Doku in docs/TESTING.md. |
 | 089     | Grün    | Release-Checkliste: docs/RELEASE.md (SemVer, Drizzle-Migrationen, Rollback, Monitoring, Render-Deploy + Recovery-Route) + scripts/release-check.sh (check+test+build) + 3 Tests grün. |
 | 090     | Grün    | Rollback-Test: Checkpoint-Tags (release-NNN), Verifikationsskript scripts/rollback-verify.sh, server/rollback-check.ts (Health-Invarianten, Router-Config, Migrationen), Checkpoint-Tool scripts/rollback-checkpoint.ts, 45 Tests grün. |
-| 091–097 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
-| 098–100 | Geplant | Verbleibende Roadmap-Sprints. |
+| 091–098 | Grün | 091 Freigaben/Vorlagen, 092 Release-Review, 093 Projekt-Dashboard, 094 Kennzahlen, 095 Erweiterungspunkte, 096 Administrator-Handbuch, 097 Nutzer-Onboarding (Abschnitte unten). |
+| 098 | Grün | 098 Produkt-Telemetrie (Opt-in) erledigt; 099–100 geplant. |
 
 ## Sprint 086 — Router-Lasttest mit Mock-Providern (06.10.2026)
 
@@ -234,3 +234,16 @@ Neue Nutzer koennen eine Villa ohne Sackgasse erstellen (Roadmap 097).
 - **Home.tsx verdrahtet**: Live-Feldfehler im Erstellungs-Modal (inkl. „Wird verbunden als ..."-Vorschau der Normalisierung), Submit blockiert mit klarer Meldung statt Server-Zod-Fehler, Onboarding-Toast direkt nach der Erstellung und persistenter „Naechste Schritte"-Hinweis in der Villa-Stage, solange Projektziel oder Repository fehlen.
 - **`client/src/lib/villa-onboarding.test.ts` (neu, 10 Tests)**: Normalisierungsfaelle, ehrliche Ablehnung (Gitlab-URLs, einName), Minimalformular okay, klare Fehlermeldungen statt Sackgasse, Onboarding-Schritte je Villa-Zustand.
 - Suite: 797 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen.
+
+
+## Sprint 098 — Produkt-Telemetrie, optional und datenschutzkonform (10.10.2026)
+
+Nur datenschutzkonforme, optionale Metriken werden erhoben (Roadmap 098).
+
+- **Opt-in statt Stillstand**: Neue Tabelle `telemetry_consents` (Migration `0016_deep_paper_doll.sql`), Standard AUS. `server/telemetry-consent.ts` liefert Zustand + ehrlichen Datenschutzhinweis; ohne DB gilt konservativ „nicht eingewilligt“ (Telemetrie faellt im Zweifel aus, nie an).
+- **tRPC**: `telemetry.consent` / `telemetry.setConsent` (`server/telemetry-router.ts`), registriert in `routers.ts`.
+- **Gate am Lauf**: `executePersistedMission` laedt die Einwilligung des Missions-Besitzers und reicht sie an `instrumentAgentRun(..., telemetryEnabled)` weiter — ohne Einwilligung werden keine Laufmetriken erfasst, der Lauf laeuft unberuehrt.
+- **UI**: Schalter im Villa-Drawer (`Home.tsx`, CSS in `themes.css`) mit ungekuerztem Hinweis am Schalter; Aenderung wirkt sofort.
+- **Doku**: `docs/TELEMETRIE.md` — Produktmetriken (Opt-in, nur Zahlen, max. 200 In-Memory) vs. Betriebsmetriken (Router-Telemetrie/Turn-Usage, rein technisch); nie erhoben: Inhalte, Prompts, personenbezogene Daten, Geheimnisse; kein Export.
+- **Tests**: `telemetry-consent.test.ts` (Router: Zustand, Standard AUS, Store-Weitergabe, SERVICE_UNAVAILABLE-Fallback), `telemetry-consent-store.test.ts` (DB-Ausfall = konservativ AUS, Hinweis-Grenzen), `agent-metrics.test.ts` (telemetryEnabled=false erfasst nichts; Integrationstests simulieren erteilte Einwilligung).
+- Suite: 805 passed / 4 skipped. `tsc --noEmit` sauber, `pnpm build` gruen. Deployment-Hinweis: `pnpm db:push` fuer die neue Tabelle.

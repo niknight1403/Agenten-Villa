@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -352,3 +353,21 @@ export type VillaRunEvent = typeof villaRunEvents.$inferSelect;
 export type InsertVillaRunEvent = typeof villaRunEvents.$inferInsert;
 export type VillaTestRun = typeof villaTestRuns.$inferSelect;
 export type InsertVillaTestRun = typeof villaTestRuns.$inferInsert;
+
+/**
+ * Sprint 098 — Produkt-Telemetrie: optionale, datenschutzkonforme Metriken.
+ * Einwilligung ist pro Nutzer gespeichert; Standard ist AUS (opt-in).
+ * Es werden nie Inhalte, Prompts oder Geheimnisse erhoben — nur Lauf-
+ * zahlen, Dauern und Fehlercodes (siehe docs/TELEMETRIE.md).
+ */
+export const telemetryConsents = pgTable("telemetry_consents", {
+  userId: integer("user_id").primaryKey(),
+  optedIn: boolean("opted_in").notNull().default(false),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export type TelemetryConsent = typeof telemetryConsents.$inferSelect;
+export type InsertTelemetryConsent = typeof telemetryConsents.$inferInsert;

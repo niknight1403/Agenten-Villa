@@ -76,22 +76,30 @@ export async function instrumentAgentRun<T>(
   kind: AgentRunKind,
   isComplete: (result: T) => boolean,
   run: () => Promise<T>,
-  scope?: AgentRunScope
+  scope?: AgentRunScope,
+  /**
+   * Sprint 098 — Produkt-Telemetrie ist optional: Ohne Einwilligung des
+   * Nutzers wird nichts erfasst (der Lauf selbst laeuft unberuehrt).
+   * Der Default bleibt aus Kompatibilitaet mit bestehenden Tests aktiv.
+   */
+  telemetryEnabled = true
 ): Promise<T> {
   const startedAt = Date.now();
   try {
     const result = await run();
-    recordAgentRun({
-      kind,
-      outcome: isComplete(result) ? "completed" : "partial",
-      durationMs: Date.now() - startedAt,
-      scope,
-    });
+    if (telemetryEnabled)
+      recordAgentRun({
+        kind,
+        outcome: isComplete(result) ? "completed" : "partial",
+        durationMs: Date.now() - startedAt,
+        scope,
+      });
     return result;
   } catch (error) {
-    recordAgentRun({
-      kind,
-      outcome: "failed",
+    if (telemetryEnabled)
+      recordAgentRun({
+        kind,
+        outcome: "failed",
       durationMs: Date.now() - startedAt,
       errorCode: toErrorLabel(error),
       scope,

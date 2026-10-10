@@ -114,6 +114,21 @@ export default function Home() {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
   });
+  // Sprint 098 — Produkt-Telemetrie ist Opt-in (Standard AUS).
+  const telemetryConsentQuery = trpc.telemetry.consent.useQuery(undefined);
+  const telemetryConsentMutation = trpc.telemetry.setConsent.useMutation({
+    onSuccess: state => {
+      telemetryConsentQuery.refetch();
+      toast.success(
+        state.optedIn
+          ? "Telemetrie aktiviert — danke. Jederzeit abschaltbar."
+          : "Telemetrie deaktiviert. Es werden keine Laufmetriken erfasst."
+      );
+    },
+    onError: error => {
+      toast.error(error.message || "Die Einwilligung konnte nicht gespeichert werden.");
+    },
+  });
   const villaListQuery = trpc.villa.list.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnWindowFocus: false,
@@ -1542,6 +1557,26 @@ export default function Home() {
               <Plus size={18} /> Neue Villa
             </button>
             <div className="drawer-spacer" />
+            <div className="drawer-telemetry" aria-label="Produkt-Telemetrie">
+              <span className="theme-menu-title">Produkt-Telemetrie (optional)</span>
+              <button
+                role="switch"
+                aria-checked={telemetryConsentQuery.data?.optedIn ?? false}
+                className={`telemetry-toggle${telemetryConsentQuery.data?.optedIn ? " on" : ""}`}
+                onClick={() =>
+                  telemetryConsentMutation.mutate({
+                    optedIn: !(telemetryConsentQuery.data?.optedIn ?? false),
+                  })
+                }
+                disabled={telemetryConsentQuery.isLoading || telemetryConsentMutation.isPending}
+              >
+                {telemetryConsentQuery.data?.optedIn ? "Aktiviert" : "Deaktiviert"}
+              </button>
+              <p className="telemetry-notice">
+                {telemetryConsentQuery.data?.notice ??
+                  "Nur Zahlen, nie Inhalte — Hinweis wird geladen…"}
+              </p>
+            </div>
             <div className="drawer-theme" aria-label="Dashboard-Design">
               <span className="theme-menu-title">Design wählen</span>
               {themes.map(option => (

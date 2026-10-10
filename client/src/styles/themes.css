@@ -581,6 +581,29 @@
 }
 .drawer-theme { display: none; flex-direction: column; gap: 6px; margin-top: 6px; }
 .drawer-theme .theme-option { border-color: rgb(255 255 255 / 8%); }
+/* Sprint 098 — Produkt-Telemetrie: Opt-in-Schalter mit ehrlichem Hinweis. */
+.drawer-telemetry { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.telemetry-toggle {
+  align-self: flex-start;
+  padding: 7px 14px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  color: #e6e9f6;
+  background: #1a2148;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.telemetry-toggle.on { border-color: #6b5bd0; background: #2a2a72; color: #fff; }
+.telemetry-toggle:disabled { opacity: .55; cursor: default; }
+.telemetry-notice {
+  margin: 0;
+  color: #8b97b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
 
 .composer-stopped {
   width: min(720px, 100%);
