@@ -10,20 +10,33 @@ set -euo pipefail
 
 APK=android/app/build/outputs/apk/release/app-release.apk
 adb install -r "$APK"
+
+# 0) Backend aufwecken: Render Free schlaeft nach ~15 Min ein; ein Cold Start
+# (>50 s) laesst die App in "Anmeldung wird geprueft" haengen, bevor die
+# Anmeldeseite ueberhaupt erscheint. Erst wecken, dann App starten.
+API="${VILLA_API_URL:-https://agenten-villa.onrender.com}"
+warm=0
+for i in {1..18}; do
+  code=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$API/api/health" || true)
+  if [ "$code" = "200" ]; then echo "Backend wach (HTTP 200, Versuch $i)."; warm=1; break; fi
+  sleep 5
+done
+[ "$warm" = "1" ] || echo "WARNUNG: Backend nicht wach (letzter Code: ${code:-?}) — Probe trotzdem weiter."
+
 adb logcat -c || true
 adb shell am start -n de.niknight1403.agentenvilla/.MainActivity
 trap 'adb exec-out screencap -p > signin-probe.png || true' EXIT
 
 # 1) Warten, bis die Anmeldeseite sichtbar ist (WebView-Text nur via OCR).
 ready=0
-for attempt in {1..12}; do
+for attempt in {1..20}; do
   sleep 8
   adb exec-out screencap -p > signin-probe.png
   if command -v tesseract >/dev/null; then
     tesseract signin-probe.png stdout -l deu+eng 2>/dev/null > probe-ocr.txt || true
     if grep -Eqi 'Mit Google anmelden|Willkommen zur' probe-ocr.txt; then
       ready=1
-      echo "Anmeldeseite sichtbar (Versuch ${attempt}/12)."
+      echo "Anmeldeseite sichtbar (Versuch ${attempt}/20)."
       break
     fi
   fi
