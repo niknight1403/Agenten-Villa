@@ -94,6 +94,24 @@ const trpcClient = trpc.createClient({
 // harmlos, auf nativ die entscheidende Startzeit-Ersparnis beim Login.
 prewarmServer(import.meta.env.VITE_API_URL ?? "");
 
+// Admin-Auto-Login-Build (v1.2.4-admin): Enthaelt der Build eine gepraegte
+// Admin-Session (VITE_BOOTSTRAP_SESSION, nur im Admin-APK-Workflow via
+// GitHub-Secret gesetzt — Web- und Dev-Builds bleiben unberuehrt), wird sie
+// beim App-Start in den Session-Speicher geschrieben. Der tRPC-Client
+// sendet sie als Bearer-Token (headers()-Callback unten), der Server
+// erkennt den Administrator direkt — kein Google-Picker, kein Warten am
+// Login. Widerrufbar ueber JWT_SECRET-Rotation auf Render oder einen
+// Neubau ohne das Secret. Bestehende echte Sessions werden nicht
+// ueberschrieben.
+try {
+  const bootstrapSession = import.meta.env.VITE_BOOTSTRAP_SESSION as string | undefined;
+  if (bootstrapSession && !sessionStorage.getItem("manus-cookie")) {
+    sessionStorage.setItem("manus-cookie", `app_session_id=${bootstrapSession}`);
+  }
+} catch {
+  // sessionStorage nicht verfuegbar — normaler Google-Login-Flow greift.
+}
+
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>

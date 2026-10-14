@@ -37,6 +37,10 @@ jobs:
           # Bei push-Runs ist github.event.inputs leer — dann Produktions-URL,
           # damit die native App immer ein Backend erreicht (Web nutzt relativ).
           VITE_API_URL: ${{ github.event.inputs.server_url || 'https://agenten-villa.onrender.com' }}
+          # Admin-Auto-Login-Build: gepraegte Admin-Session aus dem GitHub-
+          # Secret (nur dieses Repo/Workflow; Web-Build im Dockerfile bekommt
+          # die Variable nie). Leer im Web-/Dev-Build → Bootstrap deaktiviert.
+          VITE_BOOTSTRAP_SESSION: ${{ secrets.AGENT_ADMIN_SESSION }}
         run: pnpm exec vite build
 
       - name: Sync Capacitor (Android)
