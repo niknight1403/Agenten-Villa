@@ -17,7 +17,15 @@ export function useAuth(options?: UseAuthOptions) {
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+    // Render-Free-Cold-Start: Netzwerkfehler/Timeout sind transit — der Server
+    // ist beim zweiten Versuch meist wach. Fachliche 4xx (UNAUTHORIZED) werden
+    // weiterhin NICHT wiederholt (kein Login-Redirect-Stottern).
+    retry: (failureCount, error) => {
+      if (failureCount >= 2) return false;
+      const message = error instanceof Error ? error.message : "";
+      return /fetch|network|timeout|Failed|502|503|504/i.test(message);
+    },
+    retryDelay: () => 2_000,
     refetchOnWindowFocus: false,
   });
 
@@ -93,6 +101,7 @@ export function useAuth(options?: UseAuthOptions) {
   return {
     ...state,
     refresh: () => meQuery.refetch(),
+    retry: () => meQuery.refetch(),
     logout,
   };
 }

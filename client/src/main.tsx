@@ -5,6 +5,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { fetchWithResilience, prewarmServer } from "@/lib/cold-start";
 import { startLogin } from "./const";
 import "./index.css";
 import "./styles/themes.css";
@@ -78,14 +79,20 @@ const trpcClient = trpc.createClient({
         return {};
       },
       fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
+        // Render-Free-Cold-Start: Der erste Aufruf nach dem Aufwachen braucht
+        // real 30-60 s. Ohne Timeout/Retry hing die App beim Start endlos im
+        // "Anmeldung wird geprüft"-Splash; jetzt wiederholt der Wrapper
+        // transiente Fehler automatisch und schlaegt erst nach 60 s hart zu.
+        return fetchWithResilience(input, { ...(init ?? {}), credentials: "include" });
       },
     }),
   ],
 });
+
+// Server sofort vorwaermen (fire-and-forget): Weckt die schlafende Render-
+// Instanz, waehrend der Nutzer noch den Splash sieht. Auf Web (Same-Origin)
+// harmlos, auf nativ die entscheidende Startzeit-Ersparnis beim Login.
+prewarmServer(import.meta.env.VITE_API_URL ?? "");
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

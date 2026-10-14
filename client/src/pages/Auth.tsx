@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { LogIn } from "lucide-react";
 import { APP_BUILD, APP_VERSION, COOKIE_NAME } from "@shared/const";
+import { fetchWithResilience } from "@/lib/cold-start";
 
 function GoogleMark() {
   return (
@@ -71,12 +72,20 @@ export default function Auth() {
       const idToken = result.authentication?.idToken;
       if (!idToken) throw new Error("missing id token");
 
-      const res = await fetch(`${apiBase}/api/auth/google/native`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
+      // Cold-Start-Resilienz: Der Google-Account-Picker ist durchlaufen,
+      // jetzt kann noch der schlafende Render-Server das Login bremsen —
+      // 30-60 s Aufwachzeit. Der resiliente Fetch wiederholt transiente
+      // Fehler automatisch (2x), bevor er aufgibt.
+      const res = await fetchWithResilience(
+        `${apiBase}/api/auth/google/native`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        },
+        { retries: 2 },
+      );
       if (!res.ok) throw new Error(`native login failed (${res.status})`);
       const data = (await res.json()) as { sessionToken?: string };
 
@@ -122,7 +131,7 @@ export default function Auth() {
               disabled={pending}
             >
               <GoogleMark />
-              <span>{pending ? "Anmeldung läuft…" : "Mit Google anmelden"}</span>
+              <span>{pending ? "Server wird erreicht … (erster Start kann ~1 Minute dauern)" : "Mit Google anmelden"}</span>
             </button>
           ) : (
             <a className="google-button" href="/api/auth/google/start">
