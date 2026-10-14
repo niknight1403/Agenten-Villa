@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { COOKIE_NAME, UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -50,41 +50,66 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+/**
+ * Bearer-Fallback-Header: Wenn die Laufzeit die Session in den
+ * sessionStorage gespiegelt hat (Preview-Login, nativer Login, Admin-
+ * Bootstrap-Build), wird sie als Authorization-Token mitgeschickt —
+ * der regulre Cookie-Flow bleibt funktionsfaehig und hat serverseitig
+ * Vorrang.
+ */
+function authHeaders(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem("manus-cookie");
+    if (raw) {
+      const prefix = `${COOKIE_NAME}=`;
+      const pair = raw.split(";").find((s) => s.trim().startsWith(prefix));
+      const token = pair?.trim().slice(prefix.length);
+      if (token) {
+        return { Authorization: `Bearer ${token}` };
+      }
+    }
+  } catch {
+    // sessionStorage unavailable
+  }
+  return {};
+}
+
+/**
+ * Zwei Link-Ketten mit getrennten Zeitlimiten:
+ *  - agent.* (Agenten-Turns): Die kostenlose Primaerroute ist Ollama auf
+ *    der Oracle-Free-VM — CPU-Inferenz grosser Modelle braucht real
+ *    Minuten. 600 s deckt auch qwen3.6:27b ab (serverseitiges
+ *    OLLAMA_TIMEOUT_MS=600s). Ohne Trennung wuerde der 60s-Standard
+ *    Agenten-Turns auf der kostenlosen Route IMMER abwuergen, bevor das
+ *    Modell fertig ist.
+ *  - alles andere (auth.me, Listen, Mutierungen): 60 s + Retry — genug
+ *    fuer Render-Cold-Starts, schnell genug fuer klare Fehlermeldung.
+ */
+const longTimeoutFetch: typeof globalThis.fetch = (input, init) =>
+  fetchWithResilience(input, { ...(init ?? {}), credentials: "include" }, { timeoutMs: 600_000 });
+const defaultTimeoutFetch: typeof globalThis.fetch = (input, init) =>
+  fetchWithResilience(input, { ...(init ?? {}), credentials: "include" });
+
 const trpcClient = trpc.createClient({
   links: [
-    httpBatchLink({
-      // Absolute Backend-Basis-URL via VITE_API_URL (z. B. https://agenten-villa.onrender.com).
-      // /api/trpc wird hier angehaengt. Leer => relative URL (Web: Same-Origin, Default in der lokalen Entwicklung).
-      // Der Produktions-Build (Dockerfile) pint VITE_API_URL auf die Render-URL.
-      url: `${import.meta.env.VITE_API_URL ?? ""}/api/trpc`,
-      transformer: superjson,
-      headers() {
-        // Preview auto-login fallback: when the browser blocks iframe cookies
-        // (Safari ITP / private browsing / WebView), the runtime mirrors the
-        // session into sessionStorage so we can forward it as a Bearer token.
-        // The regular OAuth cookie flow keeps working and takes priority server-side.
-        try {
-          const raw = sessionStorage.getItem("manus-cookie");
-          if (raw) {
-            const prefix = `${COOKIE_NAME}=`;
-            const pair = raw.split(";").find(s => s.trim().startsWith(prefix));
-            const token = pair?.trim().slice(prefix.length);
-            if (token) {
-              return { Authorization: `Bearer ${token}` };
-            }
-          }
-        } catch {
-          // sessionStorage unavailable
-        }
-        return {};
-      },
-      fetch(input, init) {
-        // Render-Free-Cold-Start: Der erste Aufruf nach dem Aufwachen braucht
-        // real 30-60 s. Ohne Timeout/Retry hing die App beim Start endlos im
-        // "Anmeldung wird geprüft"-Splash; jetzt wiederholt der Wrapper
-        // transiente Fehler automatisch und schlaegt erst nach 60 s hart zu.
-        return fetchWithResilience(input, { ...(init ?? {}), credentials: "include" });
-      },
+    splitLink({
+      condition: (op) => op.path.startsWith("agent."),
+      true: httpBatchLink({
+        url: `${import.meta.env.VITE_API_URL ?? ""}/api/trpc`,
+        transformer: superjson,
+        headers: () => authHeaders(),
+        fetch: longTimeoutFetch,
+      }),
+      false: httpBatchLink({
+        // Absolute Backend-Basis-URL via VITE_API_URL (z. B.
+        // https://agenten-villa.onrender.com). Leer => relative URL (Web:
+        // Same-Origin, Default in der lokalen Entwicklung). Der Produktions-
+        // Build (Dockerfile) pint VITE_API_URL auf die Render-URL.
+        url: `${import.meta.env.VITE_API_URL ?? ""}/api/trpc`,
+        transformer: superjson,
+        headers: () => authHeaders(),
+        fetch: defaultTimeoutFetch,
+      }),
     }),
   ],
 });
