@@ -67,7 +67,7 @@ jobs:
     needs: ollama-smoke
     if: ${{ !inputs.skip_deploy_sync }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Secrets synchronisieren
         env:
