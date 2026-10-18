@@ -1,12 +1,16 @@
 name: render-db-bridge
 
-# Neon-Quota-Bruecke (2026-10-18): Das Neon-Kontingent (SQLSTATE 53000) ist
-# erschöpft — die Agenten-Villa-DB ist dauerhaft erreichbar? Nein: abgeschaltet
-# bis Monatsreset. Dieser Workflow stellt EINE kostenlose Render-Postgres
-# (gleiche Region wie der Web-Service) bereit, wendet die Drizzle-Migrationen
-# an und tauscht ausschliesslich DATABASE_URL in der Render-Env des Services.
+# Neon-Quota-Bruecke v2 (2026-10-18): Das Neon-Kontingent (SQLSTATE 53000) ist
+# erschöpft — die Agenten-Villa-DB ist bis zum Monatsreset abgeschaltet. Dieser
+# Workflow nutzt die bestehende kostenlose Render-Postgres `agenten-villa-db`
+# (Frankfurt, gleiche Region wie der Web-Service), wendet die Drizzle-Migrationen
+# an und tauscht ausschliesslich DATABASE_URL in der Render-Env des Services —
+# auf die INTERNE Verbindungs-URL (privates Render-Netz, gleiche Region).
+# Migrationen laufen vom Runner gegen die EXTERNE URL (interne Hostnamen sind
+# nur innerhalb Renders Netz auflösbar).
 # Rollback: DATABASE_URL zurueck auf Neon setzen (z. B. nach dem 01.11.).
 # Werte verlassen nie die GitHub-Runner; Logs maskieren Verbindungsdaten.
+# API-Stand 10/2026: /v1/postgres (statt des entfernten /v1/databases).
 
 on:
   workflow_dispatch: {}
@@ -22,7 +26,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Free-Postgres anlegen, migrieren, DATABASE_URL schwenken, deployen
+      - name: Free-Postgres finden, migrieren, DATABASE_URL schwenken, deployen
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           GH_PAT: ${{ secrets.SERVER_GITHUB_TOKEN }}
@@ -33,58 +37,52 @@ jobs:
           RAUTH="Authorization: Bearer $RENDER_API_KEY"
 
           echo "== [1/6] Region des Web-Services =="
-          REGION=$(curl -sf -H "$RAUTH" "$API/services/$SVC" | jq -r '.region // "ohio"')
+          REGION=$(curl -sf -H "$RAUTH" "$API/services/$SVC" | jq -r '.service.serviceDetails.region // .service.region // "ohio"')
           echo "Region: $REGION"
 
-          echo "== [2/6] Free-Postgres suchen (Idempotenz + Fremdbelegungsschutz) =="
-          DBS=$(curl -s -H "$RAUTH" "$API/databases?limit=100")
-          DBS_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -H "$RAUTH" "$API/databases?limit=100")
-          echo "  GET /databases -> HTTP $DBS_HTTP"
-          if [ "$DBS_HTTP" != "200" ]; then echo "  Antwort: $(echo "$DBS" | head -c 200)"; fi
-          OWNED=$(echo "$DBS" | jq -r '.[] | select(.name=="agenten-villa-db") | .id' | head -1)
-          FOREIGN=$(echo "$DBS" | jq -r '.[] | select(.plan=="free" and .name!="agenten-villa-db") | .name' | head -1)
-          if [ -n "$FOREIGN" ]; then
-            echo "ABBRUCH: Account hat bereits eine fremde Free-Postgres ($FOREIGN) — Free-Slot belegt. Nicht anfassen."
+          echo "== [2/6] Bestehende Free-Postgres suchen (Idempotenz) =="
+          PGS=$(curl -s -H "$RAUTH" "$API/postgres?limit=100")
+          PG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -H "$RAUTH" "$API/postgres?limit=100")
+          echo "  GET /postgres -> HTTP $PG_HTTP"
+          [ "$PG_HTTP" = "200" ] || { echo "  Antwort: $(echo "$PGS" | head -c 200)"; exit 1; }
+          OWNED=$(echo "$PGS" | jq -r '.[] | .postgres | select(.name=="agenten-villa-db") | .id' | head -1)
+          if [ -z "$OWNED" ]; then
+            echo "ABBRUCH: agenten-villa-db nicht gefunden — wurde außerhalb angelegt oder geloescht. Nicht fremd anlegen."
             exit 1
           fi
-          if [ -n "$OWNED" ]; then
-            DBID="$OWNED"
-            echo "Vorhandene agenten-villa-db wiederverwendet: $DBID"
-          else
-            DBID=$(curl -sf -X POST -H "$RAUTH" -H "Content-Type: application/json" "$API/databases" \
-              -d "{\"name\":\"agenten-villa-db\",\"plan\":\"free\",\"region\":\"$REGION\"}" | jq -r '.id')
-            echo "Neue Free-Postgres angelegt: $DBID"
-          fi
+          DBID="$OWNED"
+          echo "Vorhandene agenten-villa-db wiederverwendet: $DBID"
 
-          echo "== [3/6] Auf Verfuegbarkeit warten =="
-          NEWURL=""
+          echo "== [3/6] Auf Verfuegbarkeit warten + Verbindungsdaten holen =="
           for i in $(seq 1 20); do
-            DET=$(curl -sf -H "$RAUTH" "$API/databases/$DBID")
-            ST=$(echo "$DET" | jq -r '.availabilityStatus // .state // "?"')
+            DET=$(curl -sf -H "$RAUTH" "$API/postgres/$DBID")
+            ST=$(echo "$DET" | jq -r '.postgres.status // .status // "?"')
             echo "  Status: $ST"
-            if [ "$ST" = "available" ]; then
-              NEWURL=$(echo "$DET" | jq -r '.connection_info.internal_database_url // .connection_info.external_database_url // .connection_info.external_connection_string // empty')
-              break
-            fi
+            [ "$ST" = "available" ] && break
             sleep 20
           done
-          if [ -z "$NEWURL" ]; then echo "ABBRUCH: DB nicht verfuegbar geworden."; exit 1; fi
-          echo "  Verbindungs-Host: $(echo "$NEWURL" | sed -E 's#.*@#<maskiert>@#')"
+          [ "$ST" = "available" ] || { echo "ABBRUCH: DB nicht verfuegbar geworden."; exit 1; }
+          CONN=$(curl -sf -H "$RAUTH" "$API/postgres/$DBID/connection-info")
+          EXTURL=$(echo "$CONN" | jq -r '.externalConnectionString // .connectionInfo.externalConnectionString // empty')
+          INTURL=$(echo "$CONN" | jq -r '.internalConnectionString // .connectionInfo.internalConnectionString // empty')
+          [ -n "$EXTURL" ] && [ -n "$INTURL" ] || { echo "ABBRUCH: Verbindungsdaten unvollstaendig."; exit 1; }
+          echo "  Host (external): $(echo "$EXTURL" | sed -E 's#.*@#<maskiert>@#')"
+          echo "  Host (internal): $(echo "$INTURL" | sed -E 's#.*@#<maskiert>@#')"
 
-          echo "== [4/6] Drizzle-Migrationen gegen die neue DB =="
+          echo "== [4/6] Drizzle-Migrationen gegen die neue DB (externe URL) =="
           pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install >/dev/null 2>&1
-          DATABASE_URL="$NEWURL" pnpm db:push
+          DATABASE_URL="$EXTURL" pnpm drizzle-kit migrate
           echo "Migrationen angewendet."
 
           echo "== [4b/6] GitHub-Secret DATABASE_URL synchronisieren (best effort) =="
           if [ -n "$GH_PAT" ]; then
-            GH_TOKEN="$GH_PAT" gh secret set DATABASE_URL --body "$NEWURL" -R "$GITHUB_REPOSITORY" \
-              && echo "Secret DATABASE_URL aktualisiert." \
+            GH_TOKEN="$GH_PAT" gh secret set DATABASE_URL --body "$INTURL" -R "$GITHUB_REPOSITORY" \
+              && echo "Secret DATABASE_URL aktualisiert (interne URL)." \
               || echo "WARNUNG: Secret-Update fehlgeschlagen (db-migrate.yml laeuft kuenftig gegen alte URL)."
           fi
 
-          echo "== [5/6] Render-Env: nur DATABASE_URL schwenken =="
-          export NEWURL SVC RENDER_API_KEY
+          echo "== [5/6] Render-Env: nur DATABASE_URL schwenken (interne URL) =="
+          export NEWURL="$INTURL" SVC RENDER_API_KEY
           python3 - <<'PYEOF'
           import json, os, urllib.request
 
@@ -128,7 +126,7 @@ jobs:
           echo "Deploy: $DEPID"
           for i in $(seq 1 30); do
             sleep 20
-            ST=$(curl -sf -H "$RAUTH" "$API/services/$SVC/deploys/$DEPID" | jq -r '.status // "?"')
+            ST=$(curl -sf -H "$RAUTH" "$API/services/$SVC/deploys/$DEPID" | jq -r '.deploy.status // .status // "?"')
             echo "  Deploy-Status: $ST"
             case "$ST" in live) break;; build_failed|update_failed|canceled|pre_deploy_failed) echo "ABBRUCH: Deploy fehlgeschlagen."; exit 1;; esac
           done
