@@ -123,7 +123,7 @@ jobs:
 
           echo "== [6/6] Deploy anstossen =="
           DEPID=$(curl -sf -X POST -H "$RAUTH" -H "Content-Type: application/json" "$API/services/$SVC/deploys" \
-            -d '{"clearCache":"do_not_clear"}' | jq -r '.deploy.id // .id')
+            -d '{"clearCache":"do_not_clear"}' | jq -r '.[0].deploy.id // .[0].id // .deploy.id // .id')
           echo "Deploy: $DEPID"
           for i in $(seq 1 30); do
             sleep 20
