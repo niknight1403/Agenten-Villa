@@ -146,6 +146,16 @@ function isAdmin(user: { role: string; email?: string | null }) {
     Boolean(allowlisted && user.email?.trim().toLowerCase() === allowlisted)
   );
 }
+/**
+ * Sprint 056b — UNLIMITED-Tier fuer den Allowlist-Administrator
+ * (Nutzerdirektive 2026-10-18): Der via AGENT_ADMIN_EMAIL autorisierte
+ * Administrator hat keinerlei Beschraenkungen — Mutation-Budget und Limits
+ * greifen fuer ihn nicht. Alle anderen Rollen behalten Fair-Use-Limits.
+ */
+export function isUnlimitedAdmin(user: { role: string; email?: string | null }): boolean {
+  const allowlisted = process.env.AGENT_ADMIN_EMAIL?.trim().toLowerCase();
+  return Boolean(allowlisted && user.email?.trim().toLowerCase() === allowlisted);
+}
 function requireAdmin(user: { role: string; email?: string | null }) {
   if (!isAdmin(user))
     throw new TRPCError({
@@ -162,6 +172,8 @@ function requireAdminMutation(
   user: { id?: number; role: string; email?: string | null }
 ) {
   requireAdmin(user);
+  // Sprint 056b — UNLIMITED-Tier: Allowlist-Admin ohne Mutation-Budget.
+  if (isUnlimitedAdmin(user)) return;
   if (typeof user.id === "number") consumeAdminMutation(user.id);
 }
 function consumeInWindow(

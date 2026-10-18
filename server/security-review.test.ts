@@ -96,8 +96,10 @@ describe("security review: authentifizierte Schutzpfade", () => {
     }
   });
 
-  it("begrenzt Admin-Mutationen E2E auf das Budget (TOO_MANY_REQUESTS)", async () => {
-    vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
+  it("begrenzt rollenbasierte Admin-Mutationen E2E auf das Budget (TOO_MANY_REQUESTS)", async () => {
+    // Sprint 056b — Budget gilt weiter fuer DB-Rollen-Admins: Allowlist zeigt
+    // auf eine ANDERE Adresse, admin@example.com ist nur per Rolle berechtigt.
+    vi.stubEnv("AGENT_ADMIN_EMAIL", "root@example.com");
     const admin = appRouter.createCaller(createContext(77, "admin", "admin@example.com"));
     const { max } = adminMutationLimit();
     for (let i = 0; i < max; i++) {
@@ -106,6 +108,16 @@ describe("security review: authentifizierte Schutzpfade", () => {
     await expect(
       admin.agent.setSystemPrompt({ prompt: "einmal zu viel" })
     ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+  });
+
+  it("gewaehrt dem Allowlist-Administrator das UNLIMITED-Tier ohne Budget (Sprint 056b)", async () => {
+    vi.stubEnv("AGENT_ADMIN_EMAIL", "admin@example.com");
+    const owner = appRouter.createCaller(createContext(78, "admin", "admin@example.com"));
+    const { max } = adminMutationLimit();
+    for (let i = 0; i < max + 5; i += 1) {
+      await owner.agent.setSystemPrompt({ prompt: `Unlimited ${i}` });
+    }
+    // Kein TOO_MANY_REQUESTS — der autorisierte Administrator hat keine Limits.
   });
 });
 
