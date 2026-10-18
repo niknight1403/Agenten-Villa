@@ -37,7 +37,10 @@ jobs:
           echo "Region: $REGION"
 
           echo "== [2/6] Free-Postgres suchen (Idempotenz + Fremdbelegungsschutz) =="
-          DBS=$(curl -sf -H "$RAUTH" "$API/databases?limit=100")
+          DBS=$(curl -s -H "$RAUTH" "$API/databases?limit=100")
+          DBS_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -H "$RAUTH" "$API/databases?limit=100")
+          echo "  GET /databases -> HTTP $DBS_HTTP"
+          if [ "$DBS_HTTP" != "200" ]; then echo "  Antwort: $(echo "$DBS" | head -c 200)"; fi
           OWNED=$(echo "$DBS" | jq -r '.[] | select(.name=="agenten-villa-db") | .id' | head -1)
           FOREIGN=$(echo "$DBS" | jq -r '.[] | select(.plan=="free" and .name!="agenten-villa-db") | .name' | head -1)
           if [ -n "$FOREIGN" ]; then
