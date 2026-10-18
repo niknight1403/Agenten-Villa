@@ -71,7 +71,8 @@ jobs:
 
           echo "== [4/6] Drizzle-Migrationen gegen die neue DB (externe URL) =="
           pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install >/dev/null 2>&1
-          DATABASE_URL="$EXTURL" pnpm drizzle-kit migrate
+          MIGURL="$EXTURL"; case "$MIGURL" in *\?*) MIGURL="$MIGURL&sslmode=require";; *) MIGURL="$MIGURL?sslmode=require";; esac
+          DATABASE_URL="$MIGURL" pnpm drizzle-kit migrate
           echo "Migrationen angewendet."
 
           echo "== [4b/6] GitHub-Secret DATABASE_URL synchronisieren (best effort) =="
