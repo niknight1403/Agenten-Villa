@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
   getRotationStatus,
   pinRoute,
@@ -13,6 +13,21 @@ import {
 } from "./route-rotator";
 import type { ProviderHealthResult } from "./provider-health";
 
+/**
+ * Hermetisch: die Netzproben des Rotation-Ticks lesen process.env LIVE
+ * (provider-health.ts). Ambient gesetzte Keys (z. B. OPENROUTER_API_KEY in
+ * der Shell) wuerden "nichts konfiguriert"-Erwartungen kippen lassen —
+ * deshalb in beforeEach neutrales Neutralland, in afterEach zuruecksetzen.
+ */
+const ROUTE_ENV_KEYS = [
+  "OPENROUTER_API_KEY",
+  "GROQ_API_KEY",
+  "GEMINI_API_KEY",
+  "HF_TOKEN",
+  "OLLAMA_BASE_URL",
+  "OLLAMA_API_KEY",
+] as const;
+
 const ok: ProviderHealthResult = { status: "valid", cached: false };
 const degraded: ProviderHealthResult = { status: "invalid", cached: false };
 const unreachable: ProviderHealthResult = { status: "unavailable", cached: false };
@@ -22,7 +37,21 @@ function results(map: Partial<Record<RouteName, ProviderHealthResult | null>>): 
 }
 
 describe("API-Routen-Rotator (Sprint 102)", () => {
-  beforeEach(() => resetRouteRotatorForTests());
+  const originalRouteEnv = Object.fromEntries(
+    ROUTE_ENV_KEYS.map((key) => [key, process.env[key]])
+  );
+
+  beforeEach(() => {
+    resetRouteRotatorForTests();
+    for (const key of ROUTE_ENV_KEYS) delete process.env[key];
+  });
+  afterEach(() => {
+    for (const key of ROUTE_ENV_KEYS) {
+      const value = originalRouteEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
 
   it("ordnet Ollama bewusst an erster Stelle (unlimited, Oracle Always Free)", () => {
     expect(ROUTE_PRIORITY[0]).toBe("ollama");

@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { resetEnvForTests } from "./_core/env";
 import {
   fetchWithFallback,
   registerLLMProvider,
@@ -55,6 +56,12 @@ describe("LLM-Router: Ollama-Route (Audit Abschnitt 1)", () => {
     process.env.OPENROUTER_API_KEY = "";
     process.env.GROQ_API_KEY = "";
     process.env.GEMINI_API_KEY = "";
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    // ENV ist ein Import-Zeit-Snapshot: ohne erneutes Einlesen wuerde der
+    // Router weiterhin ambient gesetzte Provider-Keys sehen (Sprint-Konzept
+    // "hermetische Tests" — siehe resetEnvForTests in env.ts).
+    resetEnvForTests();
   });
 
   afterEach(() => {
@@ -137,6 +144,19 @@ describe("LLM-Router: Ollama-Route (Audit Abschnitt 1)", () => {
   });
 
   it("wirft in assertAnyApiKey, wenn gar kein Key konfiguriert ist", () => {
+    expect(() => assertAnyApiKey()).toThrow(/Kein LLM-API-Key/);
+  });
+
+  it("liest Keys nach resetEnvForTests neu — Router reagiert, nicht nur process.env", async () => {
+    // Regression: ENV ist ein Import-Zeit-Snapshot. Vor dem
+    // Test-Erweiterungspunkt sah der Router Keys, die NUR in process.env
+    // geaendert wurden — Tests wurden damit abhaengig von der Shell-Umgebung.
+    process.env.OPENROUTER_API_KEY = "später gesetzter Key";
+    resetEnvForTests();
+    expect(() => assertAnyApiKey()).not.toThrow();
+
+    process.env.OPENROUTER_API_KEY = "";
+    resetEnvForTests();
     expect(() => assertAnyApiKey()).toThrow(/Kein LLM-API-Key/);
   });
 });

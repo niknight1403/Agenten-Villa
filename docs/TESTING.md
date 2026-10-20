@@ -50,3 +50,29 @@ Beide aufeinanderfolgenden Builds erzeugen identische Artefakt-Strukturen und id
 Bei der anfänglichen Ausführung wurde identifiziert, dass ein vorherig erzeugtes `dist/build-manifest.json` beim Folgerun im `dist/`-Verzeichnis verblieb und durch den Zeitstempel (`generatedAt`) im Manifest selbst zu einem geänderten Aggregat-Hash führte.
 
 **Anpassung/Fix**: `scripts/build-manifest.ts` (und die Testsuite in `tests/build-manifest.test.ts`) ignoriert `build-manifest.json` beim Erfassen der Artefakte explizit (`collectFiles`). Dadurch fließen nur die echten Build-Erzeugnisse (JS, CSS, HTML, Assets) in die Hash-Berechnung ein und die Reproduzierbarkeit ist zu 100 % gewährleistet.
+
+## Hermetische Tests: ENV-Snapshot & ambient gesetzte Provider-Keys
+
+Regel: **Die Testsuite muss in jeder Shell-Umgebung grün sein — auch wenn dort
+echte Provider-Keys (z. B. `OPENROUTER_API_KEY`) gesetzt sind.**
+
+Hintergrund: `server/_core/env.ts` exportiert `ENV` als Import-Zeit-Snapshot
+von `process.env`. Router-Tests, die einen "nichts konfiguriert"-Zustand
+prüfen, liefen deshalb rot, sobald die Shell einen Key exportierte — der
+angeleitete Key blieb im Snapshot hängen, obwohl der Test `process.env`
+geleert hatte. Dasselbe galt für `provider-health.ts`-basierte
+Rotation-Tests, die `process.env` LIVE lesen.
+
+Konventionen:
+
+- **`resetEnvForTests()`** (`server/_core/env.ts`): Nach jeder
+  `process.env`-Umstellung in Tests aufrufen, wenn geprüft wird, wie der
+  Router auf Keys reagiert (analogue zu `resetLLMProvidersForTests()`).
+  Produktionscode ruft die Funktion nie.
+- **Save/Clear/Restore**: Testdateien, die Router-Verhalten gegen
+  ambient gesetzte Keys absichern (`EXTENSION-POINTS_PROVIDER_ENV`),
+  sichern die relevanten Variablen in `beforeEach`, löschen sie und stellen
+  sie in `afterEach` wieder her — siehe `server/llm-router.test.ts`,
+  `server/route-rotator.test.ts` und `server/extension-points.test.ts`.
+- Neue Router-Tests, die "kein Key konfiguriert" oder eine bestimmte
+  Provider-Reihenfolge annehmen, folgen denselben zwei Regeln.

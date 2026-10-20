@@ -11,6 +11,7 @@
  *    ein fehlender Authority-Eintrag wirft weiterhin ehrlich.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetEnvForTests } from "./_core/env";
 import {
   fetchWithFallback,
   registerLLMProvider,
@@ -26,11 +27,37 @@ import {
 import { buildPackCatalog, getPackCatalog } from "./pack-catalog";
 import { CAPABILITY_PACKS } from "./agent-villa";
 
+const PROVIDER_ENV_KEYS = [
+  "OPENROUTER_API_KEY",
+  "GROQ_API_KEY",
+  "GEMINI_API_KEY",
+  "BUILT_IN_FORGE_API_KEY",
+  "BUILT_IN_FORGE_API_URL",
+  "OLLAMA_BASE_URL",
+  "OLLAMA_API_KEY",
+  "OLLAMA_MODELS",
+] as const;
+
 describe("Erweiterungspunkt Provider (Sprint 095)", () => {
+  const originalProviderEnv = Object.fromEntries(
+    PROVIDER_ENV_KEYS.map((key) => [key, process.env[key]])
+  );
+
   beforeEach(() => {
     resetLLMProvidersForTests();
+    // Hermetisch: ambient gesetzte Keys/Waermen (z. B. OPENROUTER_API_KEY in
+    // der Shell duerfen die Fallback-Tests nicht beeinflussen.
+    for (const key of PROVIDER_ENV_KEYS) delete process.env[key];
+    resetEnvForTests();
   });
   afterEach(() => {
+    // Der Fallback-Loop darf erst NACH dem Restore wieder Keys sehen.
+    for (const key of PROVIDER_ENV_KEYS) {
+      const value = originalProviderEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    resetEnvForTests();
     resetLLMProvidersForTests();
     vi.restoreAllMocks();
   });
