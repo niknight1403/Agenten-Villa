@@ -155,12 +155,12 @@ export function resetLLMProvidersForTests(): void {
 
 const COOLDOWNS = new Map<string, number>();
 const COOLDOWN_MS = 5 * 60 * 1000;
-const FAILOVER_STATUS = [402, 429, 503];
+const FAILOVER_STATUS = [401, 402, 403, 408, 429, 500, 502, 503, 504];
 
 function isAvailable(p: LLMProvider): boolean {
   const key = p.apiKey();
-  if (!key) return false;
   if (p.isEnabled && !p.isEnabled()) return false;
+  if (!key && p.name !== "ollama") return false;
   const until = COOLDOWNS.get(p.name) ?? 0;
   return Date.now() > until;
 }
@@ -202,6 +202,7 @@ export async function fetchWithFallback(
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(provider.name === "ollama" ? 120_000 : 30_000),
       });
 
       if (response.ok) {
@@ -231,8 +232,8 @@ export async function fetchWithFallback(
 }
 
 export function assertAnyApiKey() {
-  const hasKey = registeredProviders.some((p) => !!p.apiKey());
+  const hasKey = registeredProviders.some((p) => isAvailable(p));
   if (!hasKey) {
-    throw new Error("Kein LLM-API-Key konfiguriert (BUILT_IN_FORGE_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY oder OLLAMA_API_KEY + OLLAMA_BASE_URL)");
+    throw new Error("Kein LLM-Provider konfiguriert (Cloud-API-Key oder OLLAMA_BASE_URL für lokalen Ollama-Betrieb)");
   }
 }
