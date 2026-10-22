@@ -234,6 +234,6 @@ export async function fetchWithFallback(
 export function assertAnyApiKey() {
   const hasKey = registeredProviders.some((p) => isAvailable(p));
   if (!hasKey) {
-    throw new Error("Kein LLM-Provider konfiguriert (Cloud-API-Key oder OLLAMA_BASE_URL für lokalen Ollama-Betrieb)");
+    throw new Error("Kein LLM-API-Key oder lokaler Ollama-Endpunkt konfiguriert (Cloud-API-Key oder OLLAMA_BASE_URL)");
   }
 }
