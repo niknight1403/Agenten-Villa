@@ -86,6 +86,36 @@ describe("LLM-Router: Ollama-Route (Audit Abschnitt 1)", () => {
     expect(String(url)).toContain("testcloud.example");
   });
 
+  it("nutzt lokale Ollama-Route ohne API-Key und sendet keine Authorization", async () => {
+    process.env.OLLAMA_BASE_URL = "http://localhost:11434/v1";
+    delete process.env.OLLAMA_API_KEY;
+    const mock = stubFetchSequence([jsonResponse(200, { ok: true })]);
+    expect(() => assertAnyApiKey()).not.toThrow();
+    const response = await fetchWithFallback(
+      { messages: [] },
+      { method: "POST", headers: {}, body: "{}" },
+    );
+    expect(response.ok).toBe(true);
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://localhost:11434/v1/chat/completions");
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+
+  it("wechselt bei HTTP 502 auf die nächste Route", async () => {
+    process.env.OLLAMA_BASE_URL = "https://ollama.example.com/v1";
+    registerTestCloud();
+    const mock = stubFetchSequence([
+      jsonResponse(502, { error: "upstream unavailable" }),
+      jsonResponse(200, { ok: true }),
+    ]);
+    const result = await fetchWithFallback(
+      { messages: [] },
+      { method: "POST", headers: {}, body: "{}" },
+    );
+    expect(result.ok).toBe(true);
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
   it("ruft Ollama zuerst auf, wenn OLLAMA_BASE_URL und Token gesetzt sind", async () => {
     process.env.OLLAMA_BASE_URL = "https://ollama.example.com/v1";
     process.env.OLLAMA_API_KEY = "villa-token";
