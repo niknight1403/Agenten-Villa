@@ -18,6 +18,28 @@ pnpm validate
 
 Damit bleibt die reguläre CI reproduzierbar und unabhängig von Kontingenten, Netzwerkverfügbarkeit und privaten Providerkonten.
 
+> Hinweis: `pnpm test` läuft sauber nur mit **sauberer Env** (z. B. `env -i PATH=… pnpm test`). Setzt die Umgebung
+> echte Provider-Schlüssel, reagierende `GITHUB_REPOSITORY` oder andere Container-Env-Werte, schlagen
+> provider-/repo-sensitiven Tests fälschlich fehl, weil sie gegen echte Konfiguration laufen statt Mocks.
+> Live-Tests bleiben separat hinter `RUN_LIVE_*` geschaltet.
+
+## Lokale End-to-End-Prüfung der Chat-Pipeline (ohne externen Anbieter)
+
+Für einen echten Laufzeittest ohne Provider-Kosten (Details auch in `AGENTS.md`):
+
+1. Postgres bereitstellen und `DATABASE_URL` setzen (lokal z. B. `postgres://villa:villa@127.0.0.1:5433/villa`),
+   Schema per `pnpm db:push` anlegen, Projekt-Villa per `pnpm seed:villa -- --user <id>` erzeugen.
+2. `OPENROUTER_BASE_URL=http://127.0.0.1:<port>/v1` auf einen lokalen Mock zeigen — der Endpunkt wird zu
+   `<base>/chat/completions` (siehe `server/provider-endpoints.ts`, einzige URL-Quelle).
+3. Server mit `JWT_SECRET` starten und ein signiertes Session-Cookie (`app_session_id`, HS256 mit
+   `{openId, appId, name}`) setzen; der Benutzer wird per `openId` aus der DB aufgelöst.
+
+Die reale Modellroute bleibt unverändert die Anbieter-Kette in `server/agent-engine.ts`
+(`callWithProviderChain`, OpenRouter → Groq → Gemini; Hugging Face nur mit Einwilligung). Der Mock
+spielt nur die OpenRouter-Route nach; es gibt keine neue Auswahl, keinen zweiten Endpunkt und keinen
+Cloud-Ersatzweg. Eine Umstellung auf eine lokale Einzelroute erfordert ein eigenes, separat
+freigegebenes Arbeitspaket.
+
 ## Build-Reproduzierbarkeit
 
 Zur Sicherstellung deterministischer und reproduzierbarer Produktions-Builds wird nach `pnpm build` mit `pnpm build:manifest` ein SHA-256-Manifest über das Ausgabeverzeichnis `dist/` erstellt (`scripts/build-manifest.ts`).
