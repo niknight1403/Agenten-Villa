@@ -21,8 +21,8 @@ export function databaseErrorSummary(error: unknown): string {
   const rawMessage = typeof candidate?.message === "string" ? candidate.message : "Unbekannter Datenbankfehler";
   // Never write connection URLs, credentials, or query parameters to application logs.
   const message = rawMessage
-    .replace(/(postgres(?:ql)?:\\/\\/)[^\\s]+/gi, "$1[redacted]")
-    .replace(/(password|passwd|pwd)=([^\\s&]+)/gi, "$1=[redacted]")
+    .replace(/(postgres(?:ql)?:\\/\\/)[^\s]+/gi, "$1[redacted]")
+    .replace(/(password|passwd|pwd)=([^\s&]+)/gi, "$1=[redacted]")
     .slice(0, 240);
   return [code, name, message].filter(Boolean).join(": ");
 }
