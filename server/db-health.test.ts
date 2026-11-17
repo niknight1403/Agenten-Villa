@@ -1,7 +1,8 @@
 /**
- * Sprint 011: Datenbank-Health — reine Prueflogik und Health-Payload-Integration.
+ * Sprint 011: Datenbank-Health — Prueflogik und Health-Payload-Integration.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { SQL } from "drizzle-orm";
 import { probeDatabaseConnection, type ExecutableDatabase } from "./db-health";
 import {
   getDatabaseHealthReport,
@@ -13,9 +14,9 @@ import {
 
 function fakeDb(behavior: "ok" | "fail"): ExecutableDatabase {
   return {
-    async execute(sql: string) {
+    async execute(query) {
       if (behavior === "fail") throw new Error("connection refused");
-      return { sql };
+      return { query };
     },
   };
 }
@@ -25,11 +26,20 @@ describe("probeDatabaseConnection", () => {
     expect(await probeDatabaseConnection(null)).toBe("nicht_konfiguriert");
   });
 
+  it("uebergibt ein Drizzle-SQL-Objekt und meldet verbunden", async () => {
+    const execute = vi.fn().mockResolvedValue({ rows: [{ "?column?": 1 }] });
+    const db: ExecutableDatabase = { execute };
+
+    expect(await probeDatabaseConnection(db)).toBe("verbunden");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0]).toBeInstanceOf(SQL);
+  });
+
   it("meldet verbunden bei erfolgreicher SELECT-1-Probe", async () => {
     expect(await probeDatabaseConnection(fakeDb("ok"))).toBe("verbunden");
   });
 
-  it("meldet fehler bei abgewiesener Verbindung (kein Umgehen von 4xx/5xx)", async () => {
+  it("meldet fehler bei abgewiesener Verbindung", async () => {
     expect(await probeDatabaseConnection(fakeDb("fail"))).toBe("fehler");
   });
 });
