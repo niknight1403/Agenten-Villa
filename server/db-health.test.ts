@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { SQL } from "drizzle-orm";
-import { probeDatabaseConnection, type ExecutableDatabase } from "./db-health";
+import { databaseErrorSummary, probeDatabaseConnection, type ExecutableDatabase } from "./db-health";
 import {
   getDatabaseHealthReport,
   getHealthPayload,
@@ -39,8 +39,21 @@ describe("probeDatabaseConnection", () => {
     expect(await probeDatabaseConnection(fakeDb("ok"))).toBe("verbunden");
   });
 
-  it("meldet fehler bei abgewiesener Verbindung", async () => {
-    expect(await probeDatabaseConnection(fakeDb("fail"))).toBe("fehler");
+  it("meldet fehler bei abgewiesener Verbindung und gibt eine Diagnose weiter", async () => {
+    const onError = vi.fn();
+    expect(await probeDatabaseConnection(fakeDb("fail"), onError)).toBe("fehler");
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
+  });
+
+  it("fasst Datenbankfehler zusammen, ohne Zugangsdaten auszugeben", () => {
+    const summary = databaseErrorSummary({
+      name: "Error",
+      code: "ECONNREFUSED",
+      message: "connect postgres://admin:secret@db.example:5432/app password=hidden",
+    });
+    expect(summary).toContain("ECONNREFUSED");
+    expect(summary).not.toContain("secret");
+    expect(summary).not.toContain("hidden");
   });
 });
 
