@@ -44,6 +44,8 @@ export async function probeDatabaseConnection(
 /** Read the configured connection and probe it once. */
 export async function checkDatabaseHealth(): Promise<DatabaseHealthReport> {
   const db = await getDb();
-  const status = await probeDatabaseConnection(db);
+  const status = await probeDatabaseConnection(db, (summary) => {
+    console.warn(`[Database] Probe-Fehler: ${summary}`);
+  });
   return { status, checkedAt: new Date().toISOString() };
 }
