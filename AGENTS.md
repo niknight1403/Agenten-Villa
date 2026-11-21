@@ -21,7 +21,7 @@ Warnung ("Unsupported engine"), Typecheck/Tests/Build laufen trotzdem sauber.
 
 ```bash
 pnpm check   # tsc --noEmit
-pnpm test    # vitest — erwartet 169 passed / 4 skipped
+pnpm test    # vitest — erwartet 965 passed / 4 skipped (Stand 2026-11-09, saubere Env)
 pnpm build   # vite + esbuild
 pnpm validate # check + test + build + git diff --check
 ```
