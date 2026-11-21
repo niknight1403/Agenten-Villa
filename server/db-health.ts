@@ -1,18 +1,5 @@
+import { sql, type SQL } from "drizzle-orm";
 import { getDb } from "./db";
-
-/**
- * Sprint 011-Betriebshaerte: Datenbank-Verfuegbarkeit beim Start sichtbar
- * machen (Sprint-Status-Regel: nie still scheitern).
- *
- * - Ohne DATABASE_URL oder ohne laehige Verbindung: "nicht_konfiguriert"
- *   (bewusst erlaubt, damit lokale Werkzeuge ohne DB laufen koennen).
- * - Produktionsmodus loggt den Status beim Start UND aktualisiert den
- *   oeffentlichen Health-Endpoint (siehe _core/health.ts), damit ein
- *   "scheinbar erfolgreicher" Deploy sofort erkennbar ist.
- *
- * Der Health-Endpoint bleibt bewusst schnell und ohne Blockieren:
- * das Ergebnis wird gecacht und nur im Hintergrund aktualisiert.
- */
 
 export type DatabaseHealthStatus = "verbunden" | "fehler" | "nicht_konfiguriert";
 
@@ -21,27 +8,44 @@ export type DatabaseHealthReport = {
   checkedAt: string;
 };
 
-/** Minimal-Interface fuer Tests: jede Drizzle-aehnliche Instanz mit execute(). */
+/** Minimal Drizzle-compatible interface, kept injectable for unit tests. */
 export interface ExecutableDatabase {
-  execute(sql: string): Promise<unknown>;
+  execute(query: SQL): Promise<unknown>;
 }
 
-/** Reine Pruefung: eine ungefaehrliche, begrenzte Anfrage (SELECT 1). */
+/** Run a harmless round-trip query to verify the actual database connection. */
+export function databaseErrorSummary(error: unknown): string {
+  const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
+  const code = typeof candidate?.code === "string" ? candidate.code : undefined;
+  const name = typeof candidate?.name === "string" ? candidate.name : "Error";
+  const rawMessage = typeof candidate?.message === "string" ? candidate.message : "Unbekannter Datenbankfehler";
+  // Never write connection URLs, credentials, or query parameters to application logs.
+  const message = rawMessage
+    .replace(new RegExp("postgres(?:ql)?:\\/\\/[^\\s]+", "gi"), "[database-url-redacted]")
+    .replace(/(password|passwd|pwd)=([^\s&]+)/gi, "$1=[redacted]")
+    .slice(0, 240);
+  return [code, name, message].filter(Boolean).join(": ");
+}
+
 export async function probeDatabaseConnection(
   db: ExecutableDatabase | null,
+  onError?: (summary: string) => void,
 ): Promise<DatabaseHealthStatus> {
   if (!db) return "nicht_konfiguriert";
   try {
-    await db.execute("SELECT 1");
+    await db.execute(sql`SELECT 1`);
     return "verbunden";
-  } catch {
+  } catch (error) {
+    onError?.(databaseErrorSummary(error));
     return "fehler";
   }
 }
 
-/** Liest die konfigurierte Verbindung und prueft sie einmal. */
+/** Read the configured connection and probe it once. */
 export async function checkDatabaseHealth(): Promise<DatabaseHealthReport> {
   const db = await getDb();
-  const status = await probeDatabaseConnection(db as ExecutableDatabase | null);
+  const status = await probeDatabaseConnection(db, (summary) => {
+    console.warn(`[Database] Probe-Fehler: ${summary}`);
+  });
   return { status, checkedAt: new Date().toISOString() };
 }

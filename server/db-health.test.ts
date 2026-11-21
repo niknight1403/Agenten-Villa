@@ -1,8 +1,9 @@
 /**
- * Sprint 011: Datenbank-Health — reine Prueflogik und Health-Payload-Integration.
+ * Sprint 011: Datenbank-Health — Prueflogik und Health-Payload-Integration.
  */
-import { describe, expect, it } from "vitest";
-import { probeDatabaseConnection, type ExecutableDatabase } from "./db-health";
+import { describe, expect, it, vi } from "vitest";
+import { SQL } from "drizzle-orm";
+import { databaseErrorSummary, probeDatabaseConnection, type ExecutableDatabase } from "./db-health";
 import {
   getDatabaseHealthReport,
   getHealthPayload,
@@ -13,9 +14,9 @@ import {
 
 function fakeDb(behavior: "ok" | "fail"): ExecutableDatabase {
   return {
-    async execute(sql: string) {
+    async execute(query) {
       if (behavior === "fail") throw new Error("connection refused");
-      return { sql };
+      return { query };
     },
   };
 }
@@ -25,12 +26,34 @@ describe("probeDatabaseConnection", () => {
     expect(await probeDatabaseConnection(null)).toBe("nicht_konfiguriert");
   });
 
+  it("uebergibt ein Drizzle-SQL-Objekt und meldet verbunden", async () => {
+    const execute = vi.fn().mockResolvedValue({ rows: [{ "?column?": 1 }] });
+    const db: ExecutableDatabase = { execute };
+
+    expect(await probeDatabaseConnection(db)).toBe("verbunden");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0]).toBeInstanceOf(SQL);
+  });
+
   it("meldet verbunden bei erfolgreicher SELECT-1-Probe", async () => {
     expect(await probeDatabaseConnection(fakeDb("ok"))).toBe("verbunden");
   });
 
-  it("meldet fehler bei abgewiesener Verbindung (kein Umgehen von 4xx/5xx)", async () => {
-    expect(await probeDatabaseConnection(fakeDb("fail"))).toBe("fehler");
+  it("meldet fehler bei abgewiesener Verbindung und gibt eine Diagnose weiter", async () => {
+    const onError = vi.fn();
+    expect(await probeDatabaseConnection(fakeDb("fail"), onError)).toBe("fehler");
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
+  });
+
+  it("fasst Datenbankfehler zusammen, ohne Zugangsdaten auszugeben", () => {
+    const summary = databaseErrorSummary({
+      name: "Error",
+      code: "ECONNREFUSED",
+      message: "connect postgres://admin:secret@db.example:5432/app password=hidden",
+    });
+    expect(summary).toContain("ECONNREFUSED");
+    expect(summary).not.toContain("secret");
+    expect(summary).not.toContain("hidden");
   });
 });
 

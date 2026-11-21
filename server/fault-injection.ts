@@ -6,6 +6,7 @@ import {
   publicMessageForError,
   type ErrorCategory,
 } from "./error-codes";
+import type { SQL } from "drizzle-orm";
 import type { ExecutableDatabase } from "./db-health";
 
 /**
@@ -194,11 +195,9 @@ class FaultInjectionRegistry {
 
     if (!matchingRule) return;
 
-    // Increment trigger count
     const currentCount = this.triggerCounts.get(matchingRule) ?? 0;
     this.triggerCounts.set(matchingRule, currentCount + 1);
 
-    // Apply delay if configured
     if (matchingRule.delayMs && matchingRule.delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, matchingRule.delayMs));
     }
@@ -212,7 +211,6 @@ class FaultInjectionRegistry {
       throw new PersistenceError(code, message);
     }
 
-    // Provider / Router faults map to AgentError or specialized error subclasses
     switch (code) {
       case "TIMEOUT":
         throw new ProviderTimeoutError(message, matchingRule.retryAfterSeconds);
@@ -249,10 +247,6 @@ class FaultInjectionRegistry {
 
 export const faultRegistry = new FaultInjectionRegistry();
 
-/**
- * Scoped async helper to execute a function with active fault injection rules,
- * restoring prior rules afterward.
- */
 export async function withFaults<T>(
   rules: FaultRule | FaultRule[],
   fn: () => Promise<T>
@@ -266,9 +260,6 @@ export async function withFaults<T>(
   }
 }
 
-/**
- * Creates a mock LLM/provider function that simulates faults before executing response logic.
- */
 export function createFaultInjectedProvider(
   handler: (prompt: string) => Promise<string> = async () => "Simulierter Erfolg"
 ) {
@@ -278,23 +269,18 @@ export function createFaultInjectedProvider(
   };
 }
 
-/**
- * Creates a mock ExecutableDatabase that simulates persistence faults on execute().
- */
+/** Creates a mock database that simulates persistence faults on execute(). */
 export function createFaultInjectedDatabase(
-  realExecute: (sql: string) => Promise<unknown> = async () => [{ ok: 1 }]
+  realExecute: (query: SQL) => Promise<unknown> = async () => [{ ok: 1 }]
 ): ExecutableDatabase {
   return {
-    async execute(sql: string): Promise<unknown> {
+    async execute(query: SQL): Promise<unknown> {
       await faultRegistry.evaluateFault("database", "DATABASE_UNAVAILABLE");
-      return realExecute(sql);
+      return realExecute(query);
     },
   };
 }
 
-/**
- * Helper to construct an AgentError for any given AgentErrorCode from Sprint 008.
- */
 export function buildInjectedError(
   code: AgentErrorCode,
   customMessage?: string,
