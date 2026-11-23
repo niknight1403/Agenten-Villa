@@ -129,7 +129,8 @@
       "vite@<=6.4.2": "6.4.3",
       "uuid@<14.0.0": ">=14.0.2 <15",
       "source-map-js": "1.2.2",
-      "postcss-selector-parser": "7.1.6"
+      "postcss-selector-parser": "7.1.6",
+      "follow-redirects@<1.16.1": ">=1.16.1"
     },
     "ignoredBuiltDependencies": [
       "esbuild"
