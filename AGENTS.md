@@ -21,13 +21,26 @@ Warnung ("Unsupported engine"), Typecheck/Tests/Build laufen trotzdem sauber.
 
 ```bash
 pnpm check   # tsc --noEmit
-pnpm test    # vitest — erwartet 169 passed / 4 skipped
+pnpm test    # vitest — erwartet 967 passed / 4 skipped (ohne ambient gesetzte Provider-Keys)
 pnpm build   # vite + esbuild
 pnpm validate # check + test + build + git diff --check
 ```
 
 Externe Provider-Schlüssel (`OPENROUTER_API_KEY`, `HF_TOKEN`, `GITHUB_TOKEN`) sind für
 den lokalen Validierungsweg NICHT nötig; Live-Tests sind separat markiert.
+
+Achtung: Sind Provider-Keys in der Shell exportiert, kippen 6 Router-Tests
+(`llm-router`, `route-rotator`, `extension-points`), weil sie den ambienten Key als
+Konfiguration lesen. Für ein sauberes lokales Ergebnis:
+`env -u OPENROUTER_API_KEY -u GROQ_API_KEY -u GEMINI_API_KEY -u HF_TOKEN pnpm test`.
+Die hermetische Variante dieser Tests liegt in PR #104 (Draft, offen).
+
+### Dependency-Audit
+
+CI prüft `pnpm audit --prod --audit-level high`. Neue Advisories werden über
+Range-Overrides in `package.json` (`pnpm.overrides`) geschlossen; `pnpm-workspace.yaml`
+spiegelt dieselben Ranges. Nach jeder Änderung `pnpm install` (Lockfile) und
+`pnpm audit --prod` prüfen — Ziel ist "No known vulnerabilities found".
 
 ### Lokale End-to-End-Prüfung (Chat-Pipeline)
 
